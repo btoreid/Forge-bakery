@@ -1,5 +1,5 @@
 /* ============================================================
-   BRØDLAB — brukergrensesnitt
+   FORGE BAKERY — brukergrensesnitt
    ============================================================ */
 
 const $  = s => document.querySelector(s);

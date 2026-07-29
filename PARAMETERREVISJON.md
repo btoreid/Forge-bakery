@@ -1,4 +1,4 @@
-# Parameterrevisjon — Brødlab
+# Parameterrevisjon — Forge Bakery
 
 Gjennomgang 29.07.2026 av alle tall appen regner med eller påstår faglig.
 Kilder: `js/engine.js` (576 l.), `js/data.js` (1352 l.), `js/app.js` (2772 l.).

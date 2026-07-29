@@ -1,5 +1,5 @@
 /* ============================================================
-   BRØDLAB — datagrunnlag
+   FORGE BAKERY — datagrunnlag
    Mel, frø, forferment, stekeprofiler, presets og fagstoff.
    Kilder er notert i teksten. Estimater er merket (est).
    ============================================================ */

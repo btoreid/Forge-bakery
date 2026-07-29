@@ -1,4 +1,4 @@
-# Endringslogg — Brødlab
+# Endringslogg — Forge Bakery
 
 Nyeste øverst. Hver post sier **hva** som ble endret, **hvorfor**, og **hvor i koden** —
 slik at arbeidet kan tas opp igjen kaldt, uten forhistorien i hodet.

@@ -1,5 +1,5 @@
 /* ============================================================
-   BRØDLAB — regnemotor
+   FORGE BAKERY — regnemotor
    Fermenteringskinetikk, deigtemperatur og oppskriftsmatematikk.
    Alle temperaturer i °C, tid i timer, gjær i % av totalt mel.
    ============================================================ */

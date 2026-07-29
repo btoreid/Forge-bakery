@@ -1,4 +1,4 @@
-# Brødlab
+# Forge Bakery
 
 Dobbeltklikk **index.html** for å åpne appen. Ingen installasjon, ingen internettforbindelse, ingenting å starte —
 det er ren HTML/CSS/JavaScript. Alt du legger inn lagres lokalt i nettleseren.
