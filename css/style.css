@@ -2,7 +2,10 @@
 :root{
   --bg:#12100e; --bg2:#1a1714; --panel:#221d18; --panel2:#2b241d;
   --line:#3a3129; --line2:#4a3f34;
-  --txt:#efe6da; --txt2:#b8a894; --txt3:#8a7a68;
+  /* --txt3 var #8a7a68 = 4,0:1 mot panelfargen, under WCAG AA på 4,5:1 — og
+     den brukes nettopp på den minste teksten (.sub, .small, .stat .k, altså
+     etiketten over appens viktigste tall). #9a8a76 gir ca. 4,9:1. */
+  --txt:#efe6da; --txt2:#b8a894; --txt3:#9a8a76;
   --gull:#e0a53c; --gull2:#f2c46b; --rust:#c9633a; --grønn:#7fa650;
   --rød:#d4564a; --blå:#5b8fa8;
   --r:10px; --shadow:0 2px 14px rgba(0,0,0,.35);
@@ -29,9 +32,12 @@ header{
 .logo{font-weight:800;font-size:1.15rem;letter-spacing:.02em;color:var(--gull);white-space:nowrap}
 .logo small{display:block;font-size:.62rem;font-weight:500;color:var(--txt3);letter-spacing:.14em;text-transform:uppercase}
 nav{display:flex;gap:2px;flex-wrap:wrap;margin-left:auto}
+/* min-height 44 px: appen brukes med melete fingre på mobil, og 44×44 er
+   minstemålet for et treffsikkert touch-mål. Gjelder all navigasjon. */
 nav button{
   background:transparent;border:1px solid transparent;color:var(--txt2);
   padding:7px 13px;border-radius:var(--r);cursor:pointer;font-size:.87rem;white-space:nowrap;
+  min-height:44px;
 }
 nav button:hover{color:var(--txt);background:#ffffff09}
 nav button.on{background:var(--gull);color:#1a1409;border-color:var(--gull);font-weight:600}
@@ -43,6 +49,7 @@ nav button.on{background:var(--gull);color:#1a1409;border-color:var(--gull);font
 #undernav button{
   background:transparent;border:1px solid transparent;color:var(--txt3);
   padding:5px 11px;border-radius:var(--r);cursor:pointer;font-size:.83rem;white-space:nowrap;
+  min-height:44px;
 }
 #undernav button:hover{color:var(--txt);background:#ffffff09}
 #undernav button.on{color:var(--gull);background:#e0a53c1a;border-color:#e0a53c44;font-weight:600}
@@ -209,7 +216,8 @@ button.stat{font:inherit;color:inherit;text-align:left;width:100%;cursor:pointer
 .mk-navn{font-weight:650;line-height:1.25}
 .mk-tag{font-size:.75rem;font-weight:650;margin-top:2px}
 .mk-stjerne{flex:0 0 auto;background:transparent;border:none;cursor:pointer;
-  color:var(--txt3);font-size:1.35rem;line-height:1;padding:0 2px}
+  color:var(--txt3);font-size:1.35rem;line-height:1;padding:10px;margin:-10px;
+  min-width:44px;min-height:44px}
 .mk-stjerne:hover{color:var(--gull2)}
 .mk-stjerne.on{color:var(--gull)}
 .mk-tall{font-size:.82rem;margin-bottom:8px}
@@ -264,9 +272,12 @@ button.stat{font:inherit;color:inherit;text-align:left;width:100%;cursor:pointer
 
 /* ---- infoknapp og konsekvensboks ---- */
 label{position:relative}
+/* Negativ margin mot padding: treffflaten blir 44 px uten at ⓘ flytter seg
+   visuelt. Uten dette var den ca. 15 px og i praksis utreffbar med fingeren. */
 .infoknapp{
   background:transparent;border:none;color:var(--txt3);cursor:pointer;
-  font-size:.95rem;line-height:1;padding:0 0 0 5px;vertical-align:-1px;
+  font-size:.95rem;line-height:1;vertical-align:-1px;
+  padding:12px;margin:-12px -12px -12px -7px;
 }
 .infoknapp:hover{color:var(--gull2)}
 .field.info-open .infoknapp{color:var(--gull)}
@@ -329,8 +340,10 @@ label{position:relative}
 .bs-tab{margin-bottom:9px}
 .bs-tab td{padding:5px 0;border-bottom:1px solid var(--line)}
 .bs-tab td:first-child{color:var(--txt2)}
-.bs-tab td.n{font-weight:650;color:var(--txt);white-space:nowrap;padding-left:12px}
-.bs-temp{color:var(--gull2);font-size:.89rem;margin-bottom:5px}
+/* Dette er tallene du faktisk veier etter, med bollen i hånda og mobilen på
+   benken. De skal være større enn de dekorative nøkkeltallene, ikke mindre. */
+.bs-tab td.n{font-weight:700;color:var(--txt);white-space:nowrap;padding-left:12px;font-size:1.05rem}
+.bs-temp{color:var(--gull2);font-size:1rem;margin-bottom:5px}
 .bs-gjor{color:var(--txt2);font-size:.88rem}
 
 @media(max-width:640px){
@@ -397,7 +410,9 @@ label{position:relative}
   .frorow .gramhint{text-align:left}
 }
 .frorow .inline{font-size:.78rem;color:var(--txt2)}
-.x{background:transparent;border:1px solid var(--line2);color:var(--txt3);border-radius:6px;cursor:pointer;padding:6px 0;line-height:1}
+/* Sletteknappen har ingen angre — den skal være lett å treffe med vilje og
+   vanskelig å treffe ved uhell. 44 px høyde er minstemålet. */
+.x{background:transparent;border:1px solid var(--line2);color:var(--txt3);border-radius:6px;cursor:pointer;padding:6px 0;line-height:1;min-height:44px}
 .x:hover{border-color:var(--rød);color:var(--rød)}
 
 /* ---- tallfelt med +/- ---- */
