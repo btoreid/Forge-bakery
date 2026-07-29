@@ -111,7 +111,20 @@ details.kollaps>summary:hover h2,details.kollaps>summary:hover h3{color:var(--gu
 @media(min-width:1300px){
   .view.on{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
   .view.on>.card,.view.on>details.card{margin-bottom:0}
-  .view.on>.bred,.view.on>.grid,.view.on>.rutefot,.view.on>h1,.view.on>.note{grid-column:1/-1}
+  /* details.card spenner alltid: et åpnet fordypningskort er langt, og i én
+     kolonne blir raden svært skjev. Samme for kort med tabell, kurve eller
+     tidslinje — de har et breddebehov CSS-en ikke kan gjette seg til. */
+  .view.on>.bred,
+  .view.on>details.card,
+  .view.on>.grid,
+  .view.on>.rutefot,
+  .view.on>h1,
+  .view.on>.note,
+  .view.on>.naakort,
+  .view.on>#bakSteg,
+  .view.on>#melBibliotek,
+  .view.on>#tipsListe,
+  .view.on>#stekeKort{grid-column:1/-1}
 }
 /* Bak nå er utførelse, ikke planlegging: ett trinn om gangen, aldri to kolonner. */
 body[data-steg="bak"] .view.on{display:block}

@@ -341,6 +341,10 @@ function velgBrotype(id) {
     // Ferdig kalibrert deig. brukPreset setter mel, hydrering, plan og steking.
     brukPreset(t.preset);
   }
+  // Brødtypen avgjør hvilke seksjoner som finnes i hvert steg (stegViews leser
+  // ruten), og den står i stegstatus og stegfot. Uten dette ble skinnen, foten
+  // og de synlige seksjonene stående på det forrige brødet til neste stegbytte.
+  if (byttet) visSteg(sisteSteg);
   lagre();
 }
 
@@ -433,6 +437,7 @@ function byggSkinne(aktiv) {
     const b = el('button', (erAktiv ? 'on ' : '') + (gjort ? 'gjort ' : '') + (s.nr ? '' : 'oppslag'));
     b.type = 'button';
     b.dataset.steg = s.id;
+    b.dataset.k = 'skinne-' + s.id;   // så gjenopprettFokus finner knappen etter re-render
     if (erAktiv) b.setAttribute('aria-current', 'step');
     b.innerHTML = `<span class="nr">${s.nr ? (gjort ? '✓' : s.nr) : '?'}</span>
       <span class="skinnetxt"><span class="navn">${s.navn}</span><span class="kort">${s.kort}</span></span>`;
@@ -739,10 +744,8 @@ function tegnStart() {
   $$('#ruteUt [data-go]').forEach(b => b.onclick = () => vis(b.dataset.go));
   $$('#ruteUt [data-steg]').forEach(b => b.onclick = () => visSteg(b.dataset.steg));
 
-  /* --- 5. Varselet om at «Bygg brød» ikke gjelder, er ikke lenger nødvendig:
-     seksjonen finnes ikke i steg 2 for preset-ruter. --- */
-  const bv = $('#byggRuteVarsel');
-  if (bv) bv.innerHTML = '';
+  /* Varselet om at «Bygg brød» ikke gjelder er borte sammen med elementet:
+     seksjonen finnes ikke i steg 2 for preset-ruter. */
 }
 
 /* ============================================================
@@ -3567,11 +3570,13 @@ function init() {
      tilbake til baket. Er det et bak i gang, lander vi i steg 4.
      På telefon holder det at det finnes en plan: telefonen er utførelses-
      enheten, PC-en er planleggingsenheten. */
-  const harBak = Object.keys(S.bakHuket).length > 0;
+  const harBak = Object.keys(S.bakHuket).length > 0 || !!S.bakStartet;
   const ferdig = S.planFerdig ? new Date(S.planFerdig) : null;
   const iVinduet = ferdig && Math.abs(ferdig - new Date()) < 36 * 3600000;
-  const telefon = window.matchMedia('(max-width:700px)').matches;
-  visSteg((harBak && iVinduet) || (telefon && iVinduet) ? 'bak' : 'brodet');
+  // Kravet er at det finnes et bak, ikke bare en plan: planFerdig settes
+  // automatisk til «i morgen 17:00» ved første besøk, så uten harBak ville
+  // enhver telefonbruker landet i steg 4 med en plan han aldri har satt.
+  visSteg(harBak && iVinduet ? 'bak' : 'brodet');
 
   tegnTeknikk();
   oppdater();
