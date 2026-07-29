@@ -79,6 +79,8 @@ function aktivProfil() {
 }
 
 /* ---------- Lagring ---------- */
+/* Nøkkelnavnet er historisk (appen het Brødlab) og skal IKKE endres:
+   bytter man nøkkel, mister alle eksisterende brukere lagret tilstand. */
 const LAGER = 'brodlab.v1';
 function lagre() {
   try {
