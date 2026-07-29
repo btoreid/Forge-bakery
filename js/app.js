@@ -393,10 +393,11 @@ const OPPSLAG = ['steking', 'melbibliotek', 'teknikk', 'logg'];
    seksjonen, ikke en fane du bytter til: «Grovhet og tid» sier hva du gjør
    der, mens «Bygg brød» bare var et sted. */
 const FANENAVN = {
-  start: 'Start', bygg: 'Grovhet og tid', oppskrift: 'Mel, salt og forferment',
-  gjaering: 'Heveplan', deigtemp: 'Deigtemp og vann', plan: 'Klokkeslett',
-  baknaa: 'Bak nå', steking: 'Steking', melbibliotek: 'Mel & korn',
-  teknikk: 'Teknikk', logg: 'Bakelogg'
+  start: 'Start', bygg: 'Grovhet', oppskrift: 'Mel, vann og salt',
+  tillegg: 'Tillegg', seover: 'Resultat',
+  tidsvalg: 'Hvor lang tid', gjaering: 'Heveplan', deigtemp: 'Deigtemp og vann',
+  plan: 'Klokkeslett', baknaa: 'Bak nå', steking: 'Steking',
+  melbibliotek: 'Mel & korn', teknikk: 'Teknikk', logg: 'Bakelogg'
 };
 function faneNavn(v) { return FANENAVN[v] || v; }
 
@@ -410,10 +411,13 @@ function faneNavn(v) { return FANENAVN[v] || v; }
 const STEG = [
   { id: 'brodet', nr: 1, navn: 'Brødet', kort: 'Hva skal du bake',
     views: { bygg: ['start'], preset: ['start'] } },
-  { id: 'deigen', nr: 2, navn: 'Deigen', kort: 'Grovhet, mel og tillegg',
-    views: { bygg: ['bygg', 'oppskrift'], preset: ['oppskrift'] } },
+  // Rekkefølgen i steg 2 følger deigen: grovhet → mel → vann → salt →
+  // forferment → frø → tillegg → resultat. Tilleggene lå før melet, altså
+  // før det de er tillegg til.
+  { id: 'deigen', nr: 2, navn: 'Deigen', kort: 'Mel, vann, salt og tillegg',
+    views: { bygg: ['bygg', 'oppskrift', 'tillegg', 'seover'], preset: ['oppskrift', 'seover'] } },
   { id: 'tid', nr: 3, navn: 'Tid & temperatur', kort: 'Heveplan og klokkeslett',
-    views: { bygg: ['gjaering', 'deigtemp', 'plan'], preset: ['gjaering', 'deigtemp', 'plan'] } },
+    views: { bygg: ['tidsvalg', 'gjaering', 'deigtemp', 'plan'], preset: ['gjaering', 'deigtemp', 'plan'] } },
   { id: 'bak', nr: 4, navn: 'Bak nå', kort: 'Følg prosessen',
     views: { bygg: ['baknaa'], preset: ['baknaa'] } },
   { id: 'oppslag', nr: null, navn: 'Oppslag', kort: 'Slå opp når du lurer',
@@ -708,9 +712,11 @@ function tegnStart() {
   });
   ph += `</tbody></table>
     <div class="spacer"></div>
-    <button class="btn" id="startTilBak">Gå til «Bak nå» og sett klokkeslett</button>`;
+    <button class="btn" id="startTilBak">Videre til Deigen ▸</button>`;
   pu.innerHTML = ph;
-  $('#startTilBak').onclick = () => vis('baknaa');
+  // Ett steg av gangen. Denne hoppet rett til steg 4 og forbi hele
+  // parametergjennomgangen — nettopp det steg 2 og 3 finnes for.
+  $('#startTilBak').onclick = () => visSteg('deigen');
 
   /* --- 4. Hvor de neste valgene tas ---
      Rutestripa som lå her før er erstattet av stegskinnen, som alltid er synlig.
@@ -3445,7 +3451,7 @@ function init() {
   // Selve committen ligger i brukByggOppskrift(), fordi startsiden må gjøre
   // nøyaktig det samme når du velger en bygg-type der.
   // Endringene gjelder nå fortløpende, så denne knappen er ren navigasjon.
-  $('#byggBruk').onclick = () => { vis('baknaa'); };
+
 
   $('#addMel').onclick = () => { S.melListe.push({ id: 'regal_standard', pct: 10 }); oppdater(); };
   $('#addFro').onclick = () => { S.froListe.push({ id: 'solsikke', gram: 100, varmt: false }); oppdater(); };

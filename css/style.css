@@ -76,9 +76,12 @@ details.kollaps>summary:hover h2,details.kollaps>summary:hover h3{color:var(--gu
 .skall{max-width:1600px;margin:0 auto;display:grid;
        grid-template-columns:212px minmax(0,1fr) 340px;gap:18px;align-items:start}
 
-/* ---- stegskinnen: appens eneste navigasjon ---- */
-#skinne{position:sticky;top:16px;align-self:start;display:flex;flex-direction:column;
-        gap:4px;padding:16px 0}
+/* ---- stegskinnen: appens eneste navigasjon ----
+   top må klarere den sticky headeren (~60 px). Med top:16px festet skinnen seg
+   BAK headeren — den så ut til å scrolle bort, fordi den lå gjemt under den.
+   Samme grunn som at #kontekst står på 70. */
+#skinne{position:sticky;top:70px;align-self:start;display:flex;flex-direction:column;
+        gap:4px;padding:16px 0;max-height:calc(100vh - 86px);overflow-y:auto}
 #skinne button{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;
   background:transparent;border:1px solid transparent;border-radius:var(--r);
   padding:10px 12px;min-height:56px;color:var(--txt2);cursor:pointer;font:inherit}
@@ -108,26 +111,6 @@ details.kollaps>summary:hover h2,details.kollaps>summary:hover h3{color:var(--gu
 
 /* To kortkolonner inne i hvert steg — hovedgrepet mot ubrukt bredde. Kort som
    trenger full bredde (tabeller, kurver, tidslinje) merkes .bred. */
-@media(min-width:1300px){
-  .view.on{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
-  .view.on>.card,.view.on>details.card{margin-bottom:0}
-  /* details.card spenner alltid: et åpnet fordypningskort er langt, og i én
-     kolonne blir raden svært skjev. Samme for kort med tabell, kurve eller
-     tidslinje — de har et breddebehov CSS-en ikke kan gjette seg til. */
-  .view.on>.bred,
-  .view.on>details.card,
-  .view.on>.grid,
-  .view.on>.rutefot,
-  .view.on>h1,
-  .view.on>.note,
-  .view.on>.naakort,
-  .view.on>#bakSteg,
-  .view.on>#melBibliotek,
-  .view.on>#tipsListe,
-  .view.on>#stekeKort{grid-column:1/-1}
-}
-/* Bak nå er utførelse, ikke planlegging: ett trinn om gangen, aldri to kolonner. */
-body[data-steg="bak"] .view.on{display:block}
 #kontekst{position:sticky;top:70px;max-height:calc(100vh - 86px);overflow-y:auto;
           background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
           padding:12px 13px;margin-top:20px}
@@ -147,6 +130,16 @@ body[data-steg="bak"] .skall{grid-template-columns:212px minmax(0,1fr)}
 main{min-width:0;padding:20px 16px 80px}
 .view{display:none} .view.on{display:block}
 
+/* Kortene står i ÉN kolonne, med vilje. Forsøket på to kortkolonner ble prøvd
+   og forkastet: nesten hvert kort har sitt eget rutenett inni (grovhetskortene,
+   feltrader, tabeller), og i en halv kolonne kollapser de til én kolonne. Da ble
+   det høye, smale kort med stor tom flate ved siden av — verre enn utgangspunktet.
+   Bredden brukes i stedet av kortenes egne g3/g4-rutenett, som får plass til tre
+   og fire kolonner når innholdskolonnen er bred. */
+/* Bak nå er utførelse, ikke planlegging: ett trinn om gangen, aldri to kolonner. */
+body[data-steg="bak"] .view.on{display:block}
+
+
 /* ---- kort ---- */
 .card{
   background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
@@ -156,7 +149,10 @@ main{min-width:0;padding:20px 16px 80px}
 .card>h2 .ic{opacity:.75;font-size:1.1em}
 .sub{color:var(--txt3);font-size:.85rem;margin:-4px 0 14px}
 
-.grid{display:grid;gap:16px}
+/* align-items:start, ikke stretch. Uten dette strekkes hvert kort i en rad til
+   høyden på det høyeste, og forskjellen blir tom luft inne i det korte kortet —
+   «Frø og bløtlegg» fikk et halvtomt felt fordi «Mel» ved siden av var lengre. */
+.grid{display:grid;gap:16px;align-items:start}
 .g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
 .g3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
 .g4{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
