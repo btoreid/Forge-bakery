@@ -273,14 +273,18 @@ function profilForUtstyr(utstyrId, formId) {
    ville vært en garantert kilde til at fanene kom i utakt. */
 function brukByggOppskrift(o = {}) {
   const B = byggOppskrift();
+  /* Dialene eier melblandingen, hydreringen, heveplanen og forfermenten.
+     Salt, smak og frø eies av kortene i steg 2 og røres KUN når brødtypen
+     faktisk byttes. Før ble de skrevet over her ved hvert eneste klikk på en
+     dial, så honning du hadde satt i «Salt og smak» hoppet tilbake til 0 så
+     snart du rørte grovheten — uten et ord. */
   S.melListe = B.gr.mel.map(m => ({ ...m }));
-  S.froListe = B.r.fro.map(f => ({ id: f.id, gram: Math.round(f.gram), varmt: f.varmt }));
   S.hydrering = +(B.hyd * 100).toFixed(1);
-  S.saltPct = 2.0;
-  S.honningPct = B.smak.honningPct || 0;
-  S.maltPct = B.smak.maltPct || 0;
-  S.oljePct = B.smak.oljePct || 0;
-  S.sukkerPct = 0; S.smorPct = 0;
+  if (o.nullstillFramdrift) {
+    S.saltPct = 2.0;
+    S.honningPct = 0; S.maltPct = 0; S.oljePct = 0; S.sukkerPct = 0; S.smorPct = 0;
+    S.froListe = [];
+  }
   S.gjaerType = 'torr'; S.gjaerPct = +B.gjaerPct.toFixed(3);
   S.forferment = { ...B.tp.forferment };
   S.antall = S.byggAntall; S.vektPerBrod = S.byggVekt;
@@ -792,26 +796,26 @@ function byggOppskrift() {
   // brukeren 3 prosentpoeng hydrering ved å velge det appen selv anbefaler.
   const lukket = ['glass', 'glass_stal', 'stopejern'].includes(ut.id);
 
-  const smak = { honningPct: 0, maltPct: 0, oljePct: 0 };
-  const froPct = [];
-  TILLEGG.forEach(t => {
-    const v = S.byggTillegg[t.id];
-    if (v === undefined || v === null) return;
-    if (t.type === 'fro') froPct.push({ id: t.id, pct: v, varmt: !!t.varmt });
-    else smak[t.felt] = v;
-  });
+  /* Salt, smak og frø leses fra tilstanden — de eies av kortene i steg 2, ikke
+     av dialene her. Før hadde de to sett kontroller som skrev til samme felt:
+     honning kunne settes både i «Salt og smak» og som tilleggskort, og et klikk
+     på en hvilken som helst dial overskrev det du hadde skrevet. */
+  const smak = {
+    honningPct: S.honningPct, maltPct: S.maltPct, oljePct: S.oljePct,
+    sukkerPct: S.sukkerPct, smorPct: S.smorPct
+  };
+  const froListe = S.froListe.map(f => ({ ...f }));
 
   const maalVekt = S.byggAntall * S.byggVekt;
   let melTotal = maalVekt / 1.85, gjaerPct = 1.0, hyd = gr.basisHyd / 100, r = null;
 
   for (let i = 0; i < 6; i++) {
-    const froListe = froPct.map(f => ({ id: f.id, gram: melTotal * f.pct / 100, varmt: f.varmt }));
     r = beregnOppskrift({
       melListe: gr.mel, froListe, hydrering: hyd,
-      saltPct: 2.0, ...smak, sukkerPct: 0, smorPct: 0,
+      saltPct: S.saltPct, ...smak,
       gjaerPct, gjaerType: 'torr',
       forferment: tp.forferment,
-      antall: S.byggAntall, vektPerBrod: S.byggVekt, froVannPaaToppen: true
+      antall: S.byggAntall, vektPerBrod: S.byggVekt, froVannPaaToppen: S.froVannPaaToppen
     });
     melTotal = r.melTotal;
     // Hydrering følger melblandingens absorpsjon. Lukket gryte støtter deigen
@@ -842,17 +846,16 @@ function byggOppskrift() {
   gjaerPct = torr;
 
   // Siste runde med riktig gjærmengde
-  const froListe = froPct.map(f => ({ id: f.id, gram: melTotal * f.pct / 100, varmt: f.varmt }));
   r = beregnOppskrift({
     melListe: gr.mel, froListe, hydrering: hyd,
-    saltPct: 2.0, ...smak, sukkerPct: 0, smorPct: 0,
+    saltPct: S.saltPct, ...smak,
     gjaerPct, gjaerType: 'torr', forferment: tp.forferment,
-    antall: S.byggAntall, vektPerBrod: S.byggVekt, froVannPaaToppen: true
+    antall: S.byggAntall, vektPerBrod: S.byggVekt, froVannPaaToppen: S.froVannPaaToppen
   });
   const g = planDose(plan, torr, r.masseKg, opt);
   const rise = maalHeveProsent(S.startTemp, { hydrering: hyd, grovAndel: r.grovMelAndel, styrke: r.svakesteStyrke, etterKaldheving: harKaldheving(plan) });
 
-  return { gr, tp, ut, lukket, r, g, plan, torr, gjaerPct, hyd, maalDose, rise, smak, froPct, underskudd };
+  return { gr, tp, ut, lukket, r, g, plan, torr, gjaerPct, hyd, maalDose, rise, smak, underskudd };
 }
 
 /* ============================================================
@@ -865,7 +868,8 @@ function tegnEffekt(B) {
   const c = $('#effektUt'); if (!c) return;
   const E = TILLEGG_EFFEKT;
 
-  const froPct = B.froPct.reduce((s, f) => s + f.pct, 0);
+  // Frøandelen leses av den ferdige oppskriften nå, ikke av tilleggskortene.
+  const froPct = (B.r.froAndel || 0) * 100;
   const honning = B.smak.honningPct || 0;
   const olje = B.smak.oljePct || 0;
   const malt = B.smak.maltPct || 0;
@@ -997,39 +1001,6 @@ function tegnEffekt(B) {
   return { loft, smak, saft, froPct };
 }
 
-/* Hvor mange gram utgjør et tillegg i den ferdige oppskriften? */
-function tilleggGram(B, t) {
-  if (t.type === 'fro') {
-    const f = B.r.fro.find(x => x.id === t.id);
-    return f ? f.gram : 0;
-  }
-  return B.r[{ honningPct: 'honning', maltPct: 'malt', oljePct: 'olje' }[t.felt]] || 0;
-}
-
-/* Lås et tillegg til et gitt antall gram.
-   Melmengden avhenger av hvor mye tillegg som er i deigen — legger du i mer frø,
-   blir det mindre plass til mel når totalvekten er fast. Prosenten kan derfor
-   ikke regnes ut i ett steg; den må itereres til den står stille. Konvergerer
-   på 3–4 runder, så seks er rikelig. */
-function settTilleggGram(id, gram) {
-  const t = TILLEGG.find(x => x.id === id); if (!t) return;
-  if (gram <= 0) { S.byggTillegg[id] = 0; return; }
-
-  // Første gjett fra melmengden slik den er nå.
-  const mel0 = byggOppskrift().r.melTotal;
-  if (isFinite(mel0) && mel0 > 0) S.byggTillegg[id] = gram / mel0 * 100;
-
-  // Så korrigeres det proporsjonalt mot det oppskriften FAKTISK gir. Et rent
-  // «pct = gram/mel» konvergerer for tregt når frøandelen er stor, fordi mer frø
-  // fortrenger mel når totalvekten er låst — de to drar i hver sin retning.
-  for (let i = 0; i < 25; i++) {
-    const naa = tilleggGram(byggOppskrift(), t);
-    if (!isFinite(naa) || naa <= 1e-6) break;
-    if (Math.abs(naa - gram) < 0.05) break;
-    S.byggTillegg[id] = Math.max(0, S.byggTillegg[id] * gram / naa);
-  }
-}
-
 function tegnBygg() {
   // --- Grovhet ---
   const gv = $('#grovhetValg'); gv.innerHTML = '';
@@ -1064,142 +1035,15 @@ function tegnBygg() {
   // ved siden av prosenten. Funksjonen leser bare tilstand, ikke DOM.
   const B = byggOppskrift();
 
-  // --- Tillegg ---
-  const lv = $('#tilleggValg'); lv.innerHTML = '';
-  TILLEGG.forEach(t => {
-    const paa = S.byggTillegg[t.id] !== undefined;
-    // Ikke <button> her: valgte kort inneholder slider og gram-felt, og nestede
-    // kontroller inne i en button er ugyldig. role+tabindex+keydown gir samme
-    // tastaturtilgang uten å ødelegge de indre feltene.
-    const b = el('div', 'stat');
-    b.style.cursor = 'pointer';
-    b.tabIndex = 0;
-    b.dataset.k = 'kort-tillegg-' + t.id;
-    b.setAttribute('role', 'button');
-    b.setAttribute('aria-pressed', String(paa));
-    if (paa) { b.style.borderColor = 'var(--gull)'; b.style.background = 'var(--panel2)'; }
-    b.innerHTML = `<div class="k">${t.type === 'fro' ? 'Frø / korn' : 'Smak'}</div>
-      <div class="v" style="font-size:1rem">${paa ? '✓ ' : '+ '}${t.navn}</div>
-      <div class="small" style="margin-top:4px">${paa ? `<b>${fmt(S.byggTillegg[t.id], t.pct < 1 ? 2 : 0)} %</b> av melet` : `anbefalt ${fmt(t.pct, t.pct < 1 ? 2 : 0)} %`}</div>`;
-    const veksle = () => {
-      if (paa) delete S.byggTillegg[t.id]; else S.byggTillegg[t.id] = t.pct;
-      byggEndret();
-    };
-    b.onclick = e => {
-      if (e.target.tagName === 'INPUT') return;
-      veksle();
-    };
-    b.onkeydown = e => {
-      if (e.target !== b) return; // Enter/space i indre felt skal ikke veksle kortet
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); veksle(); }
-    };
-    if (paa) {
-      const sl = el('input'); sl.type = 'range'; sl.min = t.min; sl.max = t.max;
-      sl.step = t.pct < 1 ? 0.05 : 1; sl.value = S.byggTillegg[t.id];
-      sl.oninput = () => { S.byggTillegg[t.id] = +sl.value; byggEndret(); };
-      sl.onclick = e => e.stopPropagation();
-      b.appendChild(sl);
+  /* Tilleggskortene er fjernet. De skrev til S.byggTillegg, som igjen satte
+     honning/olje/malt og froeliste - noeyaktig de samme verdiene som kortene
+     4 Salt og smak og 6 Froe og bloetlegg eier. To kontroller for samme tall
+     betyr at en av dem taper i stillhet, og +/- inne i kortet lukket dessuten
+     kortet fordi klikket boblet opp til kortets egen veksling. Anbefalingene
+     lever videre som info-tekst paa feltene og i kortet rett under. */
 
-      // Retningen du er på vei i, mens du drar. Uten dette må man gjette hva
-      // slideren gjør med brødet — som er hele grunnen til at panelet finnes.
-      const naa = S.byggTillegg[t.id];
-      const avvik = naa - t.pct;
-      const retning = Math.abs(avvik) < (t.pct < 1 ? 0.03 : 0.5)
-        ? `<span style="color:var(--grønn)">På anbefalt nivå.</span>`
-        : avvik > 0
-          ? `<span style="color:var(--gull)">▲ ${fmt(Math.abs(avvik), t.pct < 1 ? 2 : 0)} over anbefalt.</span> ${(t.opp || '').split('.')[0]}.`
-          : `<span style="color:var(--blå)">▼ ${fmt(Math.abs(avvik), t.pct < 1 ? 2 : 0)} under anbefalt.</span> ${(t.ned || '').split('.')[0]}.`;
-      const r = el('div', 'small', retning);
-      r.style.marginTop = '6px';
-      r.onclick = e => e.stopPropagation();
-      b.appendChild(r);
-
-      // Gram ved siden av prosent. Prosent er riktig enhet for modellen, men
-      // gram er det du har i skapet — har du 250 g solsikke igjen, vil du legge
-      // inn 250 og se hva det tilsvarer, ikke regne baklengs selv.
-      const gramNaa = tilleggGram(B, t);
-      const rad = el('div', 'gramrad');
-      rad.innerHTML = `<span class="small">gram</span>`;
-      const gi = el('input');
-      gi.type = 'number'; gi.min = '0'; gi.step = '10';
-      gi.value = Math.round(gramNaa);
-      gi.dataset.k = 'tilleggGram-' + t.id;
-      gi.onclick = e => e.stopPropagation();
-      gi.oninput = () => {
-        const v = +gi.value;
-        if (!isFinite(v) || v < 0) return;
-        settTilleggGram(t.id, v);
-        byggEndret();
-      };
-      rad.appendChild(gi);
-      rad.appendChild(el('span', 'small', `= ${pst(S.byggTillegg[t.id], t.pct < 1 ? 2 : 1)} av melet`));
-      b.appendChild(rad);
-
-      // Vei tilbake til anbefalt nivå etter at man har eksperimentert.
-      // Vises bare når man faktisk har flyttet seg fra det.
-      if (Math.abs(S.byggTillegg[t.id] - t.pct) > (t.pct < 1 ? 0.03 : 0.5)) {
-        const ret = el('button', 'btn ghost sm tilbakestill',
-          `↺ Tilbake til anbefalt (${fmt(t.pct, t.pct < 1 ? 2 : 0)} %)`);
-        ret.type = 'button';
-        ret.onclick = e => {
-          e.stopPropagation();
-          S.byggTillegg[t.id] = t.pct;
-          byggEndret();
-        };
-        b.appendChild(ret);
-      }
-    }
-    lv.appendChild(b);
-  });
-
-  // --- Utstyr ---
-  const uv = $('#byggUtstyr');
-  if (!uv.options.length) { UTSTYR.forEach(u => { const o = el('option', null, u.navn); o.value = u.id; uv.appendChild(o); }); }
-  uv.value = S.byggUtstyr;
-  $('#byggAntall').value = S.byggAntall; $('#byggVekt').value = S.byggVekt;
-
-  const { gr, tp, ut, lukket, r, g, torr, gjaerPct, hyd, rise } = B;
-
-  $('#grovhetUt').innerHTML = `<div class="note">${gr.om}</div>`;
-  $('#tidUt').innerHTML = `<div class="note">${tp.om}</div>
-    <div class="note ${tp.id === 'optimal' ? 'ok' : tp.ovnslos < 85 ? 'warn' : ''}">
-      Med denne planen løser appen gjærmengden til <b>${fmt(torr, 3)} % tørrgjær</b> (tilsvarer ${fmt(gjaerKonverter(torr, 'torr', 'fersk'), 2)} % fersk)
-      for å treffe måldosen ${fmt(B.maalDose, 2)}. ${torr > 0.55 ? 'Så høy gjærmengde gir et hevevindu på 10–20 minutter — følg deigen, ikke klokka.' : torr < 0.14 ? 'Lav gjærmengde gir et bredt, tilgivende hevevindu.' : ''}</div>` +
-    (B.underskudd > 0.02 ? `<div class="note bad"><b>Denne planen rekker ikke helt fram.</b> Gjæren er satt på det praktiske taket 0,83 % tørrgjær, og deigen når likevel bare ${fmt((1 - B.underskudd) * 100, 0)} % av måldosen. Mer gjær enn dette gir gjærsmak, smalere hevevindu og dårligere løft — det løser ikke problemet, det bytter det ut. Regn med et tettere brød med mindre smak. Har du 60 minutter til, velg neste plan opp; det er den billigste kvalitetsøkningen som finnes.</div>` : '');
-  $('#utstyrUt').innerHTML = `<div class="note ${ut.id === 'glass' ? 'warn' : ''}">${ut.om}</div>` +
-    (ut.id === 'glass' ? `<div class="note bad"><b>Termisk sjokk:</b> finn produsentens maksgrense før du forvarmer. Borosilikat tåler ~150 °C sprang, herdet kalknatronglass bare 60–80 °C, og mye glassbakeutstyr er kun godkjent til 220–250 °C. Sett heller glassgryta oppå det forvarmede stålet — da gjør stålet jobben glasset ikke klarer.</div>` : '');
-
-  // Tilleggseffekter
-  const lu = $('#tilleggUt'); lu.innerHTML = '';
-  if (B.froPct.length || Object.values(B.smak).some(v => v > 0)) {
-    let h = '<table><thead><tr><th>Tillegg</th><th class="n">Gram</th><th class="n">Binder vann</th><th>Effekt</th></tr></thead><tbody>';
-    r.fro.forEach(f => {
-      const t = TILLEGG.find(x => x.id === f.id);
-      h += `<tr><td><b>${f.navn}</b><div class="small">${t ? t.hvorfor : ''}</div>
-              ${t && t.opt ? `<div class="small" style="color:var(--grønn);margin-top:3px"><b>Anbefalt:</b> ${t.opt}</div>` : ''}</td>
-            <td class="n mono">${fmt(f.gram)}</td><td class="n mono">${fmt(f.bloetleggVann)} g</td>
-            <td class="small">${t ? t.obs : ''}
-              ${t && t.opp ? `<div style="margin-top:5px"><b style="color:var(--gull)">▲ Mer:</b> ${t.opp}</div>` : ''}
-              ${t && t.ned ? `<div style="margin-top:4px"><b style="color:var(--blå)">▼ Mindre:</b> ${t.ned}</div>` : ''}</td></tr>`;
-    });
-    [['honningPct', r.honning, 'Honning'], ['maltPct', r.malt, 'Diastatisk malt'], ['oljePct', r.olje, 'Olivenolje']].forEach(([k, gram, navn]) => {
-      if (!(B.smak[k] > 0)) return;
-      const t = TILLEGG.find(x => x.felt === k);
-      h += `<tr><td><b>${navn}</b><div class="small">${t ? t.hvorfor : ''}</div>
-              ${t && t.opt ? `<div class="small" style="color:var(--grønn);margin-top:3px"><b>Anbefalt:</b> ${t.opt}</div>` : ''}</td>
-            <td class="n mono">${fmt(gram, 1)}</td><td class="n mono">${k === 'honningPct' ? fmt(r.honningVann, 1) + ' g' : '–'}</td>
-            <td class="small">${t ? t.obs : ''}
-              ${t && t.opp ? `<div style="margin-top:5px"><b style="color:var(--gull)">▲ Mer:</b> ${t.opp}</div>` : ''}
-              ${t && t.ned ? `<div style="margin-top:4px"><b style="color:var(--blå)">▼ Mindre:</b> ${t.ned}</div>` : ''}</td></tr>`;
-    });
-    h += '</tbody></table>';
-    lu.innerHTML = h;
-    lu.appendChild(el('div', 'note',
-      `Tilleggene fortynner strukturen fra <b>${fmt(r.grovMelAndel * 100, 1)} %</b> (bare melet) til <b>${fmt(r.fortynnetAndel * 100, 1)} %</b> av alt tørrstoffet, og binder <b>${fmt(r.froAbsorbert)} g vann</b> som er lagt på toppen av hydreringen.
-       <br>${r.kornTillegg > 0
-         ? `<b>Men bare korndelen teller som grovhet.</b> Brødskala'n holder frø og nøtter helt utenfor regnestykket, mens korngrynene (${gram(r.kornTillegg)}) teller fullt med. Brødet havner derfor på <b>${fmt(r.brodskala.pct, 1)} %</b> — opp fra ${fmt(r.grovMelAndel * 100, 1)} % på melet alene — og merkes som <b>${r.brodskala.kort.toLowerCase()}</b>. Frøene flyttet det ikke ett prosentpoeng.`
-         : `<b>Men grovheten endrer seg ikke av det.</b> Brødskala'n holder frø og nøtter utenfor regnestykket, så brødet står fortsatt på <b>${fmt(r.brodskala.pct, 1)} %</b> og merkes som <b>${r.brodskala.kort.toLowerCase()}</b>.`}`));
-  } else lu.innerHTML = '<p class="small">Ingen tillegg valgt. Loff+ med 10 % sammalt og 6 % ristede solsikkekjerner er det klassiske svaret på «litt sunnere loff» — ristede frø gir omtrent dobbelt så mye smak per gram som uristede, så 6 % ristede tilsvarer 12 % uristede.</p>';
+  // Disse ble pakket ut i blokken over; nøkkeltallene under trenger dem fortsatt.
+  const { r, g, torr, hyd, lukket, rise, ut, gr, tp, plan, maalDose, underskudd } = B;
 
   tegnEffekt(B);
 

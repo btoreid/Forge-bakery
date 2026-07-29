@@ -194,20 +194,15 @@
   </div>
 </section>
 
-<!-- ============ STEG 2C: TILLEGG (bare grovhetsruten) ============ -->
+<!-- ============ STEG 2C: HVA VALGENE KOSTER (bare grovhetsruten) ============
+     Ren fordypning. Tilleggskortene som lå her er fjernet: de var en andre
+     kontroll for de samme tallene som «Salt og smak» og «Frø og bløtlegg». -->
 <section class="view" id="v-tillegg">
-  <div class="card">
-    <h2><span class="ic">✚</span> 7 · Tillegg</h2>
-    <p class="sub">Tillegg til den ferdige deigen. Trykk for å legge til — anbefalt mengde settes automatisk, og du ser hva den gjør med grovhet og vann.</p>
-    <div id="tilleggValg" class="grid g3"></div>
-    <div id="tilleggUt"></div>
-  </div>
-
   <details class="card kollaps">
-    <summary><h3>Hva tilleggene koster og gir</h3></summary>
+    <summary><h3>Hva frø og smakstilsetninger koster og gir</h3></summary>
     <p class="sub">
-      Tre ting trekker mot hver sin kant: ovnsløft, smak og saftighet. Her ser du byttehandelen mens du drar i
-      slideren over — ikke først når brødet er skåret opp. Tallene er interpolert fra publiserte måleserier.
+      Tre ting trekker mot hver sin kant: ovnsløft, smak og saftighet. Her ser du byttehandelen for frøene og
+      smakstilsetningene du har lagt inn over — ikke først når brødet er skåret opp. Tallene er interpolert fra publiserte måleserier.
     </p>
     <div id="effektUt"></div>
   </details>
@@ -259,13 +254,9 @@
 
   <div class="card">
     <h3>Utstyr og steking</h3>
-    <p class="sub">Lukket gryte støtter deigen mens den utvider seg, så du kan kjøre litt våtere. Derfor står utstyret her, ikke bare i «Bak nå».</p>
-    <div class="grid g2">
-      <div class="field"><label for="byggUtstyr">Slik steker du</label><select id="byggUtstyr"></select></div>
-      <div class="field"><label for="byggAntall">Antall brød à vekt</label>
-        <div class="row"><input type="number" id="byggAntall" min="1" step="1" value="2"><input type="number" id="byggVekt" min="200" step="50" value="900"></div>
-      </div>
-    </div>
+    <p class="sub">Lukket gryte støtter deigen mens den utvider seg, så du kan kjøre litt våtere. Derfor står utstyret her, ikke bare i «Bak nå».
+       Antall og vekt setter du i steg 2, under «Størrelse og vann».</p>
+    <div class="field" style="max-width:340px"><label for="byggUtstyr">Slik steker du</label><select id="byggUtstyr"></select></div>
     <div id="utstyrUt"></div>
   </div>
 </section>
