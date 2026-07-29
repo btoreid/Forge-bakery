@@ -617,6 +617,7 @@ function tegnStart() {
     // med tastatur og skjermleser. Samme mønster på alle kortvalg.
     const b = el('button', 'stat');
     b.type = 'button';
+    b.dataset.k = 'kort-brotype-' + t.id; // stabil nøkkel: gjenopprettFokus finner igjen kortet etter re-render
     b.setAttribute('aria-pressed', String(paa));
     if (paa) { b.style.borderColor = 'var(--gull)'; b.style.background = 'var(--panel2)'; }
     b.innerHTML = `<div class="k">${t.ikon} ${t.rute === 'bygg' ? 'Du styrer grovheten' : 'Ferdig kalibrert deig'}</div>
@@ -639,6 +640,7 @@ function tegnStart() {
       const paa = f.id === S.form;
       const b = el('button', 'stat');
       b.type = 'button';
+      b.dataset.k = 'kort-form-' + f.id;
       b.setAttribute('aria-pressed', String(paa));
       if (paa) { b.style.borderColor = 'var(--gull)'; b.style.background = 'var(--panel2)'; }
       b.innerHTML = `<div class="k">${f.ikon} ${f.kort}</div>
@@ -1018,6 +1020,7 @@ function tegnBygg() {
   GROVHET.forEach((x, i) => {
     const b = el('button', 'stat');
     b.type = 'button';
+    b.dataset.k = 'kort-grovhet-' + i;
     b.setAttribute('aria-pressed', String(i === S.byggGrovhet));
     if (i === S.byggGrovhet) { b.style.borderColor = 'var(--gull)'; b.style.background = 'var(--panel2)'; }
     b.innerHTML = `<div class="k">${x.kort}</div><div class="v" style="font-size:1.05rem">${x.navn}</div>
@@ -1032,6 +1035,7 @@ function tegnBygg() {
   TIDSPLANER.forEach(x => {
     const b = el('button', 'stat');
     b.type = 'button';
+    b.dataset.k = 'kort-tid-' + x.id;
     b.setAttribute('aria-pressed', String(x.id === S.byggTid));
     if (x.id === S.byggTid) { b.style.borderColor = 'var(--gull)'; b.style.background = 'var(--panel2)'; }
     b.innerHTML = `<div class="k">${x.kort}</div><div class="v" style="font-size:1.05rem">${x.navn}</div>
@@ -1054,6 +1058,7 @@ function tegnBygg() {
     const b = el('div', 'stat');
     b.style.cursor = 'pointer';
     b.tabIndex = 0;
+    b.dataset.k = 'kort-tillegg-' + t.id;
     b.setAttribute('role', 'button');
     b.setAttribute('aria-pressed', String(paa));
     if (paa) { b.style.borderColor = 'var(--gull)'; b.style.background = 'var(--panel2)'; }
