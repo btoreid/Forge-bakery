@@ -31,39 +31,8 @@ header{
 .hwrap{max-width:1220px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .logo{font-weight:800;font-size:1.15rem;letter-spacing:.02em;color:var(--gull);white-space:nowrap}
 .logo small{display:block;font-size:.62rem;font-weight:500;color:var(--txt3);letter-spacing:.14em;text-transform:uppercase}
-nav{display:flex;gap:2px;flex-wrap:wrap;margin-left:auto}
-/* min-height 44 px: appen brukes med melete fingre på mobil, og 44×44 er
-   minstemålet for et treffsikkert touch-mål. Gjelder all navigasjon. */
-nav button{
-  background:transparent;border:1px solid transparent;color:var(--txt2);
-  padding:7px 13px;border-radius:var(--r);cursor:pointer;font-size:.87rem;white-space:nowrap;
-  min-height:44px;
-}
-nav button:hover{color:var(--txt);background:#ffffff09}
-nav button.on{background:var(--gull);color:#1a1409;border-color:var(--gull);font-weight:600}
-
-/* Undernivået: bare den aktive gruppens faner. Knapper på desktop,
-   native <select> på mobil — OS-ens egen velger har store treffflater. */
-.undernavwrap{max-width:1220px;margin:0 auto;padding:0 16px 8px}
-#undernav{display:flex;gap:2px;flex-wrap:wrap}
-#undernav button{
-  background:transparent;border:1px solid transparent;color:var(--txt3);
-  padding:5px 11px;border-radius:var(--r);cursor:pointer;font-size:.83rem;white-space:nowrap;
-  min-height:44px;
-}
-#undernav button:hover{color:var(--txt);background:#ffffff09}
-#undernav button.on{color:var(--gull);background:#e0a53c1a;border-color:#e0a53c44;font-weight:600}
-#undernavSel{display:none;width:100%;padding:9px 10px;font-size:.95rem}
-
-/* Hovedveien for brødtypen du har valgt, markert med en prikk under fanen.
-   Fanene som ikke gjelder for den brødtypen tones ned i stedet for å skjules —
-   de virker fortsatt, men du ser at de ligger utenfor ruten din. */
-nav button.rute::after,#undernav button.rute::after{
-  content:'';display:block;height:2px;margin:3px 6px -4px;border-radius:2px;background:var(--gull);opacity:.75;
-}
-nav button.on.rute::after{background:#1a1409;opacity:.35}
-nav button.utenfor,#undernav button.utenfor{opacity:.4}
-nav button.utenfor:hover,#undernav button.utenfor:hover{opacity:.75}
+/* Gruppenav, undernav og rutemarkering er borte — stegskinnen (#skinne) er
+   nå appens eneste navigasjon. Se «stegskinnen» lenger ned. */
 
 /* Sammenleggbare fagstoffkort. <details> holder innholdet i sideflyten —
    søkbart med Ctrl+F, printbart, og du mister ikke plassen din slik du gjør i
@@ -81,7 +50,7 @@ details.kollaps>summary h2,details.kollaps>summary h3{margin:0}
 details.kollaps:not([open]){padding-bottom:13px}
 details.kollaps>summary:hover h2,details.kollaps>summary:hover h3{color:var(--gull)}
 
-/* Rutefot: «hvor er jeg, hva er neste». Ligger nederst i hovedveisfanene. */
+/* Rutefot: «hvor er jeg, hva er neste». Ligger nederst i siste seksjon i steget. */
 .rutefot{
   display:flex;align-items:center;gap:12px;flex-wrap:wrap;
   background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
@@ -91,7 +60,7 @@ details.kollaps>summary:hover h2,details.kollaps>summary:hover h3{color:var(--gu
            text-transform:uppercase;letter-spacing:.06em}
 .rutefot-k{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
 
-/* Rutestripa på startsiden */
+/* «Hvor tas de neste valgene» på startsiden */
 .rutesteg{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid var(--line)}
 .rutesteg:last-of-type{border-bottom:none}
 .rutenr{
@@ -100,10 +69,52 @@ details.kollaps>summary:hover h2,details.kollaps>summary:hover h3{color:var(--gu
 }
 .rutesteg .btn{flex:0 0 auto;min-width:104px}
 
-/* Tospaltet skall: innhold til venstre, permanent kontekstpanel til høyre.
-   340 px FAST, ikke fr — kurven skal ikke reflowe mens du drar i en slider. */
-.skall{max-width:1220px;margin:0 auto;display:grid;
-       grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+/* Trespaltet skall: stegskinne · innhold · kontekstpanel.
+   340 px FAST, ikke fr — kurven skal ikke reflowe mens du drar i en slider.
+   1600 i stedet for 1220 fjerner det meste av den ubrukte bredden på en
+   vanlig 1920-skjerm; resten tas av at kortene legger seg i to kolonner. */
+.skall{max-width:1600px;margin:0 auto;display:grid;
+       grid-template-columns:212px minmax(0,1fr) 340px;gap:18px;align-items:start}
+
+/* ---- stegskinnen: appens eneste navigasjon ---- */
+#skinne{position:sticky;top:16px;align-self:start;display:flex;flex-direction:column;
+        gap:4px;padding:16px 0}
+#skinne button{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;
+  background:transparent;border:1px solid transparent;border-radius:var(--r);
+  padding:10px 12px;min-height:56px;color:var(--txt2);cursor:pointer;font:inherit}
+#skinne button:hover{background:#ffffff09;color:var(--txt)}
+#skinne button.on{background:var(--panel);border-color:var(--gull);color:var(--txt)}
+#skinne button.on .nr{background:var(--gull);color:#1a1409}
+#skinne button.gjort .nr{background:var(--grønn);color:#12100e}
+#skinne .nr{flex:0 0 24px;height:24px;border-radius:50%;background:var(--line2);color:var(--txt);
+  display:grid;place-items:center;font-weight:700;font-size:.8rem}
+#skinne .skinnetxt{min-width:0}
+#skinne .navn{display:block;font-weight:600;font-size:.92rem}
+#skinne .kort{display:block;font-size:.74rem;color:var(--txt3);margin-top:2px;line-height:1.3}
+#skinne .oppslag{margin-top:auto;border-top:1px solid var(--line);border-radius:0;padding-top:14px}
+#skinne button:focus-visible{outline:2px solid var(--gull);outline-offset:2px}
+
+.stegstatus{margin-left:auto;color:var(--txt3);font-size:.84rem;white-space:nowrap}
+
+/* Parametergjennomgangen: alt du har bestemt, på én skjerm. */
+.seover{width:100%}
+.seover td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+.seover tr:last-child td{border-bottom:none}
+.seover td:first-child{color:var(--txt3);white-space:nowrap;width:1%;padding-right:14px}
+
+/* Ankerraden: innholdsfortegnelse for det lange steget, ikke et navnivå til. */
+.ankere{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 14px}
+.ankere .small{margin-right:2px}
+
+/* To kortkolonner inne i hvert steg — hovedgrepet mot ubrukt bredde. Kort som
+   trenger full bredde (tabeller, kurver, tidslinje) merkes .bred. */
+@media(min-width:1300px){
+  .view.on{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+  .view.on>.card,.view.on>details.card{margin-bottom:0}
+  .view.on>.bred,.view.on>.grid,.view.on>.rutefot,.view.on>h1,.view.on>.note{grid-column:1/-1}
+}
+/* Bak nå er utførelse, ikke planlegging: ett trinn om gangen, aldri to kolonner. */
+body[data-steg="bak"] .view.on{display:block}
 #kontekst{position:sticky;top:70px;max-height:calc(100vh - 86px);overflow-y:auto;
           background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
           padding:12px 13px;margin-top:20px}
@@ -117,8 +128,8 @@ details.kollaps>summary:hover h2,details.kollaps>summary:hover h3{color:var(--gu
 #kxTilKurve{width:100%;margin-top:9px}
 /* På «Bak nå» ER trinnkortet konteksten; en hevekurve er irrelevant når du
    står med hendene i deigen. */
-body[data-v="baknaa"] #kontekst{display:none}
-body[data-v="baknaa"] .skall{grid-template-columns:minmax(0,1fr)}
+body[data-steg="bak"] #kontekst{display:none}
+body[data-steg="bak"] .skall{grid-template-columns:212px minmax(0,1fr)}
 
 main{min-width:0;padding:20px 16px 80px}
 .view{display:none} .view.on{display:block}
@@ -458,6 +469,15 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
      vandrer også overskriftene ut av syne. Nå ruller hver tabell inne i seg selv. */
   .card table,details.card table{display:block;overflow-x:auto;max-width:100%}
   .skall{grid-template-columns:minmax(0,1fr)}
+  /* Skinnen blir en horisontal sticky stripe. Samme markup, samme JS — bare
+     lagt om i CSS. Dette er hele mobilnavigasjonen: ingen undernav, ingen
+     nedtrekksmeny, ingen rutestripe. */
+  #skinne{position:sticky;top:0;z-index:55;flex-direction:row;overflow-x:auto;
+          background:var(--bg2);border-bottom:1px solid var(--line);
+          padding:6px 10px;gap:6px;margin:0 -0px}
+  #skinne button{width:auto;min-height:48px;white-space:nowrap;align-items:center}
+  #skinne .kort{display:none}          /* underteksten er PC-luksus */
+  #skinne .oppslag{margin-top:0;border-top:none;padding-top:10px}
   #kontekst{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:60;
             margin:0;border-radius:0;border-left:none;border-right:none;
             max-height:56vh;display:flex;flex-direction:column-reverse;
@@ -466,7 +486,7 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
   #kontekst>summary::-webkit-details-marker{display:none}
   .kxinnhold{overflow-y:auto}
   main{padding-bottom:70px}
-  body[data-v="baknaa"] main{padding-bottom:60px}
+  body[data-steg="bak"] main{padding-bottom:60px}
 }
 
 @media(max-width:640px){
@@ -477,12 +497,10 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
   /* Undertittelen er dekor. På kjøkkenet er 20 px skjermhøyde verdt mer. */
   .logo small{display:none}
   .logo{font-size:1.05rem}
-  nav{margin-left:0;width:100%}
-  nav button{flex:1;padding:7px 8px;font-size:.8rem}
-  /* Undernivået blir nedtrekksmeny — én rad i stedet for en knapperad til. */
-  #undernav{display:none}
-  #undernavSel{display:block}
-  .undernavwrap{padding:0 12px 8px}
+  .stegstatus{margin-left:0;width:100%;font-size:.78rem}
+  /* På steg 4 er trinnkortet det viktigste på skjermen. Da komprimeres
+     skinnen til nummer, og bare det aktive steget viser navn. */
+  body[data-steg="bak"] #skinne button:not(.on) .navn{display:none}
   .rutefot-k{margin-left:0;width:100%}
   .rutefot .btn{flex:1}
   main{padding:14px 11px 70px}

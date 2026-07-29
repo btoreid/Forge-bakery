@@ -384,119 +384,111 @@ const RUTER = {
 
 const OPPSLAG = ['steking', 'melbibliotek', 'teknikk', 'logg'];
 
-/* Fanenavnene bor her, ikke i markupen — de brukes av navigasjonen, rutestripa,
-   rutefoten og mobilvelgeren, og skal skrives ett sted. */
+/* Seksjonsnavnene bor her, ikke i markupen — de brukes av ankerraden og
+   oppslagsfanene, og skal skrives ett sted. Navnene beskriver nå INNHOLDET i
+   seksjonen, ikke en fane du bytter til: «Grovhet og tid» sier hva du gjør
+   der, mens «Bygg brød» bare var et sted. */
 const FANENAVN = {
-  start: 'Start', bygg: 'Bygg brød', oppskrift: 'Oppskrift',
-  gjaering: 'Gjæring & tid', deigtemp: 'Deigtemp', plan: 'Tidsplan',
+  start: 'Start', bygg: 'Grovhet og tid', oppskrift: 'Mel, salt og forferment',
+  gjaering: 'Heveplan', deigtemp: 'Deigtemp og vann', plan: 'Klokkeslett',
   baknaa: 'Bak nå', steking: 'Steking', melbibliotek: 'Mel & korn',
   teknikk: 'Teknikk', logg: 'Bakelogg'
 };
 function faneNavn(v) { return FANENAVN[v] || v; }
 
-/* Elleve faner på én rad er ikke en meny, det er en liste. Gruppert i fire
-   følger toppnivået prosessen — velg brødet, planlegg det, bak det — og
-   oppslagsstoffet er samlet for seg i stedet for å konkurrere med handlingene.
-   Selve <section>-ene er urørt; dette er bare navigasjon. */
-const GRUPPER = [
-  { id: 'brodet',  navn: '① Brødet',    views: ['start', 'bygg', 'oppskrift'] },
-  { id: 'prosess', navn: '② Prosessen', views: ['gjaering', 'deigtemp', 'plan'] },
-  { id: 'baking',  navn: '③ Bak nå',    views: ['baknaa'] },
-  { id: 'oppslag', navn: 'Oppslag',     views: OPPSLAG }
+/* Fire steg pluss oppslag. Hvert steg er ÉN side satt sammen av flere seksjoner
+   som vises samtidig — ikke faner du må bytte mellom. Det som før var elleve
+   faner i to nivåer, er nå fire steg du går gjennom i rekkefølge.
+
+   `views` er per rute: velger du ciabatta, finnes ikke grovhetstrappa i steg 2
+   i det hele tatt. Før kunne man navigere til en fane som møtte deg med et
+   advarselskort om at man ikke burde være der. */
+const STEG = [
+  { id: 'brodet', nr: 1, navn: 'Brødet', kort: 'Hva skal du bake',
+    views: { bygg: ['start'], preset: ['start'] } },
+  { id: 'deigen', nr: 2, navn: 'Deigen', kort: 'Grovhet, mel og tillegg',
+    views: { bygg: ['bygg', 'oppskrift'], preset: ['oppskrift'] } },
+  { id: 'tid', nr: 3, navn: 'Tid & temperatur', kort: 'Heveplan og klokkeslett',
+    views: { bygg: ['gjaering', 'deigtemp', 'plan'], preset: ['gjaering', 'deigtemp', 'plan'] } },
+  { id: 'bak', nr: 4, navn: 'Bak nå', kort: 'Følg prosessen',
+    views: { bygg: ['baknaa'], preset: ['baknaa'] } },
+  { id: 'oppslag', nr: null, navn: 'Oppslag', kort: 'Slå opp når du lurer',
+    views: { bygg: OPPSLAG, preset: OPPSLAG } }
 ];
+const STEG_ANTALL = STEG.filter(s => s.nr).length;
 
-const gruppeSist = {};
-function gruppeFor(v) { return GRUPPER.find(g => g.views.includes(v)) || GRUPPER[0]; }
+function stegViews(s) { return s.views[aktivBrotype().rute] || s.views.bygg; }
+function stegFor(viewId) { return STEG.find(s => stegViews(s).includes(viewId)) || STEG[0]; }
 
-/* Toppnivået bygges én gang. Trykker du på en gruppe, havner du i den fanen du
-   sist var i der — ikke tilbake på start hver gang. */
-function byggNav() {
-  const n = $('#nav'); if (!n) return;
+/* Stegskinnen: appens eneste navigasjon. Tegnes på nytt ved hvert stegbytte,
+   fordi hakene for gjennomførte steg endrer seg. På PC står den som en sticky
+   venstrekolonne, på telefon som en horisontal stripe øverst — samme markup. */
+function byggSkinne(aktiv) {
+  const n = $('#skinne'); if (!n) return;
   n.innerHTML = '';
-  GRUPPER.forEach(g => {
-    const b = el('button', null, g.navn);
-    b.dataset.g = g.id;
-    b.onclick = () => vis(g.views.includes(gruppeSist[g.id]) ? gruppeSist[g.id] : g.views[0]);
+  const idx = STEG.findIndex(s => s.id === aktiv);
+  STEG.forEach((s, i) => {
+    const erAktiv = s.id === aktiv;
+    const gjort = s.nr && idx >= 0 && i < idx;
+    const b = el('button', (erAktiv ? 'on ' : '') + (gjort ? 'gjort ' : '') + (s.nr ? '' : 'oppslag'));
+    b.type = 'button';
+    b.dataset.steg = s.id;
+    if (erAktiv) b.setAttribute('aria-current', 'step');
+    b.innerHTML = `<span class="nr">${s.nr ? (gjort ? '✓' : s.nr) : '?'}</span>
+      <span class="skinnetxt"><span class="navn">${s.navn}</span><span class="kort">${s.kort}</span></span>`;
+    b.onclick = () => visSteg(s.id);
     n.appendChild(b);
   });
 }
 
-/* Undernivået tegnes på nytt ved hvert fanebytte, fordi det bare skal vise
-   valgene i den aktive gruppen. «③ Bak nå» har én fane, og da forsvinner raden
-   helt i stedet for å stå igjen som en tom stripe. */
-function tegnUndernav(v) {
-  const g = gruppeFor(v);
-  const un = $('#undernav'), sel = $('#undernavSel');
-  const wrap = document.querySelector('.undernavwrap');
-  if (wrap) wrap.style.display = g.views.length > 1 ? '' : 'none';
-  if (!un || !sel) return;
+/* Ankerraden scroller innenfor steget. Den bytter ikke visning, så den er ikke
+   et navigasjonsnivå — bare en innholdsfortegnelse for en lang side. Har steget
+   bare én seksjon, forsvinner raden helt. */
+function tegnAnkere(steg) {
+  const a = $('#ankere'); if (!a) return;
+  const v = stegViews(steg);
+  a.innerHTML = '';
+  a.style.display = v.length > 1 ? '' : 'none';
+  if (v.length < 2) return;
 
-  un.innerHTML = '';
-  g.views.forEach(w => {
-    const b = el('button', w === v ? 'on' : null, faneNavn(w));
-    b.dataset.v = w;
-    b.onclick = () => vis(w);
-    un.appendChild(b);
-  });
-
-  sel.innerHTML = '';
-  g.views.forEach(w => {
-    const o = el('option', null, faneNavn(w));
-    o.value = w; if (w === v) o.selected = true;
-    sel.appendChild(o);
-  });
-  sel.onchange = () => vis(sel.value);
-
-  merkRute();
-}
-
-/* Markerer hovedveien og de fanene som ikke gjelder for valgt brødtype.
-   Lå tidligere på #nav; flyttet ett nivå ned da toppnivået ble grupper. */
-function merkRute() {
-  const R = RUTER[aktivBrotype().rute]; if (!R) return;
-  const hoved = new Set(R.hoved.map(x => x[0]));
-  const ikke = new Set(R.ikke);
-  $$('#undernav button').forEach(b => {
-    b.classList.toggle('rute', hoved.has(b.dataset.v));
-    b.classList.toggle('utenfor', ikke.has(b.dataset.v));
-  });
-  $$('#nav button').forEach(b => {
-    const g = GRUPPER.find(x => x.id === b.dataset.g);
-    b.classList.toggle('rute', !!g && g.views.some(w => hoved.has(w)));
+  // Oppslag er ikke ett steg med flere seksjoner, men fire uavhengige oppslags-
+  // verk. Der bytter knappene visning; i prosesstegene scroller de.
+  const erOppslag = !steg.nr;
+  a.appendChild(el('span', 'small', erOppslag ? 'Slå opp:' : 'På denne siden:'));
+  v.forEach(w => {
+    const b = el('button', 'ordknapp' + (erOppslag && w === oppslagAktiv ? ' on' : ''), faneNavn(w));
+    b.type = 'button';
+    b.onclick = erOppslag
+      ? () => { oppslagAktiv = w; visSteg('oppslag'); }
+      : () => { const s = $('#v-' + w); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+    a.appendChild(b);
   });
 }
+let oppslagAktiv = OPPSLAG[0];
 
-/* Rutefoten: hvor er jeg, og hva er neste steg? Uten den var ruta bare synlig på
-   startsiden — og «Oppskrift», som ER steg 2 av 3 for ciabatta, baguetter og
-   focaccia, hadde ingen vei videre i det hele tatt. */
-function tegnRutefot(v) {
-  const sec = $('#v-' + v); if (!sec) return;
-  const R = RUTER[aktivBrotype().rute];
-  const idx = R.hoved.findIndex(x => x[0] === v);
-  const erFordyp = R.juster.includes(v);
-  let fot = sec.querySelector('.rutefot');
-  if (idx < 0 && !erFordyp) { if (fot) fot.remove(); return; }
-  if (!fot) { fot = el('div', 'rutefot'); sec.appendChild(fot); }
-
-  if (idx >= 0) {
-    const neste = R.hoved[idx + 1], forrige = R.hoved[idx - 1];
-    fot.innerHTML =
-      `<span class="rutefot-n">Steg ${idx + 1} av ${R.hoved.length}</span>
-       <span class="small">${aktivBrotype().navn}</span>
-       <span class="rutefot-k">
-         ${forrige ? `<button class="btn ghost sm" data-go="${forrige[0]}">◂ ${faneNavn(forrige[0])}</button>` : ''}
-         ${neste ? `<button class="btn sm" data-go="${neste[0]}">${faneNavn(neste[0])} ▸</button>` : ''}
-       </span>`;
-  } else {
-    fot.innerHTML =
-      `<span class="small">Finjustering — hovedveien går utenom denne fanen.</span>
-       <span class="rutefot-k">
-         ${R.hoved.map(([w], i) => `<button class="btn ghost sm" data-go="${w}">${i + 1}. ${faneNavn(w)}</button>`).join(' ')}
-       </span>`;
-  }
-  fot.querySelectorAll('[data-go]').forEach(b => b.onclick = () => vis(b.dataset.go));
+/* Stegfoten: én vei bakover, én framover. Festes til siste seksjon i steget,
+   ikke til hver enkelt fane. Oppslag får ingen fot — det er ikke et steg. */
+function tegnStegfot(steg) {
+  // Bare stegfoter fjernes. «Se over»-kortet har sin egen .rutefot inne i
+  // seksjonen; den eies av tegnSeOver og skal stå.
+  $$('.rutefot[data-stegfot]').forEach(f => f.remove());
+  if (!steg.nr) return;
+  const v = stegViews(steg);
+  const sec = $('#v-' + v[v.length - 1]); if (!sec) return;
+  const i = STEG.findIndex(s => s.id === steg.id);
+  const forrige = STEG[i - 1], neste = STEG[i + 1];
+  const fot = el('div', 'rutefot');
+  fot.dataset.stegfot = '1';
+  fot.innerHTML =
+    `<span class="rutefot-n">Steg ${steg.nr} av ${STEG_ANTALL}</span>
+     <span class="small">${aktivBrotype().navn}</span>
+     <span class="rutefot-k">
+       ${forrige && forrige.nr ? `<button class="btn ghost sm" data-steg="${forrige.id}">◂ ${forrige.navn}</button>` : ''}
+       ${neste && neste.nr ? `<button class="btn sm" data-steg="${neste.id}">${neste.navn} ▸</button>` : ''}
+     </span>`;
+  sec.appendChild(fot);
+  fot.querySelectorAll('[data-steg]').forEach(b => b.onclick = () => visSteg(b.dataset.steg));
 }
-
 
 /* ---------- Tegninger av korn og frø ----------
    Samme rutenett for alle, så størrelsesforskjellene mellom kornslagene er
@@ -645,7 +637,7 @@ function tegnStart() {
     b.dataset.k = 'kort-brotype-' + t.id; // stabil nøkkel: gjenopprettFokus finner igjen kortet etter re-render
     b.setAttribute('aria-pressed', String(paa));
     if (paa) { b.style.borderColor = 'var(--gull)'; b.style.background = 'var(--panel2)'; }
-    b.innerHTML = `<div class="k">${t.ikon} ${t.rute === 'bygg' ? 'Du styrer grovheten' : 'Ferdig kalibrert deig'}</div>
+    b.innerHTML = `<div class="k">${t.ikon} ${t.rute === 'bygg' ? 'Du styrer grovhet og mel' : 'Ferdig kalibrert deig'}</div>
       <div class="v" style="font-size:1.05rem">${paa ? '✓ ' : ''}${t.navn}</div>
       <div class="small" style="margin-top:5px">${t.undertittel}</div>`;
     b.onclick = () => { velgBrotype(t.id); oppdater(); };
@@ -715,55 +707,42 @@ function tegnStart() {
   pu.innerHTML = ph;
   $('#startTilBak').onclick = () => vis('baknaa');
 
-  /* --- 4. Ruten gjennom fanene --- */
+  /* --- 4. Hvor de neste valgene tas ---
+     Rutestripa som lå her før er erstattet av stegskinnen, som alltid er synlig.
+     Det som gjenstår er det stripa ikke svarte på: HVOR grovhet, meltyper og
+     forferment faktisk bestemmes. */
   const R = RUTER[type.rute];
-  let rh = `<p class="sub">Du baker <b>${type.navn.toLowerCase()}</b>. Da er dette veien:</p>`;
-  R.hoved.forEach(([v, hva], i) => {
-    rh += `<div class="rutesteg">
-      <span class="rutenr">${i + 1}</span>
-      <button class="btn ghost sm" data-go="${v}">${faneNavn(v)}</button>
-      <span class="small">${hva}</span></div>`;
-  });
-
-  rh += `<div class="spacer"></div>
-    <p class="small"><b>Vil du finjustere?</b> Disse fanene viser og endrer detaljer i det samme brødet —
-    du trenger dem ikke, men de er der: ${R.juster.map(v => `<button class="btn ghost sm" data-go="${v}">${faneNavn(v)}</button>`).join(' ')}</p>`;
-
-  if (R.ikke.length) {
-    rh += `<div class="note warn"><b>Hopp over ${R.ikke.map(faneNavn).join(' og ')}.</b>
-      Den fanen bygger frittstående brød av grovhetstrappa — Regal, sammalt hvete og rug.
-      ${type.navn} er en annen deig, og grovhetsdialen der ville bare bygget deg et helt annet brød.</div>`;
-  }
-
-  rh += `<p class="small" style="margin-top:10px"><b>Oppslag når du lurer på noe:</b>
-    ${OPPSLAG.map(v => `<button class="btn ghost sm" data-go="${v}">${faneNavn(v)}</button>`).join(' ')}</p>`;
-
-  $('#ruteUt').innerHTML = rh;
+  const hvaISteg2 = type.rute === 'bygg'
+    ? 'grovhet, tidsplan og tillegg — og rett under: de konkrete melsortene, saltet og forfermenten'
+    : 'melsortene, saltet og forfermenten. Deigen er ferdig kalibrert, så her ser du over og justerer bare det du vil';
+  $('#ruteUt').innerHTML =
+    `<p class="sub">Du baker <b>${type.navn.toLowerCase()}</b>.</p>
+     <div class="rutesteg">
+       <span class="rutenr">2</span>
+       <button class="btn" data-steg="deigen">Deigen ▸</button>
+       <span class="small">Her velger du ${hvaISteg2}.</span>
+     </div>
+     <div class="rutesteg">
+       <span class="rutenr">3</span>
+       <button class="btn ghost sm" data-steg="tid">Tid &amp; temperatur ▸</button>
+       <span class="small">Heveplan, deigtemperatur og klokkeslett.</span>
+     </div>
+     <div class="rutesteg">
+       <span class="rutenr">4</span>
+       <button class="btn ghost sm" data-steg="bak">Bak nå ▸</button>
+       <span class="small">Følg prosessen steg for steg, med avhuking.</span>
+     </div>
+     ${R.ikke.length ? `<div class="note"><b>Merk:</b> ${type.navn} bygges ikke av grovhetstrappa —
+       den er en egen kalibrert deig. Derfor viser steg 2 melsortene direkte, uten grovhetsdial.</div>` : ''}
+     <p class="small" style="margin-top:10px"><b>Oppslag når du lurer på noe:</b>
+       ${OPPSLAG.map(v => `<button class="btn ghost sm" data-go="${v}">${faneNavn(v)}</button>`).join(' ')}</p>`;
   $$('#ruteUt [data-go]').forEach(b => b.onclick = () => vis(b.dataset.go));
+  $$('#ruteUt [data-steg]').forEach(b => b.onclick = () => visSteg(b.dataset.steg));
 
-  /* --- 5. Marker hovedveien i navigasjonen --- */
-  const ikke = new Set(R.ikke);
-  merkRute();
-  // Ruta kan ha endret seg (bygg ↔ preset), så foten i fanen du står i må følge med.
-  tegnRutefot(sisteVis);
-
-  /* --- 6. Varsel i «Bygg brød» når fanen ikke gjelder --- */
+  /* --- 5. Varselet om at «Bygg brød» ikke gjelder, er ikke lenger nødvendig:
+     seksjonen finnes ikke i steg 2 for preset-ruter. --- */
   const bv = $('#byggRuteVarsel');
-  if (bv) {
-    bv.innerHTML = ikke.has('bygg')
-      ? `<div class="card"><div class="note warn">
-          <b>Du har valgt ${type.navn.toLowerCase()} på startsiden, og denne fanen gjelder ikke for den.</b>
-          «Bygg brød» setter alltid sammen et frittstående brød av grovhetstrappa. Drar du i dialene her og
-          trykker «Bruk denne», bytter du ut ${type.navn.toLowerCase()}en med et grovbrød.
-          Deigen din styres fra «Oppskrift».
-          <div class="spacer"></div>
-          <button class="btn ghost sm" id="byggTilOppskrift">Gå til Oppskrift</button>
-          <button class="btn ghost sm" id="byggTilStart">Tilbake til Start</button>
-        </div></div>`
-      : '';
-    const a = $('#byggTilOppskrift'); if (a) a.onclick = () => vis('oppskrift');
-    const c = $('#byggTilStart'); if (c) c.onclick = () => vis('start');
-  }
+  if (bv) bv.innerHTML = '';
 }
 
 /* ============================================================
@@ -1616,6 +1595,60 @@ function tegnOppskrift() {
   rows.push(`<tr class="tsum"><td>Totalt — ${S.antall} brød à ${gram(S.vektPerBrod)}</td><td class="n mono">${gram(r.totalVekt)}</td><td class="n"></td><td class="n mono">${kron(r.kost.total)}</td></tr>`);
   rows.push('</tbody>');
   t.innerHTML = rows.join('');
+
+  tegnSeOver(r);
+}
+
+/* Parametergjennomgangen: alt du har bestemt, på én skjerm, med en vei til
+   hvert enkelt valg. Uten denne gikk flyten rett fra brødvalget til «Bak nå»,
+   og valg som «skal jeg ha biga i det hele tatt» hadde ingen naturlig plass. */
+function tegnSeOver(r) {
+  const ut = $('#seOverUt'); if (!ut) return;
+  const type = aktivBrotype();
+  const melTxt = r.mel.map(m => `${m.navn} ${pst(m.pct, 0)}`).join(' · ');
+  const froTxt = r.fro.length
+    ? r.fro.map(f => `${f.navn} ${gram(f.gram)}`).join(' · ')
+    : 'ingen';
+  const ffTxt = r.forferment
+    ? `${r.forferment.type} — ${pst(r.forferment.pctMel, 0)} av melet, ${fmt(r.forferment.timer, 1)} t ved ${grader(r.forferment.temp)}`
+    : 'ingen — alt mel går rett i deigen';
+
+  // data-anker scroller til seksjonen valget bor i; data-felt fokuserer feltet.
+  const rad = (hva, verdi, anker, felt) =>
+    `<tr>
+       <td class="small">${hva}</td>
+       <td>${verdi}</td>
+       <td class="n"><button class="btn ghost sm" data-anker="${anker}"${felt ? ` data-felt="${felt}"` : ''}>endre</button></td>
+     </tr>`;
+
+  ut.innerHTML =
+    `<table class="seover"><tbody>
+      ${rad('Brød', `<b>${type.navn}</b> — ${S.antall} × ${gram(S.vektPerBrod)}`, 'start')}
+      ${type.rute === 'bygg' ? rad('Grovhet', `${GROVHET[S.byggGrovhet].navn} · ${r.brodskala.kort}`, 'bygg') : ''}
+      ${rad('Meltyper', melTxt, 'oppskrift', '#melListe')}
+      ${rad('Hydrering', `<b>${fmt(S.hydrering, 1)} %</b> (effektiv ${fmt(r.effektivHydrering * 100, 1)} %)`, 'oppskrift', '#hydrering')}
+      ${rad('Salt', `${fmt(S.saltPct, 2)} %`, 'oppskrift', '#saltPct')}
+      ${rad('Forferment', ffTxt, 'oppskrift', '#ffBruk')}
+      ${rad('Frø og korn', froTxt, 'oppskrift', '#froListe')}
+      ${rad('Gjær', `${fmt(S.gjaerPct, 3)} % ${({ fersk: 'fersk', torr: 'tørrgjær', aktiv: 'aktiv tørrgjær' })[S.gjaerType]}`, 'oppskrift', '#gjaerPct')}
+    </tbody></table>
+    <div class="spacer"></div>
+    <div class="rutefot" style="margin:0">
+      <span class="small">Ser dette riktig ut?</span>
+      <span class="rutefot-k"><button class="btn" data-steg="tid">Tid &amp; temperatur ▸</button></span>
+    </div>`;
+
+  ut.querySelectorAll('[data-anker]').forEach(b => b.onclick = () => {
+    const sek = $('#v-' + b.dataset.anker);
+    // Ligger valget i et annet steg, må vi dit først.
+    if (sek && !sek.classList.contains('on')) return vis(b.dataset.anker);
+    if (sek) sek.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (b.dataset.felt) {
+      const f = $(b.dataset.felt);
+      if (f) setTimeout(() => { f.scrollIntoView({ behavior: 'smooth', block: 'center' }); if (f.focus) f.focus(); }, 260);
+    }
+  });
+  ut.querySelectorAll('[data-steg]').forEach(b => b.onclick = () => visSteg(b.dataset.steg));
 }
 
 /* ============================================================
@@ -3165,20 +3198,42 @@ function festInfo() {
 /* Hvor man var i hver fane huskes. Å bli kastet til toppen hver gang man bytter
    er en del av «mister oversikten» — særlig i «Gjæring & tid», som er 5 000 px. */
 const scrollMinne = {};
-let sisteVis = 'start';
+let sisteSteg = 'brodet';
 
+/* vis() beholder signaturen sin med vilje: rundt femten steder i koden kaller
+   vis('baknaa'), vis('gjaering') osv. Tar den imot et view-navn, finner den
+   steget seksjonen bor i og scroller dit — tar den imot en steg-id, går den
+   rett til steget. Ingen kallsteder måtte røres da navigasjonen ble bygget om. */
 function vis(v) {
-  scrollMinne[sisteVis] = window.scrollY;
-  sisteVis = v;
-  const g = gruppeFor(v);
-  gruppeSist[g.id] = v;
-  $$('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v));
-  $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.g === g.id));
-  tegnUndernav(v);
-  tegnRutefot(v);
+  const somSteg = STEG.find(s => s.id === v);
+  if (somSteg) return visSteg(somSteg.id);
+  // Oppslagene er egne visninger, ikke seksjoner i én lang side: be om
+  // «teknikk», og det er teknikk som skal vises — ikke det første oppslaget.
+  if (OPPSLAG.includes(v)) { oppslagAktiv = v; return visSteg('oppslag'); }
+  visSteg(stegFor(v).id, v);
+}
+
+function visSteg(id, ankerView) {
+  scrollMinne[sisteSteg] = window.scrollY;
+  const steg = STEG.find(s => s.id === id) || STEG[0];
+  sisteSteg = steg.id;
+  // I oppslag vises én seksjon om gangen; i prosesstegene vises alle samtidig
+  // som én lang side.
+  const aktive = new Set(steg.nr ? stegViews(steg) : [oppslagAktiv]);
+  $$('.view').forEach(x => x.classList.toggle('on', aktive.has(x.id.slice(2))));
   // Styrer om kontekstpanelet vises (skjult på «Bak nå», der trinnkortet er konteksten).
-  document.body.dataset.v = v;
-  window.scrollTo(0, scrollMinne[v] || 0);
+  document.body.dataset.steg = steg.id;
+  document.body.dataset.v = stegViews(steg)[0];
+  byggSkinne(steg.id);
+  tegnAnkere(steg);
+  tegnStegfot(steg);
+  const st = $('#stegStatus');
+  if (st) st.textContent = steg.nr ? `Steg ${steg.nr} av ${STEG_ANTALL} · ${aktivBrotype().navn}` : 'Oppslag';
+  if (ankerView) {
+    const s = $('#v-' + ankerView);
+    if (s) { s.scrollIntoView({ block: 'start' }); return; }
+  }
+  window.scrollTo(0, scrollMinne[steg.id] || 0);
 }
 
 /* Mel-, frø- og heveplanradene bygges opp fra bunnen ved hver eneste
@@ -3322,7 +3377,6 @@ function init() {
     oppdater();
   };
 
-  byggNav();
 
   // paa() i stedet for $('#x').onclick = … : mangler elementet — for eksempel fordi
   // nettleseren serverer en bufret index.html — skal init() gå videre, ikke stoppe
@@ -3508,7 +3562,16 @@ function init() {
     still();
     mq.addEventListener ? mq.addEventListener('change', still) : mq.addListener(still);
   }
-  vis('start');
+  /* Hvor lander man? Appen husker alt, men satte deg likevel av på startsiden —
+     kom du tilbake til kjøkkenet etter tre timer, måtte du selv finne veien
+     tilbake til baket. Er det et bak i gang, lander vi i steg 4.
+     På telefon holder det at det finnes en plan: telefonen er utførelses-
+     enheten, PC-en er planleggingsenheten. */
+  const harBak = Object.keys(S.bakHuket).length > 0;
+  const ferdig = S.planFerdig ? new Date(S.planFerdig) : null;
+  const iVinduet = ferdig && Math.abs(ferdig - new Date()) < 36 * 3600000;
+  const telefon = window.matchMedia('(max-width:700px)').matches;
+  visSteg((harBak && iVinduet) || (telefon && iVinduet) ? 'bak' : 'brodet');
 
   tegnTeknikk();
   oppdater();
