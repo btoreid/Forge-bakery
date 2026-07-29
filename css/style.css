@@ -1,0 +1,472 @@
+/* ===== BRØDLAB ===== */
+:root{
+  --bg:#12100e; --bg2:#1a1714; --panel:#221d18; --panel2:#2b241d;
+  --line:#3a3129; --line2:#4a3f34;
+  --txt:#efe6da; --txt2:#b8a894; --txt3:#8a7a68;
+  --gull:#e0a53c; --gull2:#f2c46b; --rust:#c9633a; --grønn:#7fa650;
+  --rød:#d4564a; --blå:#5b8fa8;
+  --r:10px; --shadow:0 2px 14px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--txt);
+  font:15px/1.55 "Segoe UI",system-ui,-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{margin:0 0 .5em; line-height:1.25; font-weight:650}
+h1{font-size:1.5rem} h2{font-size:1.18rem} h3{font-size:1rem}
+a{color:var(--gull2)}
+button{font:inherit}
+
+/* ---- topp ---- */
+header{
+  position:sticky; top:0; z-index:50;
+  background:linear-gradient(180deg,#1a1714 0%,#17140f 100%);
+  border-bottom:1px solid var(--line); box-shadow:var(--shadow);
+}
+.hwrap{max-width:1220px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.logo{font-weight:800;font-size:1.15rem;letter-spacing:.02em;color:var(--gull);white-space:nowrap}
+.logo small{display:block;font-size:.62rem;font-weight:500;color:var(--txt3);letter-spacing:.14em;text-transform:uppercase}
+nav{display:flex;gap:2px;flex-wrap:wrap;margin-left:auto}
+nav button{
+  background:transparent;border:1px solid transparent;color:var(--txt2);
+  padding:7px 13px;border-radius:var(--r);cursor:pointer;font-size:.87rem;white-space:nowrap;
+}
+nav button:hover{color:var(--txt);background:#ffffff09}
+nav button.on{background:var(--gull);color:#1a1409;border-color:var(--gull);font-weight:600}
+
+/* Undernivået: bare den aktive gruppens faner. Knapper på desktop,
+   native <select> på mobil — OS-ens egen velger har store treffflater. */
+.undernavwrap{max-width:1220px;margin:0 auto;padding:0 16px 8px}
+#undernav{display:flex;gap:2px;flex-wrap:wrap}
+#undernav button{
+  background:transparent;border:1px solid transparent;color:var(--txt3);
+  padding:5px 11px;border-radius:var(--r);cursor:pointer;font-size:.83rem;white-space:nowrap;
+}
+#undernav button:hover{color:var(--txt);background:#ffffff09}
+#undernav button.on{color:var(--gull);background:#e0a53c1a;border-color:#e0a53c44;font-weight:600}
+#undernavSel{display:none;width:100%;padding:9px 10px;font-size:.95rem}
+
+/* Hovedveien for brødtypen du har valgt, markert med en prikk under fanen.
+   Fanene som ikke gjelder for den brødtypen tones ned i stedet for å skjules —
+   de virker fortsatt, men du ser at de ligger utenfor ruten din. */
+nav button.rute::after,#undernav button.rute::after{
+  content:'';display:block;height:2px;margin:3px 6px -4px;border-radius:2px;background:var(--gull);opacity:.75;
+}
+nav button.on.rute::after{background:#1a1409;opacity:.35}
+nav button.utenfor,#undernav button.utenfor{opacity:.4}
+nav button.utenfor:hover,#undernav button.utenfor:hover{opacity:.75}
+
+/* Sammenleggbare fagstoffkort. <details> holder innholdet i sideflyten —
+   søkbart med Ctrl+F, printbart, og du mister ikke plassen din slik du gjør i
+   en modal. Fordi elementene er statiske i index.html, overlever open-tilstanden
+   alle oppdater()-runder; app.js skriver bare til IDene inni. */
+details.kollaps>summary{
+  cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
+}
+details.kollaps>summary::-webkit-details-marker{display:none}
+details.kollaps>summary::before{
+  content:'▸';color:var(--gull);font-size:.9rem;transition:transform .15s;flex:0 0 auto;
+}
+details.kollaps[open]>summary::before{transform:rotate(90deg)}
+details.kollaps>summary h2,details.kollaps>summary h3{margin:0}
+details.kollaps:not([open]){padding-bottom:13px}
+details.kollaps>summary:hover h2,details.kollaps>summary:hover h3{color:var(--gull)}
+
+/* Rutefot: «hvor er jeg, hva er neste». Ligger nederst i hovedveisfanene. */
+.rutefot{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  padding:11px 14px;margin-top:16px;
+}
+.rutefot-n{font-weight:700;color:var(--gull);font-size:.84rem;
+           text-transform:uppercase;letter-spacing:.06em}
+.rutefot-k{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+
+/* Rutestripa på startsiden */
+.rutesteg{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid var(--line)}
+.rutesteg:last-of-type{border-bottom:none}
+.rutenr{
+  flex:0 0 24px;height:24px;border-radius:50%;background:var(--gull);color:#1a1409;
+  display:grid;place-items:center;font-weight:700;font-size:.8rem;
+}
+.rutesteg .btn{flex:0 0 auto;min-width:104px}
+
+/* Tospaltet skall: innhold til venstre, permanent kontekstpanel til høyre.
+   340 px FAST, ikke fr — kurven skal ikke reflowe mens du drar i en slider. */
+.skall{max-width:1220px;margin:0 auto;display:grid;
+       grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+#kontekst{position:sticky;top:70px;max-height:calc(100vh - 86px);overflow-y:auto;
+          background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+          padding:12px 13px;margin-top:20px}
+#kontekst>summary{font-weight:700;color:var(--gull);cursor:pointer;letter-spacing:.02em;
+                  font-size:.86rem;text-transform:uppercase}
+#kxKurve{width:100%;height:auto;display:block;margin:10px 0 8px;
+         background:var(--bg2);border-radius:6px}
+#kxIdent{font-size:.9rem;color:var(--txt);line-height:1.45}
+#kontekst .stat{padding:7px 9px}
+#kontekst .stat .v{font-size:1.02rem}
+#kxTilKurve{width:100%;margin-top:9px}
+/* På «Bak nå» ER trinnkortet konteksten; en hevekurve er irrelevant når du
+   står med hendene i deigen. */
+body[data-v="baknaa"] #kontekst{display:none}
+body[data-v="baknaa"] .skall{grid-template-columns:minmax(0,1fr)}
+
+main{min-width:0;padding:20px 16px 80px}
+.view{display:none} .view.on{display:block}
+
+/* ---- kort ---- */
+.card{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  padding:16px 18px;margin-bottom:16px;
+}
+.card>h2{color:var(--gull2);display:flex;align-items:center;gap:9px}
+.card>h2 .ic{opacity:.75;font-size:1.1em}
+.sub{color:var(--txt3);font-size:.85rem;margin:-4px 0 14px}
+
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+
+/* ---- felt ---- */
+label{display:block;font-size:.78rem;color:var(--txt2);margin-bottom:4px;letter-spacing:.02em}
+input,select,textarea{
+  width:100%;background:var(--bg2);border:1px solid var(--line2);color:var(--txt);
+  padding:8px 10px;border-radius:7px;font:inherit;
+}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gull);background:#1e1a15}
+input[type=range]{padding:0;height:26px;accent-color:var(--gull);border:none;background:none}
+.field{margin-bottom:12px}
+.row{display:flex;gap:10px;align-items:flex-end}
+.row>*{flex:1}
+.inline{display:flex;align-items:center;gap:8px}
+.inline input[type=checkbox]{width:auto;flex:0}
+
+.btn{
+  background:var(--gull);color:#1a1409;border:none;padding:9px 16px;border-radius:8px;
+  cursor:pointer;font-weight:650;font-size:.88rem;
+}
+.btn:hover{background:var(--gull2)}
+.btn.ghost{background:transparent;border:1px solid var(--line2);color:var(--txt2);font-weight:500}
+.btn.ghost:hover{border-color:var(--gull);color:var(--gull2)}
+.btn.sm{padding:5px 10px;font-size:.8rem}
+.btn.danger{background:transparent;border:1px solid #6b3a34;color:#d99}
+.btn.danger:hover{background:#3a201c}
+
+/* ---- tabell ---- */
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th{text-align:left;color:var(--txt3);font-weight:600;font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;padding:6px 8px;border-bottom:1px solid var(--line2)}
+td{padding:6px 8px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:none}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tbody tr:hover{background:#ffffff06}
+.tsec td{background:#ffffff07;color:var(--gull2);font-weight:650;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em}
+.tsum td{border-top:1px solid var(--line2);font-weight:700}
+
+/* ---- nøkkeltall ---- */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px}
+.stat{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:11px 13px}
+.stat .k{font-size:.7rem;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px}
+.stat .v{font-size:1.32rem;font-weight:700;color:var(--gull2);font-variant-numeric:tabular-nums;line-height:1.15}
+.stat .u{font-size:.72rem;color:var(--txt3);font-weight:400}
+.stat.ok .v{color:var(--grønn)} .stat.warn .v{color:var(--gull)} .stat.bad .v{color:var(--rød)}
+
+/* ---- notiser ---- */
+.note{border-left:3px solid var(--blå);background:#ffffff07;padding:9px 13px;border-radius:0 7px 7px 0;font-size:.86rem;color:var(--txt2);margin:10px 0}
+.note.warn{border-color:var(--gull)}
+.note.bad{border-color:var(--rød)}
+.note.ok{border-color:var(--grønn)}
+.note b{color:var(--txt)}
+
+/* ---- tidslinje ---- */
+.tl{position:relative;padding-left:30px;margin:8px 0}
+.tl::before{content:'';position:absolute;left:9px;top:6px;bottom:10px;width:2px;background:var(--line2)}
+.tlrow{position:relative;padding:9px 0 9px 4px;border-bottom:1px solid var(--line)}
+.tlrow:last-child{border-bottom:none}
+.tlrow::before{content:'';position:absolute;left:-26px;top:15px;width:11px;height:11px;border-radius:50%;background:var(--gull);border:2px solid var(--bg)}
+.tlrow.cold::before{background:var(--blå)}
+.tlrow.bake::before{background:var(--rust)}
+.tlrow .t{font-weight:700;color:var(--gull2);font-variant-numeric:tabular-nums;font-size:.94rem}
+.tlrow .n{font-weight:600}
+.tlrow .d{color:var(--txt3);font-size:.82rem;margin-top:2px}
+
+/* ---- kurve ---- */
+.chart{width:100%;min-width:620px;height:360px;display:block}
+
+/* ---- melbibliotek ---- */
+.melgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;margin-top:10px}
+.melkort{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
+.melkort.fav{border-color:var(--gull);box-shadow:0 0 0 1px var(--gull) inset}
+.mk-topp{display:flex;align-items:flex-start;gap:11px;margin-bottom:9px}
+.mk-bilde{flex:0 0 32px;display:flex;justify-content:center}
+.mk-tit{flex:1;min-width:0}
+.mk-navn{font-weight:650;line-height:1.25}
+.mk-tag{font-size:.75rem;font-weight:650;margin-top:2px}
+.mk-stjerne{flex:0 0 auto;background:transparent;border:none;cursor:pointer;
+  color:var(--txt3);font-size:1.35rem;line-height:1;padding:0 2px}
+.mk-stjerne:hover{color:var(--gull2)}
+.mk-stjerne.on{color:var(--gull)}
+.mk-tall{font-size:.82rem;margin-bottom:8px}
+.mk-tall td{padding:3px 0;border-bottom:1px solid var(--line)}
+.mk-tall td:first-child{color:var(--txt3)}
+.melkort ul{margin:0 0 7px;padding-left:18px;font-size:.82rem;color:var(--txt2)}
+.melkort li{margin-bottom:3px}
+.mk-plus li::marker{content:'+ ';color:var(--grønn);font-weight:700}
+.mk-minus li::marker{content:'− ';color:var(--rød);font-weight:700}
+.mk-notat{font-size:.79rem;color:var(--txt3);border-top:1px solid var(--line);padding-top:7px;margin-top:2px}
+.miknapp{background:transparent;border:none;color:var(--txt3);cursor:pointer;
+  font-size:.88rem;line-height:1;padding:0 0 0 4px;vertical-align:-1px}
+.miknapp:hover{color:var(--gull2)}
+.miknapp.on{color:var(--gull)}
+.mk-forklaring td,.mk-forklaring.fri{
+  font-size:.79rem;color:var(--txt2);background:#ffffff08;
+  border-left:2px solid var(--gull);padding:9px 11px !important;line-height:1.5;
+}
+.mk-forklaring.fri{border-radius:0 6px 6px 0;margin:0 0 9px}
+.mk-forklaring b{color:var(--txt)}
+
+.tilbakestill{width:100%;margin-top:8px}
+
+/* ---- ordliste ---- */
+.ordgruppe{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--txt3);margin:14px 0 6px}
+.ordgruppe:first-child{margin-top:4px}
+.ordrad{display:flex;flex-wrap:wrap;gap:6px}
+.ordknapp{
+  background:var(--bg2);border:1px solid var(--line2);color:var(--txt2);
+  padding:5px 11px;border-radius:99px;cursor:pointer;font-size:.84rem;
+}
+.ordknapp:hover{border-color:var(--gull);color:var(--gull2)}
+.ordknapp.on{background:var(--gull);border-color:var(--gull);color:#1a1409;font-weight:650}
+.orddef{
+  margin-top:9px;padding:12px 15px;border-radius:9px;
+  background:var(--bg2);border:1px solid var(--line2);border-left:3px solid var(--gull);
+  font-size:.88rem;color:var(--txt2);
+}
+.orddef .od-ord{font-weight:700;color:var(--gull2);margin-bottom:4px}
+.orddef .od-se{margin-top:8px;font-size:.8rem;color:var(--txt3)}
+.orddef .od-se a{color:var(--gull2);text-decoration:none;border-bottom:1px dotted var(--line2)}
+.orddef .od-se a:hover{border-bottom-color:var(--gull)}
+
+/* ---- korn- og frøtegninger ---- */
+.korn{display:block;flex:0 0 auto}
+.korn .f{fill:var(--kf);stroke:var(--kk);stroke-width:1.4;stroke-linejoin:round}
+.korn .s{fill:none;stroke:var(--kk);stroke-width:1.3;stroke-linecap:round;opacity:.85}
+.korn .s2{fill:none;stroke:var(--kk);stroke-width:1;stroke-linecap:round;opacity:.55}
+.korn .s2f{fill:var(--kk);stroke:none;opacity:.6}
+
+.kornrad{display:flex;align-items:center;gap:10px}
+
+/* ---- infoknapp og konsekvensboks ---- */
+label{position:relative}
+.infoknapp{
+  background:transparent;border:none;color:var(--txt3);cursor:pointer;
+  font-size:.95rem;line-height:1;padding:0 0 0 5px;vertical-align:-1px;
+}
+.infoknapp:hover{color:var(--gull2)}
+.field.info-open .infoknapp{color:var(--gull)}
+.infoboks{display:none;margin-top:7px;padding:10px 13px;border-radius:8px;
+  background:var(--bg2);border:1px solid var(--line2);font-size:.83rem;color:var(--txt2)}
+.field.info-open .infoboks{display:block}
+.infoboks .ib-opt{color:var(--grønn);margin-bottom:8px}
+.infoboks .ib-opt b{color:var(--grønn)}
+.infoboks .ib-rad{display:flex;gap:9px;margin-bottom:6px;align-items:baseline}
+.infoboks .ib-pil{flex:0 0 68px;font-weight:650;font-size:.78rem}
+.infoboks .ib-pil.opp{color:var(--gull)}
+.infoboks .ib-pil.ned{color:var(--blå)}
+.infoboks .ib-hvorfor{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);color:var(--txt3)}
+.infoboks b{color:var(--txt)}
+
+.feilbanner{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:200;
+  max-width:min(680px,94vw);background:#3a201c;border:1px solid #6b3a34;color:#e6c4bf;
+  padding:11px 16px;border-radius:var(--r);font-size:.85rem;box-shadow:var(--shadow);
+}
+.feilbanner b{color:#ffb4a8}
+
+/* ---- bak nå ---- */
+.bakbar{height:6px;border-radius:99px;background:var(--bg2);border:1px solid var(--line);margin-top:12px;overflow:hidden}
+.bakbar>div{height:100%;background:var(--gull);transition:width .25s}
+
+.naakort{
+  background:linear-gradient(180deg,var(--panel2) 0%,var(--panel) 100%);
+  border:1px solid var(--line2);border-left:4px solid var(--txt3);
+  border-radius:var(--r);padding:14px 18px;margin-bottom:16px;
+  position:sticky;top:56px;z-index:20;box-shadow:var(--shadow);
+}
+.naakort.aktiv{border-left-color:var(--gull)}
+.naakort.ferdig{border-left-color:var(--grønn)}
+.naakort .nk-l{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--txt3);margin-bottom:3px}
+.naakort.aktiv .nk-l{color:var(--gull)}
+.naakort .nk-n{font-weight:700;font-size:1.06rem;color:var(--txt)}
+.naakort .nk-d{color:var(--txt2);font-size:.86rem;margin-top:3px}
+
+.bsteg{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  margin-bottom:11px;overflow:hidden;transition:opacity .2s;
+}
+.bsteg.naa{border-color:var(--gull);box-shadow:0 0 0 1px var(--gull) inset}
+.bsteg.huket{opacity:.5}
+.bs-topp{display:flex;align-items:center;gap:13px;padding:13px 16px}
+.bs-hak{
+  flex:0 0 34px;height:34px;border-radius:50%;cursor:pointer;
+  background:var(--bg2);border:1px solid var(--line2);color:var(--txt3);
+  font-weight:700;font-size:.92rem;line-height:1;
+}
+.bs-hak:hover{border-color:var(--gull);color:var(--gull2)}
+.bsteg.naa .bs-hak{border-color:var(--gull);color:var(--gull2)}
+.bsteg.huket .bs-hak{background:#3a4a2a;border-color:#5c7a3f;color:#bcd89a}
+.bs-tit{flex:1;min-width:0}
+.bs-navn{font-weight:650}
+.bs-tid{color:var(--gull2);font-size:.84rem;font-variant-numeric:tabular-nums}
+.bs-kropp{padding:0 16px 14px 63px}
+.bsteg.huket .bs-kropp{display:none}
+.bs-tab{margin-bottom:9px}
+.bs-tab td{padding:5px 0;border-bottom:1px solid var(--line)}
+.bs-tab td:first-child{color:var(--txt2)}
+.bs-tab td.n{font-weight:650;color:var(--txt);white-space:nowrap;padding-left:12px}
+.bs-temp{color:var(--gull2);font-size:.89rem;margin-bottom:5px}
+.bs-gjor{color:var(--txt2);font-size:.88rem}
+
+@media(max-width:640px){
+  /* Snudd 29.07.2026. Her stod .naakort{position:static} — altså navigasjonen
+     spikret fast øverst mens «hva gjør jeg NÅ» rullet bort. Det er stikk motsatt
+     av hva man trenger på kjøkkenet. Grunnen var trolig at den 186 px høye
+     stickyheaderen ikke etterlot plass; nå er headeren statisk på mobil, og da
+     er plassen der. */
+  .naakort{position:sticky;top:0}
+  .bs-kropp{padding-left:16px}
+}
+
+/* ---- tips ---- */
+.tip{border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px;background:var(--panel);overflow:hidden}
+.tip.varsel{border-color:#6e5220}
+.tiphead{padding:13px 16px;cursor:pointer;display:flex;align-items:center;gap:11px;user-select:none}
+.tiphead:hover{background:#ffffff06}
+.tiphead .ic{font-size:1.05rem;opacity:.8;width:20px;text-align:center}
+.tiphead .ttl{font-weight:650;flex:1}
+.tip.varsel .ttl{color:var(--gull)}
+.tiphead .arw{color:var(--txt3);transition:transform .18s}
+.tip.open .arw{transform:rotate(90deg)}
+.tipbody{display:none;padding:0 16px 14px 47px}
+.tip.open .tipbody{display:block}
+.tipbody .intro{color:var(--txt2);font-size:.9rem;margin-bottom:12px;font-style:italic}
+.tipbody dl{margin:0}
+.tipbody dt{font-weight:650;color:var(--gull2);font-size:.88rem;margin-top:11px}
+.tipbody dd{margin:2px 0 0;color:var(--txt2);font-size:.89rem}
+
+/* ---- logg ---- */
+.logg{border:1px solid var(--line);border-radius:9px;padding:12px 14px;margin-bottom:9px;background:var(--bg2)}
+.logg .lh{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.logg .lt{font-weight:650}
+.logg .ld{color:var(--txt3);font-size:.8rem}
+.logg .lm{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;font-size:.83rem;color:var(--txt2)}
+.logg .lm b{color:var(--gull2);font-variant-numeric:tabular-nums}
+.logg .lk{margin-top:7px;font-size:.86rem;color:var(--txt2)}
+
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:.72rem;background:#ffffff10;color:var(--txt2);margin-right:5px}
+.pill.g{background:#3a4a2a;color:#bcd89a}
+.pill.r{background:#4a2a26;color:#e6a49c}
+.pill.y{background:#4a3d1e;color:#e8cd8a}
+
+/* Kolonnen som holder tallfeltet må ha plass til BÅDE de to stepper-knappene og
+   selve feltet. Da den var 78 px bred, spiste knappene 76 og tallet fikk 2 —
+   feltet ble usynlig, og raden så ut som om pluss og minus var ødelagt. */
+.melrow{display:grid;grid-template-columns:26px minmax(0,1fr) 124px 124px 34px;gap:8px;align-items:center;margin-bottom:7px}
+.frorow{display:grid;grid-template-columns:26px minmax(0,1fr) 124px 56px auto 34px;gap:8px;align-items:center;margin-bottom:7px}
+.kornikon{display:flex;align-items:center;justify-content:center}
+.gramhint{text-align:right;line-height:1.2;color:var(--gull2);font-variant-numeric:tabular-nums}
+
+/* gram ved siden av prosent på tilleggskortene */
+.gramrad{display:flex;align-items:center;gap:7px;margin-top:7px}
+.gramrad input{width:74px;padding:4px 6px;text-align:right;font-size:.85rem}
+.gramrad .small{white-space:nowrap}
+
+@media(max-width:560px){
+  .melrow{grid-template-columns:26px minmax(0,1fr) 34px;grid-auto-rows:min-content}
+  .melrow .kornikon{grid-column:1;grid-row:1} .melrow select{grid-column:2} .melrow .x{grid-column:3}
+  .melrow .step{grid-column:1/4}
+  .frorow{grid-template-columns:26px minmax(0,1fr) 34px}
+  .frorow .kornikon{grid-column:1;grid-row:1} .frorow select{grid-column:2} .frorow .x{grid-column:3}
+  .frorow .step,.frorow .inline,.frorow .gramhint{grid-column:1/4}
+  .frorow .gramhint{text-align:left}
+}
+.frorow .inline{font-size:.78rem;color:var(--txt2)}
+.x{background:transparent;border:1px solid var(--line2);color:var(--txt3);border-radius:6px;cursor:pointer;padding:6px 0;line-height:1}
+.x:hover{border-color:var(--rød);color:var(--rød)}
+
+/* ---- tallfelt med +/- ---- */
+.step{display:flex;align-items:stretch;gap:0}
+.step input[type=number]{
+  border-radius:0;text-align:center;flex:1;min-width:0;
+  -moz-appearance:textfield;
+}
+.step input[type=number]::-webkit-outer-spin-button,
+.step input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+/* Knappene får krympe når plassen er trang, og tallfeltet har et gulv. Uten dette
+   vinner knappene all plassen i smale kolonner og feltet forsvinner helt. */
+.step button{
+  flex:0 1 38px;min-width:30px;background:var(--panel2);border:1px solid var(--line2);color:var(--gull2);
+  font-size:1.15rem;font-weight:700;line-height:1;cursor:pointer;padding:0;
+  display:flex;align-items:center;justify-content:center;user-select:none;
+}
+.step input[type=number]{min-width:44px}
+.step button:hover{background:var(--gull);color:#1a1409;border-color:var(--gull)}
+.step button:active{transform:translateY(1px)}
+.step button.minus{border-radius:7px 0 0 7px;border-right:none}
+.step button.pluss{border-radius:0 7px 7px 0;border-left:none}
+.step .enhet{
+  flex:0 0 auto;display:flex;align-items:center;padding:0 9px;font-size:.8rem;color:var(--txt3);
+  background:var(--bg2);border:1px solid var(--line2);border-left:none;border-radius:0 7px 7px 0;
+}
+.step .enhet + button.pluss{border-radius:0 7px 7px 0}
+.step:has(.enhet) button.pluss{border-radius:0}
+td .step button{flex:0 0 30px;font-size:1rem}
+td .step input[type=number]{padding:5px 4px}
+
+.small{font-size:.82rem;color:var(--txt3)}
+.mono{font-variant-numeric:tabular-nums}
+hr{border:none;border-top:1px solid var(--line);margin:16px 0}
+.spacer{height:6px}
+
+/* Under 1000 px er det ikke plass til to spalter. Panelet blir en bunnskuff:
+   sammenslått viser den bare nøkkeltallene i 46 px, åpnet får du kurven.
+   column-reverse setter <summary> nederst, i tommelrekkevidde. */
+@media(max-width:1000px){
+  /* Brede tabeller (heveplanen er 635 px) sprengte sidebredden og ga vannrett
+     scroll på HELE dokumentet — det verste som finnes på mobil, fordi da
+     vandrer også overskriftene ut av syne. Nå ruller hver tabell inne i seg selv. */
+  .card table,details.card table{display:block;overflow-x:auto;max-width:100%}
+  .skall{grid-template-columns:minmax(0,1fr)}
+  #kontekst{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:60;
+            margin:0;border-radius:0;border-left:none;border-right:none;
+            max-height:56vh;display:flex;flex-direction:column-reverse;
+            box-shadow:0 -4px 18px rgba(0,0,0,.45)}
+  #kontekst>summary{min-height:46px;display:flex;align-items:center;list-style:none}
+  #kontekst>summary::-webkit-details-marker{display:none}
+  .kxinnhold{overflow-y:auto}
+  main{padding-bottom:70px}
+  body[data-v="baknaa"] main{padding-bottom:60px}
+}
+
+@media(max-width:640px){
+  .hwrap{padding:9px 12px}
+  /* Navigasjonen skal ikke følge deg gjennom hele bakingen — den tok 23 % av
+     skjermen permanent. Trinnkortet skal følge deg. Se .naakort over. */
+  header{position:static}
+  /* Undertittelen er dekor. På kjøkkenet er 20 px skjermhøyde verdt mer. */
+  .logo small{display:none}
+  .logo{font-size:1.05rem}
+  nav{margin-left:0;width:100%}
+  nav button{flex:1;padding:7px 8px;font-size:.8rem}
+  /* Undernivået blir nedtrekksmeny — én rad i stedet for en knapperad til. */
+  #undernav{display:none}
+  #undernavSel{display:block}
+  .undernavwrap{padding:0 12px 8px}
+  .rutefot-k{margin-left:0;width:100%}
+  .rutefot .btn{flex:1}
+  main{padding:14px 11px 70px}
+  .card{padding:13px 13px}
+  .tipbody{padding-left:16px}
+}

@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Brødlab</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🍞</text></svg>">
+</head>
+<body>
+
+<header>
+  <div class="hwrap">
+    <div class="logo">BRØDLAB<small>gjæring · temperatur · løft</small></div>
+    <!-- Fire grupper i stedet for elleve faner. Knappene bygges av GRUPPER i
+         app.js, så gruppenavn og fanenavn står ett sted. -->
+    <nav id="nav"></nav>
+  </div>
+  <!-- Undernivået viser KUN valgene i den aktive gruppen. På mobil erstattes
+       knapperaden av en native <select>: OS-ens egen velger har store
+       treffflater, koster null CSS og virker fra file://. -->
+  <div class="undernavwrap">
+    <div id="undernav"></div>
+    <select id="undernavSel" aria-label="Velg fane"></select>
+  </div>
+</header>
+
+<div class="skall">
+<main>
+
+<!-- ============ START ============ -->
+<section class="view on" id="v-start">
+  <div class="card">
+    <h2><span class="ic">◆</span> Hva skal du bake?</h2>
+    <p class="sub">
+      Velg brødtype først — den avgjør alt det andre. Ciabatta, baguetter og focaccia er ikke det samme brødet med
+      andre tall; de er tre forskjellige prosesser. Når du har valgt, viser appen deg nøyaktig hvilken vei du skal
+      gå gjennom fanene, og hvilke du kan hoppe over.
+    </p>
+    <div id="brotypeValg" class="grid g3"></div>
+    <div id="brotypeUt"></div>
+  </div>
+
+  <div class="card" id="formKort">
+    <h3>Form og kurv</h3>
+    <p class="sub">Formen er ikke pynt — den avgjør hvilket stekeutstyr som i det hele tatt får plass rundt emnet.</p>
+    <div id="formValg" class="grid g3"></div>
+    <div id="formUt"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="ic">▸</span> Slik blir prosessen</h2>
+    <p class="sub">
+      Hentet direkte fra den ferdig utregnede bakekjeden — det er de samme stegene, i samme rekkefølge, som
+      «Bak nå» gir deg med klokkeslett. Endrer du noe senere, endrer denne seg med.
+    </p>
+    <div id="prosessUt"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="ic">⇥</span> Veien gjennom appen</h2>
+    <div id="ruteUt"></div>
+  </div>
+</section>
+
+<!-- ============ BYGG BRØD ============ -->
+<section class="view" id="v-bygg">
+  <div id="byggRuteVarsel"></div>
+  <div class="card">
+    <h2><span class="ic">▲</span> Bygg brødet ditt</h2>
+    <p class="sub">
+      Bygget etter det fagfeltet er enig om, med ovnsløft som førsteprioritet. Velg grovhet og hvor lang tid du har —
+      appen løser gjærmengden slik at alle planene gir samme gjæringsgrad. Samme brød, ulik klokke.
+    </p>
+  </div>
+
+  <div class="card">
+    <h3>1 · Hvor grovt?</h3>
+    <p class="sub">Alt grovt du legger til stjeler fra den glutenbærende andelen. Derfor koster grovhet ovnsløft — men de første 10–20 % koster nesten ingenting.
+       Betegnelsene følger <b>Brødskala'n</b>, den norske merkeordningen: fint brød er 0–25,9 % sammalt mel og hele korn, halvgrovt 26–50,9 %, grovt 51–75,9 % og ekstra grovt fra 76 %. Frø teller ikke med i grovheten.</p>
+    <div id="grovhetValg" class="grid g3"></div>
+    <div id="grovhetUt"></div>
+  </div>
+
+  <div class="card">
+    <h3>2 · Hvor lang tid har du?</h3>
+    <p class="sub">Gjærmengden regnes ut, ikke oppgis. Kortere tid betyr mer gjær og smalere hevevindu — ikke dårligere teknikk.</p>
+    <div id="tidValg" class="grid g3"></div>
+    <div id="tidUt"></div>
+  </div>
+
+  <div class="card">
+    <h3>3 · Tillegg</h3>
+    <p class="sub">Trykk for å legge til. Anbefalt mengde settes automatisk, og du ser hva den gjør med grovhet og vann.</p>
+    <div id="tilleggValg" class="grid g3"></div>
+    <div id="tilleggUt"></div>
+  </div>
+
+  <details class="card kollaps">
+    <summary><h3>Hva tilleggene koster og gir</h3></summary>
+    <p class="sub">
+      Tre ting trekker mot hver sin kant: ovnsløft, smak og saftighet. Her ser du byttehandelen mens du drar i
+      slideren over — ikke først når brødet er skåret opp. Tallene er interpolert fra publiserte måleserier.
+    </p>
+    <div id="effektUt"></div>
+  </details>
+
+  <div class="card">
+    <h3>4 · Utstyr og steking</h3>
+    <div class="grid g2">
+      <div class="field"><label>Slik steker du</label><select id="byggUtstyr"></select></div>
+      <div class="field"><label>Antall brød à vekt</label>
+        <div class="row"><input type="number" id="byggAntall" min="1" step="1" value="2"><input type="number" id="byggVekt" min="200" step="50" value="900"></div>
+      </div>
+    </div>
+    <div id="utstyrUt"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="ic">Σ</span> Oppskriften din</h2>
+    <div class="stats" id="byggStats"></div>
+    <div class="spacer"></div>
+    <div id="byggNotiser"></div>
+    <div class="spacer"></div>
+    <table id="byggTabell"></table>
+    <div class="spacer"></div>
+    <p class="small">Endringene over gjelder med én gang — hele appen regner på dette brødet nå.</p>
+    <button class="btn" id="byggBruk">Gå til «Bak nå» og sett klokkeslett</button>
+  </div>
+
+  <details class="card kollaps">
+    <summary><h2><span class="ic">✓</span> Ovnsløft-sjekkliste</h2></summary>
+    <div id="byggSjekk"></div>
+  </details>
+</section>
+
+<!-- ============ BAK NÅ ============ -->
+<section class="view" id="v-baknaa">
+  <div class="card">
+    <h2><span class="ic">▶</span> Bak nå</h2>
+    <p class="sub">
+      Hele prosessen som én liste, i rekkefølge, med mengdene og temperaturene der du trenger dem.
+      Sett når brødet skal ut av ovnen, så faller alle klokkeslettene på plass. Hak av etter hvert —
+      appen husker hvor du er, også om du lukker fanen.
+    </p>
+    <div class="grid g3">
+      <div class="field">
+        <label>Jeg starter</label><input type="datetime-local" id="bakStart">
+        <button class="btn sm" id="bakStartNaa" style="width:100%;margin-top:6px">▶ Start nå</button>
+      </div>
+      <div class="field"><label>Ferdig stekt</label><input type="datetime-local" id="bakFerdig"></div>
+      <div class="field">
+        <label>Slik steker du</label><select id="bakProfil"></select>
+        <button class="btn ghost sm" id="bakNullstill" style="width:100%;margin-top:6px">Nullstill avhukingen</button>
+      </div>
+    </div>
+    <p class="small">
+      Sett enten start eller ferdig — det andre følger etter, og hele planen flytter seg med.
+      <b>Start nå</b> legger første steg på dette klokkeslettet, så du ser hvordan døgnet ser ut framover.
+    </p>
+    <div id="bakOversikt"></div>
+  </div>
+
+  <div class="naakort" id="bakNaaKort"></div>
+
+  <div id="bakSteg"></div>
+
+  <div class="card">
+    <p class="small">
+      Tallene her er de samme som under Oppskrift, Gjæring og Tidsplan — endrer du noe der, endrer det seg her.
+      Klokka styrer rekkefølgen, men <b>deigen bestemmer</b>: står det 4 timer bulk og målekrukka har nådd hevemålet etter 3, så er den ferdig.
+    </p>
+  </div>
+</section>
+
+<!-- ============ OPPSKRIFT ============ -->
+<section class="view" id="v-oppskrift">
+  <div class="card">
+    <h2><span class="ic">◍</span> Oppskrift</h2>
+    <p class="sub">Bakerprosent med forferment, frø og kostnad. Alt regnes av «sum tørt» = alt mel inkludert melet i forfermenten, akkurat som i regnearket ditt.</p>
+    <div class="grid g2">
+      <div>
+        <div class="field">
+          <label>Forvalg</label>
+          <select id="preset"></select>
+        </div>
+        <p class="small" id="presetNotat"></p>
+      </div>
+      <div class="grid g3">
+        <div class="field"><label>Antall brød</label><input type="number" id="antall" min="1" step="1"></div>
+        <div class="field"><label>Vekt per brød (g)</label><input type="number" id="vektPerBrod" min="100" step="10"></div>
+        <div class="field"><label>Hydrering (%)</label><input type="number" id="hydrering" min="50" max="100" step="0.5"></div>
+        <div class="field"><label>Vekta di viser</label>
+          <select id="vektTrinn">
+            <option value="1">hele gram</option>
+            <option value="0.1">0,1 g</option>
+            <option value="0.01">0,01 g — finvekt</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h2><span class="ic">▤</span> Mel</h2>
+      <p class="sub">Prosent av totalt mel. Summen normaliseres automatisk.</p>
+      <div id="melListe"></div>
+      <button class="btn ghost sm" id="addMel">+ Legg til mel</button>
+      <div id="melAdvarsel"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">◦</span> Frø og bløtlegg</h2>
+      <p class="sub">Oppgis i gram og teller ikke i hydreringen — men de stjeler vann fra deigen. Se «effektiv hydrering».</p>
+      <div id="froListe"></div>
+      <button class="btn ghost sm" id="addFro">+ Legg til frø</button>
+      <div class="field inline" style="margin-top:12px"><input type="checkbox" id="froVannPaaToppen" checked><label for="froVannPaaToppen" style="margin:0">Regn frøvannet inn <b>på toppen</b> av hydreringen</label></div>
+      <p class="small">På (anbefalt): frøene får sitt eget vann, og deigen får den hydreringen du faktisk oppga. Av: regnearkets konvensjon — frøene tar vannet fra hydreringen, så deigen blir merkbart fastere enn tallet tilsier.</p>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h2><span class="ic">◈</span> Salt og smak</h2>
+      <div class="grid g3">
+        <div class="field"><label>Salt (%)</label><input type="number" id="saltPct" min="0" max="4" step="0.1"></div>
+        <div class="field"><label>Honning (%)</label><input type="number" id="honningPct" min="0" max="15" step="0.5"></div>
+        <div class="field"><label>Olivenolje (%)</label><input type="number" id="oljePct" min="0" max="15" step="0.5"></div>
+        <div class="field"><label>Sukker (%)</label><input type="number" id="sukkerPct" min="0" max="20" step="0.5"></div>
+        <div class="field"><label>Smør (%)</label><input type="number" id="smorPct" min="0" max="50" step="0.5"></div>
+        <div class="field"><label>Diastatisk malt (%)</label><input type="number" id="maltPct" min="0" max="1" step="0.05"></div>
+      </div>
+      <div id="smakNotiser"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">◐</span> Forferment</h2>
+      <div class="field inline"><input type="checkbox" id="ffBruk"><label for="ffBruk" style="margin:0">Bruk poolish / biga</label></div>
+      <div id="ffFelt">
+        <div class="grid g4">
+          <div class="field"><label>Type</label><select id="ffType"><option value="poolish">Poolish</option><option value="biga">Biga</option><option value="pate">Pâte fermentée</option></select></div>
+          <div class="field"><label>% av melet</label><input type="number" id="ffPctMel" min="5" max="100" step="1"></div>
+          <div class="field"><label>Hydrering (%)</label><input type="number" id="ffHydrering" min="40" max="120" step="1"></div>
+          <div class="field"><label>Modningstid (t)</label><input type="number" id="ffTimer" min="2" max="30" step="0.5"></div>
+          <div class="field"><label>Temperatur (°C)</label><input type="number" id="ffTemp" min="4" max="30" step="0.5"></div>
+        </div>
+        <div id="ffUt"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="ic">Σ</span> Resultat</h2>
+    <div class="stats" id="oppskriftStats"></div>
+    <div class="spacer"></div>
+    <div id="oppskriftNotiser"></div>
+    <div class="spacer"></div>
+    <table id="oppskriftTabell"></table>
+  </div>
+</section>
+
+<!-- ============ GJÆRING ============ -->
+<section class="view" id="v-gjaering">
+  <div class="card">
+    <h2><span class="ic">⏱</span> Gjæringsdose — appens kjerne</h2>
+    <p class="sub">
+      Gjæringsdose (GD) er ett tall som gjør ulike kombinasjoner av gjærmengde, tid og temperatur direkte sammenlignbare.
+      Den er integralet av gjærmengde × temperaturrate over hele planen, i enheten «%-tørrgjær-timer ved 24 °C»,
+      og den tar hensyn til at deigen bruker timer på å bli kald i kjøleskapet.
+      Målet ditt hentes fra referanseplanen i forvalget — altså fra en prosess du allerede vet fungerer.
+    </p>
+    <div class="grid g3">
+      <div class="field"><label>Gjærtype</label><select id="gjaerType"><option value="fersk">Fersk gjær</option><option value="torr">Tørrgjær (instant)</option><option value="aktiv">Aktiv tørrgjær</option></select></div>
+      <div class="field"><label>Gjær (% av mel)</label><input type="number" id="gjaerPct" min="0.01" max="4" step="0.05"></div>
+      <div class="field"><label>Deigmasse (kg) — fra oppskriften</label><input type="number" id="masseKg" readonly title="Regnes ut fra oppskriften. Styrer hvor fort deigen kjøles ned."></div>
+    </div>
+    <div class="field inline"><input type="checkbox" id="lokk" checked><label for="lokk" style="margin:0">Tett lokkboks i kjøleskapet (kjøles saktere)</label></div>
+    <div class="field inline"><input type="checkbox" id="fulltKjol"><label for="fulltKjol" style="margin:0">Stappfullt kjøleskap / dårlig luftsirkulasjon</label></div>
+  </div>
+
+  <details class="card kollaps">
+    <summary><h2><span class="ic">▦</span> Hva måltallet er, tegnet</h2></summary>
+    <p class="sub">Gjæringsdosen er ikke en oppfunnet skala. Den er et areal, og du kan se det.</p>
+    <div id="doseForklaring"></div>
+  </details>
+
+  <div class="card">
+    <h2><span class="ic">≡</span> Heveplan</h2>
+    <p class="sub">Første trinn starter på deigens temperatur ut av maskinen. Etterfølgende trinn arver temperaturen fra forrige.</p>
+    <div class="field" style="max-width:220px"><label>Deigtemp ut av maskin (°C)</label><input type="number" id="startTemp" min="10" max="32" step="0.5"></div>
+    <table id="planTabell"></table>
+    <div class="spacer"></div>
+    <button class="btn ghost sm" id="addTrinn">+ Legg til trinn</button>
+    <button class="btn ghost sm" id="resetPlan">Tilbakestill til forvalgets plan</button>
+  </div>
+
+  <div class="card">
+    <h2><span class="ic">◎</span> Resultat</h2>
+    <div class="stats" id="gjStats"></div>
+    <div class="spacer"></div>
+    <div id="gjNotiser"></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h2><span class="ic">⇄</span> Løs for …</h2>
+      <p class="sub">Endre én ting og la appen finne verdien som gir nøyaktig samme gjæringsdose.</p>
+      <div class="field"><label>Måldose (GD)</label><input type="number" id="maalDose" min="0.1" max="30" step="0.05"></div>
+      <div class="field"><label>Bruk referanseplanens dose som mål</label><button class="btn ghost sm" id="setRefDose">Hent fra forvalg</button></div>
+      <hr>
+      <div id="loesUt"></div>
+    </div>
+
+  </div>
+
+  <div class="card">
+    <h2><span class="ic">📉</span> Gjæringsforløpet — hele pakken</h2>
+    <p class="sub">Deigtemperatur, øyeblikkelig gjæringsfart og akkumulert gjæring, mot klokka. Den gule kurven er den viktigste: den viser hvor gjæringen faktisk skjer, ikke hvor lenge trinnet varer.</p>
+    <div style="overflow-x:auto"><svg class="chart" id="tempChart" viewBox="0 0 860 360"></svg></div>
+    <div id="chartLegend" class="small"></div>
+  </div>
+
+  <details class="card kollaps">
+    <summary><h2><span class="ic">🌡</span> Ratetabell</h2></summary>
+    <p class="sub">Hvor fort gjærer deigen ved ulike temperaturer, relativt til 24 °C — og hvor mange grader du må opp for å doble farten derfra.</p>
+    <table id="rateTabell"></table>
+  </details>
+</section>
+
+<!-- ============ DEIGTEMP ============ -->
+<section class="view" id="v-deigtemp">
+  <div class="card">
+    <h2><span class="ic">⚙</span> Vanntemperatur</h2>
+    <p class="sub">
+      Ekte varmebalanse med reelle varmekapasiteter (mel 1,81 kJ/kg·K, vann 4,18), ikke den klassiske 3-faktorformelen —
+      den overkorrigerer med rundt 4 °C så snart melet ikke holder romtemperatur.
+    </p>
+    <div class="grid g3">
+      <div class="field"><label>Ønsket deigtemp (°C) — samme som i Gjæring</label><input type="number" id="dtOnsket" min="10" max="32" step="0.5"></div>
+      <div class="field"><label>Meltemperatur (°C)</label><input type="number" id="dtMelTemp" step="0.5"></div>
+      <div class="field"><label>Springvann (°C)</label><input type="number" id="dtSpring" step="0.5"></div>
+      <div class="field"><label>Forferment-temp (°C)</label><input type="number" id="dtFfTemp" step="0.5"></div>
+      <div class="field"><label>Maskin</label>
+        <select id="dtMikser">
+          <option value="hand">Håndelting (0,15 °C/min)</option>
+          <option value="planet">Kjøkkenmaskin/planet (0,6)</option>
+          <option value="spiralHjemme">Spiralmikser hjemme — f.eks. Ooni Halo Pro (0,4)</option>
+          <option value="spiralProff">Spiral proff (1,0)</option>
+          <option value="egen">Egen kalibrering …</option>
+        </select>
+      </div>
+      <div class="field" id="dtEgenFelt" style="display:none"><label>Egen friksjon (°C per min)</label><input type="number" id="dtEgen" step="0.05" min="0" max="2"></div>
+      <div class="field"><label>Eltetid i maskinen (min)</label><input type="number" id="dtMin" step="1" min="0" max="60">
+        <button class="btn ghost sm tilbakestill" id="eltAnbefalt" type="button"></button>
+      </div>
+    </div>
+    <div class="note">Mengdene hentes automatisk fra oppskriften din. <span id="dtMengder"></span></div>
+    <div class="stats" id="dtStats"></div>
+    <div class="spacer"></div>
+    <div id="dtNotiser"></div>
+  </div>
+
+  <details class="card kollaps">
+    <summary><h2><span class="ic">⏲</span> Eltetid × intensitet — hele forklaringen på vanntemperaturen</h2></summary>
+    <p class="sub">
+      Friksjonsvarmen er tid ganger intensitet. Det er derfor «bruk kaldt vann» er riktig for én baker
+      og feil for en annen: rådet stammer fra lang, hard elting på proff spiral. Her er din maskin og din deig.
+    </p>
+    <table id="dtFriksjonTabell"></table>
+    <div id="dtEltNotiser"></div>
+  </details>
+
+  <details class="card kollaps">
+    <summary><h2><span class="ic">🧊</span> Kalibrer maskinen din</h2></summary>
+    <p class="sub">
+      Notatet ditt sier «1 grad per minutt kjøring». Det stemmer for en kommersiell spiral, men de fleste hjemmemaskiner ligger på 0,4–0,6.
+      Bak én gang, mål vanntemperatur inn og deigtemperatur ut, og få den faktiske friksjonen for akkurat din maskin.
+    </p>
+    <div class="grid g4">
+      <div class="field"><label>Vanntemp du brukte (°C)</label><input type="number" id="kalVann" value="14" step="0.5"></div>
+      <div class="field"><label>Meltemp (°C)</label><input type="number" id="kalMel" value="21" step="0.5"></div>
+      <div class="field"><label>Målt deigtemp ut (°C)</label><input type="number" id="kalUt" value="24" step="0.1"></div>
+      <div class="field"><label>Eltetid (min)</label><input type="number" id="kalMin" value="8" step="1"></div>
+    </div>
+    <div id="kalUtSvar"></div>
+  </details>
+</section>
+
+<!-- ============ TIDSPLAN ============ -->
+<section class="view" id="v-plan">
+  <div class="card">
+    <h2><span class="ic">📅</span> Bakeplan</h2>
+    <p class="sub">Sett når brødet skal ut av ovnen, så regner appen bakover gjennom hele prosessen — inkludert forfermenten.</p>
+    <div class="grid g3">
+      <div class="field"><label>Ferdig stekt</label><input type="datetime-local" id="planFerdig"></div>
+      <div class="field"><label>Utbaking + benkehvile (min)</label><input type="number" id="planUtbak" min="0" step="5"></div>
+      <div class="field"><label>Elting inkl. autolyse (min)</label><input type="number" id="planElt" min="0" step="5"></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="tl" id="planTidslinje"></div>
+  </div>
+  <div class="card">
+    <h2><span class="ic">✎</span> Handleliste og oppsett</h2>
+    <div id="planListe"></div>
+  </div>
+</section>
+
+<!-- ============ STEKING ============ -->
+<section class="view" id="v-steking">
+  <div class="card">
+    <h2><span class="ic">🔥</span> Stekeprofiler</h2>
+    <p class="sub">
+      Alle temperaturer i °C. «Ned ved innsetting» betyr at du skrur ned i det døra lukkes — overskuddet finnes bare for å overleve
+      varmetapet ved innsetting. På STÅL i stedet for stein: flytt brød ett hakk opp, eller kjør 15–25 °C lavere.
+    </p>
+    <div id="stekeKort"></div>
+  </div>
+  <div class="card">
+    <h2><span class="ic">⚠</span> Tre ting å endre i din nåværende praksis</h2>
+    <div id="stekeEndringer"></div>
+  </div>
+</section>
+
+<!-- ============ MEL & KORN ============ -->
+<section class="view" id="v-melbibliotek">
+  <div class="card">
+    <h2><span class="ic">▤</span> Mel &amp; korn</h2>
+    <p class="sub">
+      Alle korntypene med fordeler og ulemper. Stjernemerk dine favoritter — de legger seg øverst i
+      melvelgeren under Oppskrift, så du slipper å lete gjennom hele lista hver gang.
+    </p>
+    <div class="grid g3">
+      <div class="field"><label>Søk</label><input type="search" id="melSok" placeholder="Navn, smak, egenskap …"></div>
+      <div class="field"><label>Gruppe</label><select id="melGruppe"></select></div>
+      <div class="field"><label>Glutenbidrag</label>
+        <select id="melBidrag">
+          <option value="">Alle</option>
+          <option value="bidrar">Bygger gluten</option>
+          <option value="noytral">Nøytral</option>
+          <option value="fortynner">Fortynner</option>
+          <option value="bryterned">Bryter ned</option>
+        </select>
+      </div>
+    </div>
+    <div class="field inline">
+      <input type="checkbox" id="melBareFav"><label for="melBareFav" style="margin:0">Vis bare favorittene mine</label>
+    </div>
+    <div id="melAntall" class="small"></div>
+  </div>
+
+  <div id="melBibliotek"></div>
+</section>
+
+<!-- ============ TEKNIKK ============ -->
+<section class="view" id="v-teknikk">
+  <div class="card">
+    <h2><span class="ic">📖</span> Teknikk og fagstoff</h2>
+    <p class="sub">Notatene dine, verifisert og utvidet med forskning. Der noe motsier notatene, er det merket med ⚠.</p>
+    <div class="row" style="max-width:420px">
+      <div class="field" style="margin:0"><input type="search" id="tipsSok" placeholder="Søk i fagstoffet …"></div>
+      <button class="btn ghost sm" id="tipsAlle" style="flex:0;white-space:nowrap">Åpne alle</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="ic">≡</span> Ordliste</h2>
+    <p class="sub">Fagordene appen bruker, forklart. Klikk et ord for definisjonen, eller søk.</p>
+    <div class="field" style="max-width:420px;margin-bottom:4px">
+      <input type="search" id="ordSok" placeholder="Søk etter ord …">
+    </div>
+    <div id="ordListe"></div>
+  </div>
+
+  <div id="tipsListe"></div>
+</section>
+
+<!-- ============ LOGG ============ -->
+<section class="view" id="v-logg">
+  <div class="card">
+    <h2><span class="ic">✒</span> Ny loggføring</h2>
+    <p class="sub">Forskjellen mellom en god og en fantastisk gjærbaker er en loggbok, ikke en surdeig. Endre én variabel per bak.</p>
+    <div class="grid g3">
+      <div class="field"><label>Navn</label><input type="text" id="lgNavn" placeholder="f.eks. Enkornbrød #7"></div>
+      <div class="field"><label>Dato</label><input type="date" id="lgDato"></div>
+      <div class="field"><label>Karakter (1–10)</label><input type="number" id="lgKar" min="1" max="10" step="1" value="7"></div>
+    </div>
+    <div class="note" id="lgAuto"></div>
+    <div class="grid g2">
+      <div class="field"><label>Hva gikk bra / dårlig</label><textarea id="lgKomm" rows="3" placeholder="Krumme, skorpe, løft, snitt, smak …"></textarea></div>
+      <div class="field"><label>Én ting å endre neste gang</label><textarea id="lgEndring" rows="3"></textarea></div>
+    </div>
+    <button class="btn" id="lgLagre">Lagre bak</button>
+    <button class="btn ghost" id="lgKalibrer">Denne var perfekt — bruk dosen som mål</button>
+  </div>
+  <div class="card">
+    <h2><span class="ic">≣</span> Tidligere bak</h2>
+    <div id="loggListe"></div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ KONTEKSTPANEL ============
+     Følger deg gjennom hele appen, slik at konsekvensen av et valg er synlig
+     samtidig som du tar det. Tidligere lå hevekurven 3 600 px under
+     gjærmengde-feltet og var aldri på skjermen samtidig med den.
+     details-elementet gjør at mobilversjonen blir en bunnskuff uten en linje JS. -->
+<details id="kontekst" open>
+  <summary id="kxHandtak">Deigen din</summary>
+  <div class="kxinnhold">
+    <div id="kxIdent"></div>
+    <svg id="kxKurve" viewBox="0 0 340 150" preserveAspectRatio="none"></svg>
+    <div id="kxLegend" class="small"></div>
+    <div class="stats g2" id="kxStats"></div>
+    <div id="kxStatus"></div>
+    <button class="btn ghost sm" id="kxTilKurve">Vis hele kurven →</button>
+  </div>
+</details>
+
+</div><!-- /.skall -->
+
+<script src="js/data.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
