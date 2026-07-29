@@ -112,7 +112,10 @@ const FLOURS = [
 
 /* ---------- FRØ OG BLØTLEGG ----------
    vannKaldt / vannVarmt = gram vann som faktisk BINDES per 100 g tørt.
-   Hell alltid ~1,85× det som bindes, slik at ingenting blir tørt.
+   Kaldbløt: hell ~1,85× det som bindes og hell av overskuddet, slik at
+   ingenting blir tørt. Skålding (varmt): hell nøyaktig det som bindes —
+   alt vannet skal med i deigen, for det er skåldevannet som bærer
+   sukkerartene og stivelsen skåldingen frigjør.
 
    `korn` er IKKE et smaksfelt — det avgjør om ingrediensen teller i grovheten.
    Brødskala'n regner hele korn, sammalt mel, kli og gryn av korn som grovt,
@@ -161,10 +164,14 @@ const BAKE_PROFILES = [
     inn:230, ned:230, nedNaar:'hold den der', damp:'ingen tilsatt — gryta holder på brødets eget damp', dampTid:'lokk på 20 min',
     rist:'gryta står oppå det forvarmede stålet, nederste tredel', tid:'45–50 min', kjerne:'96–99 °C', luft:'lokk av etter 20 min, dørspalte siste 5 min',
     notat:'Dette er det beste du får ut av utstyret du har. Stålet leverer 232 °C kontakttemperatur til bunnen, glasset leverer dampen. Glasset alene gir bare 147 °C mot bunnen — det er der ovnsløftet forsvinner. Forvarm stålet 90–120 min. LES ADVARSELEN om termisk sjokk under Utstyr før du forvarmer glasset.' },
+  // 230 °C av samme grunn som glassgryte-profilen over: Pyrexen tåler 220 °C
+  // termisk sprang, og en romtemperert kloke inn i 260-graders ovn er 235+.
+  // Denne profilen stod alene på 260 og motsa både utstyrslista og tipset om
+  // forvarming — det var en reell bruddrisiko, ikke bare et avvik.
   { id:'brod_kloke', navn:'★ Rundbrød — brød på stålet, glasset som kloke over', vekt:'800–900 g', hydrering:'72–78 %',
-    inn:260, ned:235, nedNaar:'straks døra lukkes', damp:'brødets eget, fanget under glasset', dampTid:'glasset av etter 20 min',
+    inn:230, ned:230, nedNaar:'hold den der', damp:'brødets eget, fanget under glasset', dampTid:'glasset av etter 20 min',
     rist:'direkte på stålet, nederste tredel', tid:'45–50 min', kjerne:'96–99 °C', luft:'glasset av etter 20 min',
-    notat:'Teoretisk det sterkeste oppsettet: full stålkontakt mot deigen OG et lukket dampkammer. Krever at gryta er dyp nok til å dekke brødet uten å røre det. King Arthurs egen sammenligning kåret nettopp «støpejern + kokende vann + opp-ned bolle over brødet» til vinner. Forutsetter at glasset tåler å stå tomt i varm ovn — sjekk produsentens maksgrense.' },
+    notat:'Teoretisk det sterkeste oppsettet: full stålkontakt mot deigen OG et lukket dampkammer. Krever at gryta er dyp nok til å dekke brødet uten å røre det. King Arthurs egen sammenligning kåret nettopp «støpejern + kokende vann + opp-ned bolle over brødet» til vinner. MAKS 230 °C med Pyrex som kloke — glasset tåler 220 °C termisk sprang, så det skal aldri inn i en varmere ovn enn det. LES ADVARSELEN om termisk sjokk under Utstyr før du forvarmer glasset.' },
   { id:'ciabatta', navn:'Ciabatta — 15 mm stål', vekt:'200–300 g biter', hydrering:'80–85 %',
     inn:260, ned:230, nedNaar:'straks', damp:'50 ml kokende vann i forvarmet støpejern', dampTid:'10–12 min',
     rist:'MIDTEN', tid:'20–25 min', kjerne:'97–99 °C', luft:'ta ut dampkaret etter 12 min',

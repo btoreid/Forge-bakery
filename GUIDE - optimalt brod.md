@@ -186,7 +186,7 @@ kaffeaktig — som er umulig å forveksle med surdeigssyre. Bløtlegg *etter* ri
 |---|---|
 | Regal Hvetemel standard | **482 g** |
 | Sammalt hvete fin | **80 g** |
-| Vann | **535 g** (498 g først, 37 g spedd inn) |
+| Vann | **459 g** (400 g først, 59 g spedd inn) |
 | Honning | **24,1 g** |
 | Tørrgjær | **0,84 g** |
 | Salt | **16,1 g** |
@@ -221,9 +221,9 @@ automatisk. Kalibrer maskinen der etter første bak: de målte °C per minutt er
 
 **T−17 t · Sett bigaen.** Visp gjæren ut i vannet før melet. Bland lurvete. Lokk på. 18 °C.
 
-**T−1 t · Rist og bløtlegg frøene.** Panne til de dufter, avkjøl, hell over 158 g vann.
+**T−1 t · Rist og bløtlegg frøene.** Panne til de dufter, avkjøl, hell over 142 g vann.
 
-**T−45 min · Autolyse.** Bland alt melet med 553 g av vannet. La stå. Ikke salt, ikke gjær.
+**T−45 min · Autolyse.** Bland alt melet med 400 g av vannet. La stå. Ikke salt, ikke gjær.
 Gjærdeig ligger på pH 5,5–6, godt over proteasenes aktiveringsvindu på 3,0–4,5, så den
 tåler mye lengre autolyse enn surdeig. 45 minutter til 3 timer er trygt.
 

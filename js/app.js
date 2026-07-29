@@ -109,6 +109,28 @@ function last() {
     if (d) Object.assign(S, d);
   } catch (e) {}
 
+  /* Lagret tilstand er uvalidert JSON, gjerne skrevet av eldre versjoner av
+     appen (nøkkelen har fulgt med siden Brødlab-tiden). Alt motoren regner på
+     vaskes derfor her: én ukjent frø-id eller et hevetrinn uten miljø gir
+     ellers unntak eller stille NaN gjennom samtlige visninger. */
+  const tall = v => typeof v === 'number' && isFinite(v);
+  if (!Array.isArray(S.melListe)) S.melListe = [];
+  S.melListe = S.melListe.filter(m => m && FLOURS.some(f => f.id === m.id) && tall(m.pct) && m.pct >= 0);
+  if (!Array.isArray(S.froListe)) S.froListe = [];
+  S.froListe = S.froListe.filter(f => f && SOAKERS.some(s => s.id === f.id) && tall(f.gram) && f.gram >= 0);
+  if (!Array.isArray(S.plan)) S.plan = [];
+  S.plan = S.plan.filter(t => t && tall(t.timer) && t.timer >= 0 && tall(t.miljo));
+  const ffOk = S.forferment && typeof S.forferment === 'object'
+    && tall(S.forferment.pctMel) && tall(S.forferment.hydrering)
+    && tall(S.forferment.timer) && tall(S.forferment.temp);
+  // Står oppskriften uten mel eller plan etter vasken, er tilstanden ubrukelig —
+  // da lastes forvalget på nytt i stedet for å regne på ingenting. Bakeloggen
+  // og andre felter som overlevde vasken røres ikke av dette.
+  if (!S.melListe.length || !S.plan.length || !ffOk) {
+    if (!PRESETS.some(p => p.id === S.presetId)) S.presetId = PRESETS[0].id;
+    brukPreset(S.presetId);
+  }
+
   // Peker det lagrede forvalget på noe som ikke finnes lenger — fordi et forvalg
   // er fjernet — er hele oppskriften i tilstanden arvet fra det forvalget. Da er
   // det ærligere å laste et gyldig forvalg enn å la appen stå med en oppskrift
@@ -591,8 +613,11 @@ function tegnStart() {
   const tv = $('#brotypeValg'); tv.innerHTML = '';
   BROTYPER.forEach(t => {
     const paa = t.id === S.brotype;
-    const b = el('div', 'stat');
-    b.style.cursor = 'pointer';
+    // Ekte <button>, ikke klikk-div: appens aller første valg må kunne nås
+    // med tastatur og skjermleser. Samme mønster på alle kortvalg.
+    const b = el('button', 'stat');
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(paa));
     if (paa) { b.style.borderColor = 'var(--gull)'; b.style.background = 'var(--panel2)'; }
     b.innerHTML = `<div class="k">${t.ikon} ${t.rute === 'bygg' ? 'Du styrer grovheten' : 'Ferdig kalibrert deig'}</div>
       <div class="v" style="font-size:1.05rem">${paa ? '✓ ' : ''}${t.navn}</div>
@@ -612,8 +637,9 @@ function tegnStart() {
     const fv = $('#formValg'); fv.innerHTML = '';
     FORMER.forEach(f => {
       const paa = f.id === S.form;
-      const b = el('div', 'stat');
-      b.style.cursor = 'pointer';
+      const b = el('button', 'stat');
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(paa));
       if (paa) { b.style.borderColor = 'var(--gull)'; b.style.background = 'var(--panel2)'; }
       b.innerHTML = `<div class="k">${f.ikon} ${f.kort}</div>
         <div class="v" style="font-size:1.02rem">${paa ? '✓ ' : ''}${f.navn}</div>
@@ -990,8 +1016,9 @@ function tegnBygg() {
   // --- Grovhet ---
   const gv = $('#grovhetValg'); gv.innerHTML = '';
   GROVHET.forEach((x, i) => {
-    const b = el('div', 'stat');
-    b.style.cursor = 'pointer';
+    const b = el('button', 'stat');
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(i === S.byggGrovhet));
     if (i === S.byggGrovhet) { b.style.borderColor = 'var(--gull)'; b.style.background = 'var(--panel2)'; }
     b.innerHTML = `<div class="k">${x.kort}</div><div class="v" style="font-size:1.05rem">${x.navn}</div>
                    <div class="small" style="margin-top:3px;color:var(--gull)">${x.klasse}</div>
@@ -1003,8 +1030,9 @@ function tegnBygg() {
   // --- Tid ---
   const tv = $('#tidValg'); tv.innerHTML = '';
   TIDSPLANER.forEach(x => {
-    const b = el('div', 'stat');
-    b.style.cursor = 'pointer';
+    const b = el('button', 'stat');
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(x.id === S.byggTid));
     if (x.id === S.byggTid) { b.style.borderColor = 'var(--gull)'; b.style.background = 'var(--panel2)'; }
     b.innerHTML = `<div class="k">${x.kort}</div><div class="v" style="font-size:1.05rem">${x.navn}</div>
                    <div class="small" style="margin-top:5px">Smak/løft ca. ${x.ovnslos} % av optimal</div>`;
@@ -1020,16 +1048,29 @@ function tegnBygg() {
   const lv = $('#tilleggValg'); lv.innerHTML = '';
   TILLEGG.forEach(t => {
     const paa = S.byggTillegg[t.id] !== undefined;
+    // Ikke <button> her: valgte kort inneholder slider og gram-felt, og nestede
+    // kontroller inne i en button er ugyldig. role+tabindex+keydown gir samme
+    // tastaturtilgang uten å ødelegge de indre feltene.
     const b = el('div', 'stat');
     b.style.cursor = 'pointer';
+    b.tabIndex = 0;
+    b.setAttribute('role', 'button');
+    b.setAttribute('aria-pressed', String(paa));
     if (paa) { b.style.borderColor = 'var(--gull)'; b.style.background = 'var(--panel2)'; }
     b.innerHTML = `<div class="k">${t.type === 'fro' ? 'Frø / korn' : 'Smak'}</div>
       <div class="v" style="font-size:1rem">${paa ? '✓ ' : '+ '}${t.navn}</div>
       <div class="small" style="margin-top:4px">${paa ? `<b>${fmt(S.byggTillegg[t.id], t.pct < 1 ? 2 : 0)} %</b> av melet` : `anbefalt ${fmt(t.pct, t.pct < 1 ? 2 : 0)} %`}</div>`;
-    b.onclick = e => {
-      if (e.target.tagName === 'INPUT') return;
+    const veksle = () => {
       if (paa) delete S.byggTillegg[t.id]; else S.byggTillegg[t.id] = t.pct;
       byggEndret();
+    };
+    b.onclick = e => {
+      if (e.target.tagName === 'INPUT') return;
+      veksle();
+    };
+    b.onkeydown = e => {
+      if (e.target !== b) return; // Enter/space i indre felt skal ikke veksle kortet
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); veksle(); }
     };
     if (paa) {
       const sl = el('input'); sl.type = 'range'; sl.min = t.min; sl.max = t.max;
@@ -2023,7 +2064,7 @@ function bakeSteg() {
           : 'Kaldt vann holder.',
       gjor: valgfritt
         ? `<b>Rist dem</b> — det er ristingen som gir smaken, ikke bløtleggingen: målt 28–51× mer pyrazin, altså dobbelt så mye smak per gram. 125–150 °C til lys gyllen, ikke hardt og raskt. Avkjøl før de går i deigen. Vil du likevel bløtlegge, bruk <b>kaldt</b> vann og kort tid — pyrazinene er vannløselige og flyktige, så en lang eller varm bløt vasker ut nettopp det du ristet fram.`
-        : `Minst 30 minutter. Frøene binder til sammen <b>${gram(r.froAbsorbert)}</b> — det er ${pst(stjaaltPP, 1)} av hydreringen, nok til å merkes. Overskuddet på <b>${gram(r.froVannOverskudd)}</b> heller du av før de går i deigen. Rist dem først, og bruk kaldt bløtevann hvis du vil beholde ristesmaken.`,
+        : `Minst 30 minutter. Frøene binder til sammen <b>${gram(r.froAbsorbert)}</b> — det er ${pst(stjaaltPP, 1)} av hydreringen, nok til å merkes.${maa.length ? ' Skåldevannet skal med i deigen alt sammen — det bærer sukkerartene og stivelsen skåldingen frigjør.' : ''}${r.froVannOverskudd > 1 ? ` Overskuddet fra kaldbløtet på <b>${gram(r.froVannOverskudd)}</b> heller du av før frøene går i deigen.` : ''} Rist dem først, og bruk kaldt bløtevann hvis du vil beholde ristesmaken.`,
       sjekk: valgfritt
         ? 'Frøene skal dufte nøtteaktig, ikke brent. Blir de mørke, har du kjørt for varmt.'
         : 'Ingen tørre kjerner igjen. Bløtlegger du ikke ved denne mengden, trekker frøene vann ut av glutenet gjennom hele bulken, og deigen strammer seg uten at du skjønner hvorfor.'
@@ -2891,14 +2932,21 @@ function tegnTeknikk() {
     const open = tipsAapne.has(i) || (sok.length > 2);
     const d = el('div', 'tip' + (t.varsel ? ' varsel' : '') + (open ? ' open' : ''));
     d.innerHTML = `
-      <div class="tiphead"><span class="ic">${t.ikon}</span><span class="ttl">${t.tittel}</span><span class="arw">›</span></div>
+      <div class="tiphead" role="button" tabindex="0" aria-expanded="${open}"><span class="ic" aria-hidden="true">${t.ikon}</span><span class="ttl">${t.tittel}</span><span class="arw" aria-hidden="true">›</span></div>
       <div class="tipbody">
         ${t.intro ? `<div class="intro">${t.intro}</div>` : ''}
         <dl>${t.punkter.map(p => `<dt>${p[0]}</dt><dd>${p[1]}</dd>`).join('')}</dl>
       </div>`;
-    d.querySelector('.tiphead').onclick = () => {
+    const hode = d.querySelector('.tiphead');
+    const veksle = () => {
       d.classList.toggle('open');
-      if (d.classList.contains('open')) tipsAapne.add(i); else tipsAapne.delete(i);
+      const aapen = d.classList.contains('open');
+      hode.setAttribute('aria-expanded', String(aapen));
+      if (aapen) tipsAapne.add(i); else tipsAapne.delete(i);
+    };
+    hode.onclick = veksle;
+    hode.onkeydown = e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); veksle(); }
     };
     c.appendChild(d);
   });
@@ -2949,6 +2997,18 @@ function tegnLogg() {
    ============================================================ */
 /* Legger − og + rundt alle talIfelt. Steglengden hentes fra feltets step-attributt,
    så temperaturfelt går i 0,5 °C og gramfelt i hele enheter. */
+/* Hold-inne-tilstanden ligger utenfor knappens closure og ryddes fra document:
+   første tikk re-renderer listene, knappen byttes ut i DOM-en midt i holdet,
+   og pointerup på den gamle knappen fyrer da aldri. Bare én stepper kan
+   holdes om gangen, så ett par timer-id-er holder. */
+let stepperForsinkelse = null, stepperIntervall = null;
+function stoppStepper() {
+  clearTimeout(stepperForsinkelse); clearInterval(stepperIntervall);
+  stepperForsinkelse = stepperIntervall = null;
+}
+document.addEventListener('pointerup', stoppStepper);
+document.addEventListener('pointercancel', stoppStepper);
+
 function leggTilSteppere() {
   $$('input[type=number]').forEach(inp => {
     if (inp.dataset.stepper || inp.readOnly) return;
@@ -2972,11 +3032,12 @@ function leggTilSteppere() {
         inp.dispatchEvent(new Event('change', { bubbles: true }));
       };
       b.onclick = juster;
-      // Hold inne for å gjenta
-      let t1, t2;
-      b.onpointerdown = () => { t1 = setTimeout(() => { t2 = setInterval(juster, 90); }, 450); };
-      const stopp = () => { clearTimeout(t1); clearInterval(t2); };
-      b.onpointerup = b.onpointerleave = b.onpointercancel = stopp;
+      // Hold inne for å gjenta — se stoppStepper over for hvorfor tilstanden er global
+      b.onpointerdown = () => {
+        stoppStepper();
+        stepperForsinkelse = setTimeout(() => { stepperIntervall = setInterval(juster, 90); }, 450);
+      };
+      b.onpointerleave = stoppStepper;
       return b;
     };
 
@@ -3304,7 +3365,13 @@ function init() {
   paa('#bakProfil', 'onchange', () => {
     S.stekeProfil = $('#bakProfil').value; S.stekeProfilManuell = true; lagre(); oppdater();
   });
-  paa('#bakNullstill', 'onclick', () => { S.bakHuket = {}; lagre(); tegnBakNaa(); });
+  // Bekreftelse fordi knappen sletter fremdriften i et pågående bak — den ligger
+  // øverst i fanen, midt i klikksonen for melete fingre, og det finnes ingen angre.
+  paa('#bakNullstill', 'onclick', () => {
+    const antallHuket = Object.keys(S.bakHuket).length;
+    if (antallHuket && !confirm(`Nullstille avhukingen? ${antallHuket} avhukede steg slettes — dette kan ikke angres.`)) return;
+    S.bakHuket = {}; lagre(); tegnBakNaa();
+  });
 
   // Start-tid som alternativt ankerpunkt. Hele kjeden regnes fortsatt bakover fra
   // ferdigtidspunktet; å sette starten forskyver bare hele planen i tid.

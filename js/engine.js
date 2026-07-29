@@ -464,14 +464,19 @@ function beregnOppskrift(inn) {
     return { id: m.id, navn: f ? f.navn : m.id, pct: m.pct / pctSum * 100, gram, kr: f ? f.kr : 0, kost: f ? gram / 1000 * f.kr : 0, notat: f ? f.notat : '' };
   });
 
-  // Frø
+  // Frø. Ukjent id (f.eks. fra eldre lagret tilstand) må ikke velte hele
+  // beregningen — raden nulles og vises med id-en som navn.
   const fro = froListe.map(f => {
     const sk = soakerById(f.id);
+    if (!sk) return { id: f.id, navn: f.id, gram: f.gram || 0, varmt: !!f.varmt, bloetleggVann: 0, hellVann: 0, kost: 0, notat: '' };
     const bloet = (f.gram || 0) * (f.varmt ? sk.varmt : sk.kaldt) / 100;
+    // Skålding (varmt): hell nøyaktig det som bindes — alt skal med i deigen,
+    // for det er skåldevannet som bærer sukkerartene og den forklistrede
+    // stivelsen. 1,85× med avhelling gjelder bare kaldbløt.
     return {
-      id: f.id, navn: sk ? sk.navn : f.id, gram: f.gram || 0, varmt: !!f.varmt,
-      bloetleggVann: bloet, hellVann: bloet * 1.85,
-      kost: sk ? (f.gram || 0) / 1000 * sk.kr : 0, notat: sk ? sk.notat : ''
+      id: f.id, navn: sk.navn, gram: f.gram || 0, varmt: !!f.varmt,
+      bloetleggVann: bloet, hellVann: f.varmt ? bloet : bloet * 1.85,
+      kost: (f.gram || 0) / 1000 * sk.kr, notat: sk.notat
     };
   });
 
@@ -531,9 +536,10 @@ function beregnOppskrift(inn) {
     honningVann, smorVann,
     gjaerTotal, gjaerHoved, gjaerType,
     vannHoved, froVannHelles, froAbsorbert,
-    // Overskuddet du heller av etter bløtlegging. Frøene skal stå i rikelig vann
+    // Overskuddet du heller av etter KALDBLØT. Kalde frø skal stå i rikelig vann
     // (~1,85× det de binder) for at ingen kjerner blir tørre, men bare det de
-    // faktisk binder følger med i deigen — resten helles av.
+    // binder følger med i deigen — resten helles av. Skåldede frø bidrar ikke
+    // hit: der helles nøyaktig det som bindes, og alt går i deigen.
     froVannOverskudd: froVannHelles - froAbsorbert,
     hydrering, effektivHydrering, anbefaltHydrering, absFaktor, froVannPaaToppen,
     oppgittHydrering: vannTotal / melTotal,
