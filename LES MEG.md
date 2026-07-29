@@ -96,8 +96,10 @@ Tre steder kan vann ligge, og appen holder dem fra hverandre:
     vann totalt = vann i deigen + vann i forfermenten + vann frøene binder
 
 «Vann i hoveddeigen» er altså bare det som skal i bollen. Frøene bløtlegges i sitt eget vann ved
-siden av — du heller ca. 1,85× det de binder, slik at ingen kjerner blir tørre, og heller av
-overskuddet før de går i deigen. Appen viser både hva som helles på og hva som blir igjen.
+siden av. Ved kaldbløt heller du ca. 1,85× det de binder, slik at ingen kjerner blir tørre, og
+heller av overskuddet før de går i deigen. Ved skålding heller du nøyaktig det som bindes, og alt
+skal med i deigen — det er skåldevannet som bærer sukkerartene skåldingen frigjør. Appen viser
+riktig mengde for begge tilfellene.
 
 ## Kalibreringen av forvalgene, 29.07.2026
 

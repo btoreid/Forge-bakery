@@ -163,12 +163,14 @@ const BAKE_PROFILES = [
   { id:'brod_glass_stal', navn:'★ Rundbrød — glassgryte PÅ 15 mm stål', vekt:'700–800 g', hydrering:'72–78 %',
     inn:230, ned:230, nedNaar:'hold den der', damp:'ingen tilsatt — gryta holder på brødets eget damp', dampTid:'lokk på 20 min',
     rist:'gryta står oppå det forvarmede stålet, nederste tredel', tid:'45–50 min', kjerne:'96–99 °C', luft:'lokk av etter 20 min, dørspalte siste 5 min',
-    notat:'Dette er det beste du får ut av utstyret du har. Stålet leverer 232 °C kontakttemperatur til bunnen, glasset leverer dampen. Glasset alene gir bare 147 °C mot bunnen — det er der ovnsløftet forsvinner. Forvarm stålet 90–120 min. LES ADVARSELEN om termisk sjokk under Utstyr før du forvarmer glasset.' },
+    notat:'Dette er det beste du får ut av utstyret du har. Stålet leverer ca. 213 °C kontakttemperatur til bunnen ved 230-graders ovn (232-tallet gjelder 250 °C, som Pyrexen ikke tåler), glasset leverer dampen. Glasset alene gir bare ~140 °C mot bunnen — det er der ovnsløftet forsvinner. Forvarm stålet 90–120 min. LES ADVARSELEN om termisk sjokk under Utstyr før du forvarmer glasset.' },
   // 230 °C av samme grunn som glassgryte-profilen over: Pyrexen tåler 220 °C
   // termisk sprang, og en romtemperert kloke inn i 260-graders ovn er 235+.
   // Denne profilen stod alene på 260 og motsa både utstyrslista og tipset om
   // forvarming — det var en reell bruddrisiko, ikke bare et avvik.
-  { id:'brod_kloke', navn:'★ Rundbrød — brød på stålet, glasset som kloke over', vekt:'800–900 g', hydrering:'72–78 %',
+  // 700–800 g av samme grunn som glassgryte-profilen: innvendig 21,5 cm blir
+  // trangt for et 900 g emne etter ovnsløftet — kloken er samme gryte.
+  { id:'brod_kloke', navn:'★ Rundbrød — brød på stålet, glasset som kloke over', vekt:'700–800 g', hydrering:'72–78 %',
     inn:230, ned:230, nedNaar:'hold den der', damp:'brødets eget, fanget under glasset', dampTid:'glasset av etter 20 min',
     rist:'direkte på stålet, nederste tredel', tid:'45–50 min', kjerne:'96–99 °C', luft:'glasset av etter 20 min',
     notat:'Teoretisk det sterkeste oppsettet: full stålkontakt mot deigen OG et lukket dampkammer. Krever at gryta er dyp nok til å dekke brødet uten å røre det. King Arthurs egen sammenligning kåret nettopp «støpejern + kokende vann + opp-ned bolle over brødet» til vinner. MAKS 230 °C med Pyrex som kloke — glasset tåler 220 °C termisk sprang, så det skal aldri inn i en varmere ovn enn det. LES ADVARSELEN om termisk sjokk under Utstyr før du forvarmer glasset.' },
@@ -1162,9 +1164,12 @@ const UTSTYR = [
   { id:'glass', navn:'Pyrex Slow Cook 4,4 L med lokk (din)', effusivitet:1453, kontakt:147, forvarm:'sammen med stålet, maks 230 °C',
     damp:'utmerket — lukket kammer', best:'Damp og fuktighetskontroll, ikke bunnvarme',
     om:'Produsentspesifikasjon: tåler −40 til +300 °C, og termisk sjokk opptil 220 °C differanse. Det er borosilikat-tall — herdet kalknatronglass ligger på 60–80 °C — så den tåler langt mer enn typisk glassbakeutstyr. Som dampkammer er den fullverdig: en lukket gryte trenger bare ~2 g damp, og brødet inneholder selv 350–400 g vann. Som helle er den svak: effusivitet 1 453 mot støpejernets 13 123. Glasset måtte holdt 397 °C for å matche støpejern på 250. Løsningen er å la stålet levere bunnvarmen og glasset dampen. Innvendig 21,5 cm bred og 13,5 cm høy med lokket på — komfortabelt til 700–800 g emner, trangt over 900 g.' },
-  { id:'glass_stal', navn:'★ Pyrex-gryta PÅ 15 mm stålet', effusivitet:13625, kontakt:232, forvarm:'stål 90–120 min, gryta inn siste 20 min',
+  // kontakt:213, ikke 232: kontakttallene er regnet ved 250 °C helle (se
+  // headerkommentaren), men dette oppsettet er låst til 230 av Pyrexens
+  // 220-graders termiske sprang. Ved 230 °C mot 6-graders deig blir det ~213.
+  { id:'glass_stal', navn:'★ Pyrex-gryta PÅ 15 mm stålet', effusivitet:13625, kontakt:213, forvarm:'stål 90–120 min, gryta inn siste 20 min',
     damp:'utmerket — lukket kammer', best:'Dette er ditt beste oppsett for rundbrød',
-    om:'Stålet leverer 232 °C kontakttemperatur gjennom glassbunnen, gryta leverer dampen. Du får begge gryteoppgavene løst med utstyr du allerede eier. Sett gryta på det ferdig forvarmede stålet de siste 20 minuttene av forvarmingen, hold deg på 230 °C, og last inn på bakepapir. Da er temperaturspranget godt innenfor de 220 °C spesifikasjonen tåler.' },
+    om:'Stålet leverer ca. 213 °C kontakttemperatur gjennom glassbunnen ved 230-graders ovn (232-tallet forutsetter 250 °C, som Pyrexen ikke tåler), gryta leverer dampen. Du får begge gryteoppgavene løst med utstyr du allerede eier. Sett gryta på det ferdig forvarmede stålet de siste 20 minuttene av forvarmingen, hold deg på 230 °C, og last inn på bakepapir. Da er temperaturspranget godt innenfor de 220 °C spesifikasjonen tåler.' },
   { id:'stopejern', navn:'Støpejernsgryte (referanse)', effusivitet:13123, kontakt:232, forvarm:'45–60 min',
     damp:'utmerket — lukket kammer', best:'Alt av frittstående brød',
     om:'Løser damp og bunnvarme i én gjenstand. Dette er fasiten alle andre oppsett måles mot.' },
