@@ -131,6 +131,29 @@ function last() {
     brukPreset(S.presetId);
   }
 
+  // Skalarfeltene motoren deler og multipliserer med må også klemmes — en
+  // streng, NaN eller 0 her gir NaN gjennom hele oppskriften uten feilmelding.
+  const klem = (k, min, max, fallback) => {
+    if (!tall(S[k]) || S[k] < min || S[k] > max) S[k] = fallback;
+  };
+  klem('hydrering', 40, 120, 70);
+  klem('saltPct', 0, 5, 1.8);
+  klem('gjaerPct', 0.001, 5, 0.3);
+  klem('antall', 1, 100, 4);
+  klem('vektPerBrod', 100, 5000, 900);
+  klem('startTemp', 5, 35, 24);
+  klem('byggAntall', 1, 100, 2);
+  klem('byggVekt', 100, 5000, 900);
+  // Beholderne som dereferes direkte ved første oppdater() — null her krasjer
+  // før noen fallback rekker å slå inn.
+  if (!S.byggTillegg || typeof S.byggTillegg !== 'object') S.byggTillegg = {};
+  if (!Array.isArray(S.favorittMel)) S.favorittMel = [];
+  if (!Array.isArray(S.logg)) S.logg = [];
+  if (!S.bakHuket || typeof S.bakHuket !== 'object') S.bakHuket = {};
+  // Forfermenttemperatur på 0–3 °C passerer talltesten men gir Infinity i
+  // forfermentGjaerPct — gjær gjør uansett ingenting der.
+  if (S.forferment && tall(S.forferment.temp) && (S.forferment.temp < 4 || S.forferment.temp > 35)) S.forferment.temp = 22;
+
   // Peker det lagrede forvalget på noe som ikke finnes lenger — fordi et forvalg
   // er fjernet — er hele oppskriften i tilstanden arvet fra det forvalget. Da er
   // det ærligere å laste et gyldig forvalg enn å la appen stå med en oppskrift
@@ -3013,6 +3036,10 @@ function stoppStepper() {
 }
 document.addEventListener('pointerup', stoppStepper);
 document.addEventListener('pointercancel', stoppStepper);
+// Slippes museknappen utenfor vinduet, fyrer verken pointerup eller
+// pointercancel — blur og pointerleave på dokumentet fanger de tilfellene.
+document.addEventListener('pointerleave', stoppStepper);
+window.addEventListener('blur', stoppStepper);
 
 function leggTilSteppere() {
   $$('input[type=number]').forEach(inp => {
