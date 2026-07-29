@@ -1398,8 +1398,13 @@ function tegnOppskrift() {
 
   // Smaksnotiser
   const sn = $('#smakNotiser'); sn.innerHTML = '';
-  if (S.saltPct < 1.7) sn.appendChild(el('div', 'note warn', 'Under 1,8 % salt smaker brødet flatt og gjærer uforutsigbart — og skorpa blir blekere, fordi gjæren rekker å spise opp sukkeret.'));
-  if (S.saltPct > 2.4) sn.appendChild(el('div', 'note warn', 'Over 2,2 % begynner du å betale i hevehøyde uten smaksgevinst.'));
+  // Tersklene matcher teksten (1,8/2,2) — før slo advarselen først inn ved
+  // 1,7/2,4, så en bruker på 1,75 % fikk aldri beskjed om at gulvet var 1,8.
+  if (S.saltPct < 1.8) sn.appendChild(el('div', 'note warn', 'Under 1,8 % salt smaker brødet flatt og gjærer uforutsigbart — og skorpa blir blekere, fordi gjæren rekker å spise opp sukkeret.'));
+  if (S.saltPct > 2.2) sn.appendChild(el('div', 'note warn', 'Over 2,2 % begynner du å betale i hevehøyde uten smaksgevinst.'));
+  // Salt er parameteren der svakt/grovt mel vinner mest (+51 % målt styrke) —
+  // grove deiger bør ligge mot 2,0, ikke på gulvet.
+  if (r.grovMelAndel > 0.25 && S.saltPct >= 1.8 && S.saltPct < 1.9) sn.appendChild(el('div', 'note warn', `Med ${fmt(r.grovMelAndel * 100, 0)} % grovt mel bør saltet mot <b>2,0 %</b> — svakt mel vinner mest deigstyrke på salt.`));
   if (S.honningPct > 0) {
     const v = r.honning * 0.171;
     sn.appendChild(el('div', 'note ok', `Honningen bærer <b>${fmt(v, 1)} g vann</b> (17,1 %), som er trukket fra hovedvannet. Ved ${fmt(S.honningPct, 1)} % er du fortsatt på den akselererende siden — gassproduksjonen topper først rundt 7 % sukker. Ha den i deigen, ikke i forfermenten.`));
@@ -1556,10 +1561,14 @@ function tegnOppskrift() {
        Vil du at deigen faktisk skal ha ${fmt(S.hydrering, 1)} %, kryss av for «legg vannet på toppen» under Frø.
        Uansett: bløtlegg frøene i halve vannmengden i 30 minutter først — ellers stjeler de vannet fra glutenet underveis.`));
   }
-  const rang = { 'ingen': 0, 'svært svak': 1, 'svak': 2, 'svak-middels': 3, 'middels': 4, 'middels-sterk': 4.5, 'sterk': 5, 'ukjent': 3 };
-  if (S.hydrering >= 78 && (rang[r.svakesteStyrke] ?? 3) < 5) on.appendChild(el('div', 'note bad',
-    `Du kjører <b>${fmt(S.hydrering, 1)} % hydrering</b> med ${r.svakesteStyrke} mel i blandingen. Over 78 % trenger du W 300+ i minst 60–80 % av melet, ellers flyter deigen ut. Bland inn sterkt hvetemel eller gå ned til 74 % og klatre 2 % per bak.`));
-  if (S.hydrering < 72 && S.presetId === 'ciabatta') on.appendChild(el('div', 'note warn', 'Ciabatta under 78 % blir et vanlig brød. De store uregelmessige hullene kommer av at glutenfilmene er tynne nok til å blåses enormt opp før de revner.'));
+  // Vektet styrke, ikke svakeste enkeltmel: 80 % Caputo Cuoco + 20 % Regal er
+  // 0,8×5 + 0,2×4,5 = 4,9 og skal IKKE utløse advarsel på 82 % — det er appens
+  // eget ciabatta-forvalg. Terskelen skjerpes over 82 %.
+  const styrkeKrav = S.hydrering > 82 ? 4.85 : 4.7;
+  if (S.hydrering >= 78 && r.styrkeVektet < styrkeKrav) on.appendChild(el('div', 'note bad',
+    `Du kjører <b>${fmt(S.hydrering, 1)} % hydrering</b>, og melblandingen er ikke sterk nok til det (vektet styrke ${fmt(r.styrkeVektet, 1)} av 5, trenger ${fmt(styrkeKrav, 1)}). Over 78 % trenger du W 300+ i størstedelen av melet, ellers flyter deigen ut. Bland inn mer sterkt hvetemel eller gå ned til 74 % og klatre 2 % per bak.`));
+  // Terskelen matcher teksten: advarselen sier «under 78 %», da skal den også utløses der.
+  if (S.hydrering < 78 && S.presetId === 'ciabatta') on.appendChild(el('div', 'note warn', 'Ciabatta under 78 % blir et vanlig brød. De store uregelmessige hullene kommer av at glutenfilmene er tynne nok til å blåses enormt opp før de revner.'));
 
   // Tabell
   const t = $('#oppskriftTabell');
@@ -1943,7 +1952,14 @@ const FORVARM_MIN = {
 function anbefaltEltMin() {
   const f = S.dtMikser === 'egen' ? S.dtEgen : FRIKSJON[S.dtMikser];
   const maal = (ELTING.MAAL_LAV + ELTING.MAAL_HOY) / 2;
-  return Math.max(1, Math.round(gradForArbeid(maal) / Math.max(f, 0.01)));
+  const min = Math.max(1, Math.round(gradForArbeid(maal) / Math.max(f, 0.01)));
+  // Håndelting: arbeidsmodellen gjelder ikke. Mye av friksjonsvarmen går til
+  // benk og luft, og hendene varmer deigen uavhengig av arbeidet — så
+  // temperaturstigningen er ingen gyldig arbeidsmåler her. Rå formel ga 34 min,
+  // samtidig som appen advarte mot mer enn 25. Normen er 10–12 min pluss brett.
+  if (S.dtMikser === 'hand') return Math.min(12, min);
+  // Ingen maskin skal anbefales over appens eget tak for hvetemel.
+  return Math.min(25, min);
 }
 
 function deigtempInn(r) {

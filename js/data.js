@@ -76,11 +76,11 @@ const FLOURS = [
     notat:'Den snilleste norske fullkornshveten. Malt av ekstra bakekraftige sorter.' },
 
   // Rug
-  { id:'rug_siktet',      navn:'Rugmel siktet',                     gruppe:'Rug',          protein:6.5,  absorpsjon:1.08, styrke:'ingen',         maxPct:40,  kr:16.5, grov:1,
+  { id:'rug_siktet',      navn:'Rugmel siktet',                     gruppe:'Rug',          protein:6.5,  absorpsjon:1.08, styrke:'ingen',         maxPct:25,  kr:16.5, grov:1,
     notat:'Ingen glutennettverk. Absorpsjonen er tidsavhengig — deigen strammer seg etter elting.' },
-  { id:'samalt_rug',      navn:'Sammalt rug fin',                   gruppe:'Rug',          protein:9.2,  absorpsjon:1.15, styrke:'ingen',         maxPct:40,  kr:30.0, grov:1,
+  { id:'samalt_rug',      navn:'Sammalt rug fin',                   gruppe:'Rug',          protein:9.2,  absorpsjon:1.15, styrke:'ingen',         maxPct:25,  kr:30.0, grov:1,
     notat:'Over 20 % uten surdeig blir klissete. 10–15 % er sweet spot i et hvetebrød.' },
-  { id:'samalt_rug_grov', navn:'Sammalt rug grov',                  gruppe:'Rug',          protein:9.1,  absorpsjon:1.20, styrke:'ingen',         maxPct:40,  kr:30.0, grov:1,
+  { id:'samalt_rug_grov', navn:'Sammalt rug grov',                  gruppe:'Rug',          protein:9.1,  absorpsjon:1.20, styrke:'ingen',         maxPct:25,  kr:30.0, grov:1,
     notat:'Over 40 % må i form. La brødet hvile 12–24 t før skjæring.' },
   { id:'svedjerug',       navn:'Svedjerug sammalt',                 gruppe:'Rug',          protein:10.2, absorpsjon:1.18, styrke:'ingen',         maxPct:25,  kr:54.0, grov:1,
     notat:'Den mest aromatiske rugen — røykaktig, dyp og kompleks, med mer aroma per prosentpoeng enn vanlig rug. Samme amylase- og pentosanproblematikk, så behandle den som rug og ikke som hvete. Fås fra Holli, Sigdal og Norsk Urkorn, kun nett.' },
@@ -96,9 +96,9 @@ const FLOURS = [
     notat:'' },
 
   // Andre korn
-  { id:'havremel',        navn:'Havremel sammalt',                  gruppe:'Andre korn',   protein:14.0, absorpsjon:1.18, styrke:'ingen',         maxPct:35,  kr:27.5, grov:1,
+  { id:'havremel',        navn:'Havremel sammalt',                  gruppe:'Andre korn',   protein:14.0, absorpsjon:1.18, styrke:'ingen',         maxPct:20,  kr:27.5, grov:1,
     notat:'7 g fett/100 g — høyest fettinnhold av alt melet. Betaglukan gjør det tørst. Tak 35–40 %.' },
-  { id:'byggmel',         navn:'Byggmel sammalt',                   gruppe:'Andre korn',   protein:8.7,  absorpsjon:1.20, styrke:'ingen',         maxPct:35,  kr:26.0, grov:1,
+  { id:'byggmel',         navn:'Byggmel sammalt',                   gruppe:'Andre korn',   protein:8.7,  absorpsjon:1.20, styrke:'ingen',         maxPct:15,  kr:26.0, grov:1,
     notat:'Høy betaglukan — svært tørst og ikke-lineær. Aktivt ødeleggende for gluten.' },
   { id:'durum',           navn:'Durummel',                          gruppe:'Andre korn',   protein:13.0, absorpsjon:1.02, styrke:'middels',       maxPct:40,  kr:24.0, grov:0,
     notat:'Sterkt, men lite ekstensibelt (høy P/L). Bland, ikke bruk alene.' },
@@ -206,9 +206,13 @@ const PRESETS = [
     id:'brod_standard',
     navn:'Standardbrød 70 % (sammalt hvete)',
     beskrivelse:'Grunnoppskriften fra notatene dine: 1 % fersk gjær, 3–4 t bulk, 18–24 t på kjøl.',
-    hydrering:72, salt:1.8, antall:4, vektPerBrod:900,
+    // Frømengden var 300 + 150 g = 28,8 % av melet. Appens egne anbefalinger er
+    // 6 % solsikke og 3 % lin, og 28,8 % koster ca. HALVE ovnsløftet: glutenbærende
+    // andel falt til 50,4 %, og 9,6 % lin er langt inne i sonen der deigstabiliteten
+    // kollapser. Hydreringen er hevet 72→75 % i tråd med absFaktor for blandingen.
+    hydrering:75, salt:1.8, antall:4, vektPerBrod:900,
     mel:[ {id:'regal_standard', pct:65}, {id:'samalt_hvete', pct:27}, {id:'samalt_rug', pct:8} ],
-    fro:[ {id:'solsikke', gram:300, varmt:false}, {id:'linfro', gram:150, varmt:false} ],
+    fro:[ {id:'solsikke', gram:96, varmt:false}, {id:'linfro', gram:48, varmt:false} ],
     forferment:{ bruk:false, type:'poolish', pctMel:20, hydrering:100, timer:14, temp:22 },
     gjaerType:'torr', gjaerPct:0.234,   // kalibrert til dose 2,16 (var 0,333 → 2,99)
     refPlan:[
@@ -255,7 +259,10 @@ const PRESETS = [
     id:'focaccia',
     navn:'Focaccia 78 %',
     beskrivelse:'Samme deig som brødet, men hever i formen og kaldhever der.',
-    hydrering:78, salt:2.0, antall:1, vektPerBrod:1000,
+    // 4 % olje i deigen: volumtoppen ligger på 4–5 % etter TILLEGG_EFFEKT.fett,
+    // og 3 % gir målt 69 % mykere krumme. Uten olje i deigen er en focaccia et
+    // flatbrød — oljen i formen gjør bare utsiden.
+    hydrering:78, salt:2.0, oljePct:4, antall:1, vektPerBrod:1000,
     mel:[ {id:'regal_standard', pct:100} ],
     fro:[],
     forferment:{ bruk:true, type:'poolish', pctMel:25, hydrering:100, timer:14, temp:22 },
@@ -500,7 +507,7 @@ const TILLEGG = [
     hvorfor:'Ren fiberøkning uten å bytte mel. Praktisk hvis du vil ha loffens krumme men mer fiber.',
     obs:'Oppfører seg nesten som mel og kutter gluten som mel gjør. Regnes derfor mot grovheten.',
     opt:'0–3 % hvis løft er målet. Kli er den dyreste fiberkilden i struktur.',
-    opp:'Mer fiber. Men målt er ren kli ca. 1,5× så skadelig for volumet som frø ved samme vektandel — den binder 4–6 g vann per gram mot frøenes 0,8–1,3, og fiberens fenoler hemmer glutendannelsen kjemisk.',
+    opp:'Mer fiber. Men målt er ren kli ca. 1,5× så skadelig for volumet som frø ved samme vektandel. Laboratoriemålt vannbindingsevne er 4–6 g per gram (sentrifugert WHC), men i deig gir kliet mye av det tilbake — praktisk binding er ca. 1 g kaldt og 1,7 g skåldet, som er tallene appen regner med. Fiberens fenoler hemmer dessuten glutendannelsen kjemisk.',
     ned:'Merkbart bedre løft. Vil du ha fiber billigere, bytt til litt sammalt mel i stedet.' },
   { id:'honning',    type:'smak',  navn:'Honning',         pct:2,  min:0.5, max:6, felt:'honningPct',
     hvorfor:'Rundhet og skorpefarge. Honning er allerede invertert sukker, og fruktose har lavest karamelliseringsterskel av alle sukkerarter — derfor bruner den hardere enn vanlig sukker.',
@@ -725,7 +732,7 @@ const ORDLISTE = [
   { ord:'Siktet', gr:'Mel',
     def:'Bare den stivelsesrike kjernen. Norsk siktet hvete har typisk 78 % utmaling, italiensk tipo 00 rundt 55 %.', se:['Sammalt'] },
   { ord:'Kli', gr:'Mel',
-    def:'Kornets ytre skallag. Binder 4–6 g vann per gram — mot frøenes 0,8–1,3 — og hemmer glutendannelsen kjemisk. Derfor får man ikke vindusrute i grovt mel.',
+    def:'Kornets ytre skallag. Laboratoriemålt vannbindingsevne er 4–6 g per gram, men det er en sentrifugert verdi: i deig gir kliet mye tilbake, og praktisk binding er ca. 1 g kaldt og 1,7 g skåldet. Hemmer glutendannelsen kjemisk — derfor får man ikke vindusrute i grovt mel.',
     se:['Sammalt','Vindusrute'] },
   { ord:'Falltall', gr:'Mel',
     def:'Hagberg Falling Number, et mål på melets egen amylaseaktivitet. Norsk hvetemel ligger på 280–320 sekunder, som er det optimale vinduet. Lavt falltall gir klissete krumme, høyt gir blek skorpe.',

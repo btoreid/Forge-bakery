@@ -404,12 +404,17 @@ function beregnOppskrift(inn) {
   // Regal-deig fikk advarsel om for svakt mel.
   const styrkeRang = { 'ingen': 0, 'svært svak': 1, 'svak': 2, 'svak-middels': 3, 'middels': 4, 'middels-sterk': 4.5, 'sterk': 5, 'ukjent': 3 };
   let minRang = 9;
+  // styrkeVektet = Σ(andel × rang): blandingens samlede styrke. Hydrerings-
+  // advarselen bruker denne, ikke svakesteStyrke — 20 % middels-sterkt mel i en
+  // ellers sterk blanding skal ikke utløse «for svakt mel» på 82 % hydrering.
+  let styrkeVektet = 0;
   melListe.forEach(m => {
     const f = flourById(m.id); if (!f) return;
     const andel = m.pct / pctSum;
     absFaktor += andel * f.absorpsjon;
     grovAndel += andel * f.grov;
     const r = styrkeRang[f.styrke] ?? 3;
+    styrkeVektet += andel * r;
     if (r < minRang && andel >= 0.15) { minRang = r; svakesteStyrke = f.styrke; }
   });
 
@@ -543,7 +548,7 @@ function beregnOppskrift(inn) {
     froVannOverskudd: froVannHelles - froAbsorbert,
     hydrering, effektivHydrering, anbefaltHydrering, absFaktor, froVannPaaToppen,
     oppgittHydrering: vannTotal / melTotal,
-    grovAndel, svakesteStyrke,
+    grovAndel, svakesteStyrke, styrkeVektet,
     // Frø er ikke mel. De bygger ikke gluten, men de fortynner nettverket og
     // stjeler vann. Derfor flere ulike «grovhets»-tall som ofte forveksles —
     // og som betyr helt forskjellige ting:
@@ -610,7 +615,11 @@ function brodskalan(grovMelGram, melTotal, kornTillegg = 0) {
   return { pct, klasse: k.klasse, kort: k.kort, biter: k.biter,
            // Nøkkelhullet krever minst 30 % fullkorn av tørrstoffet i korndelen
            // (Veileder til nøkkelhullsforskriften, Mattilsynet, revidert 2021).
-           nokkelhull: pct >= 30 };
+           // Feltet heter fullkorn, ikke nokkelhull, fordi ordningen i tillegg
+           // stiller krav til salt, fiber, sukker og fett — dem har appen ikke
+           // tallene til å vurdere. Et brød på 2,0 % salt ryker trolig på
+           // saltkravet selv om fullkornandelen holder.
+           nokkelhullFullkorn: pct >= 30 };
 }
 
 /* Lineær interpolasjon i en ankerpunkttabell. Utenfor endepunktene klippes det
