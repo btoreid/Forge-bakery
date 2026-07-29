@@ -232,7 +232,7 @@ function tilTorrPct(pct, type) { return gjaerKonverter(pct, type, 'torr'); }
 const RISE_ANKER = [[27, 30], [24, 50], [21, 75], [18, 100]];
 
 function maalHeveProsent(deigTemp, o = {}) {
-  const { hydrering = 0.75, grovAndel = 0.10, styrke = 'middels' } = o;
+  const { hydrering = 0.75, grovAndel = 0.10, styrke = 'middels', etterKaldheving = false } = o;
   const p = RISE_ANKER;
   let base;
   if (deigTemp >= p[0][0]) base = p[0][1];
@@ -246,7 +246,13 @@ function maalHeveProsent(deigTemp, o = {}) {
   const hydJust  = 1 - 1.2 * (hydrering - 0.75);
   const grovJust = 1 - 0.7 * (grovAndel - 0.10);
   const styrkeJust = { 'svært svak': 0.78, 'svak': 0.85, 'svak-middels': 0.90, 'middels': 0.96, 'middels-sterk': 1.00, 'sterk': 1.05, 'ingen': 0.85, 'ukjent': 0.93 }[styrke] ?? 0.96;
-  return Math.max(18, base * hydJust * grovJust * styrkeJust);
+  const maal = base * hydJust * grovJust * styrkeJust;
+  // Ankertabellen er forankret på 75 % hydrering og 90/10 hvete/fullkorn — den
+  // er ikke kalibrert for en ciabatta på 82 % ren sterk hvete. Formelen ga der
+  // 45 % bulkstigning, mens fagteksten sier 70–80 %. Går deigen på kjøl etterpå
+  // og ligger over 80 % hydrering, settes et gulv på 60 %.
+  const gulv = (etterKaldheving && hydrering > 0.80) ? 60 : 18;
+  return Math.max(gulv, maal);
 }
 
 /* ---------- Forferment ---------- */
@@ -518,7 +524,12 @@ function beregnOppskrift(inn) {
   // toppen, er det ekstra vann som aldri skulle vært i bollen; tas det fra
   // hydreringen, er det vann deigen har gitt fra seg til frøene.
   const froVannHelles = fro.reduce((s, f) => s + f.hellVann, 0);
-  const vannHoved = vannTotal - (ff ? ff.vann : 0) - honningVann - smorVann - froAbsorbert;
+  const vannHovedRaa = vannTotal - (ff ? ff.vann : 0) - honningVann - smorVann - froAbsorbert;
+  // Negativt vann er ikke en mengde, det er en umulig oppskrift: forfermenten
+  // inneholder mer vann enn hele deigen skal ha (poolish over ~70 % av melet
+  // ved 70 % hydrering). Klemmes til 0 og flagges, på samme måte som gjaerHoved.
+  const vannHoved = Math.max(0, vannHovedRaa);
+  const vannUnderskudd = Math.max(0, -vannHovedRaa);
 
   // Vannet frøene binder ligger allerede i vannTotal, så her teller bare tørrvekten.
   const totalVekt = melTotal + vannTotal + salt + honning + olje + sukker + smor + malt + gjaerTotal + froGramTotal;
@@ -540,7 +551,7 @@ function beregnOppskrift(inn) {
     salt, honning, olje, sukker, smor, malt,
     honningVann, smorVann,
     gjaerTotal, gjaerHoved, gjaerType,
-    vannHoved, froVannHelles, froAbsorbert,
+    vannHoved, vannUnderskudd, froVannHelles, froAbsorbert,
     // Overskuddet du heller av etter KALDBLØT. Kalde frø skal stå i rikelig vann
     // (~1,85× det de binder) for at ingen kjerner blir tørre, men bare det de
     // binder følger med i deigen — resten helles av. Skåldede frø bidrar ikke

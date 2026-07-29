@@ -285,8 +285,10 @@ function brukByggOppskrift(o = {}) {
   S.forferment = { ...B.tp.forferment };
   S.antall = S.byggAntall; S.vektPerBrod = S.byggVekt;
   S.plan = B.plan.map(s => ({ ...s }));
-  S.startTemp = 24;
-  S.froVannPaaToppen = true;
+  // startTemp og froVannPaaToppen nullstilles IKKE her. Denne funksjonen kalles
+  // ved hvert klikk i «Bygg brød», så en deigtemp brukeren hadde satt til 22 °C
+  // hoppet tilbake til 24 så snart han byttet kurv — uten varsel, og med ny
+  // vanntemperatur og gjærmengde som følge.
   // Måldosen skal være det planen SIKTER mot, ikke det den oppnådde. Satte vi
   // den til det oppnådde, ble avviket alltid «+0 %» — også når gjæren står på
   // det praktiske taket og planen ikke rekker fram. Da skjulte nøkkeltallet
@@ -597,7 +599,7 @@ function tegnKontekst() {
   const avvikTxt = Math.abs(avvik) < 0.5 ? '±0 %' : `${avvik > 0 ? '+' : '−'}${fmt(Math.abs(avvik), 0)} %`;
   const bs = bakeSteg();
   const rise = maalHeveProsent(S.startTemp, {
-    hydrering: S.hydrering / 100, grovAndel: r.grovAndel, styrke: r.svakesteStyrke
+    hydrering: S.hydrering / 100, grovAndel: r.grovAndel, styrke: r.svakesteStyrke, etterKaldheving: harKaldheving()
   });
 
   $('#kxStats').innerHTML = `
@@ -831,7 +833,10 @@ function byggOppskrift() {
   }
 
   const plan = tp.plan.map(s => ({ ...s }));
-  plan[0].temp = 24;
+  // Deigtemperaturen er brukerens valg, ikke en konstant. Sto den hardkodet på
+  // 24, løste «Bygg brød» gjærmengden for en annen temperatur enn den brukeren
+  // faktisk hadde satt i Deigtemp — og satte den så tilbake til 24 etterpå.
+  plan[0].temp = S.startTemp;
   const pff = tp.forferment.bruk ? tp.forferment.pctMel / 100 : 0;
   const maalDose = maalDoseFor(r.grovMelAndel, pff);
   // Kjøleskapsinnstillingene gjelder også her — de ble tidligere ignorert i denne visningen.
@@ -857,7 +862,7 @@ function byggOppskrift() {
     antall: S.byggAntall, vektPerBrod: S.byggVekt, froVannPaaToppen: true
   });
   const g = planDose(plan, torr, r.masseKg, opt);
-  const rise = maalHeveProsent(24, { hydrering: hyd, grovAndel: r.grovMelAndel, styrke: r.svakesteStyrke });
+  const rise = maalHeveProsent(S.startTemp, { hydrering: hyd, grovAndel: r.grovMelAndel, styrke: r.svakesteStyrke, etterKaldheving: harKaldheving(plan) });
 
   return { gr, tp, ut, lukket, r, g, plan, torr, gjaerPct, hyd, maalDose, rise, smak, froPct, underskudd };
 }
@@ -1483,6 +1488,10 @@ function tegnOppskrift() {
        ${fmt(ff.mel)} g mel · ${fmt(ff.vann)} g vann · <b>${fmt(ff.gjaer, 2)} g ${enhet}</b>
        (${fmt(ff.gjaerPctAvFfMel, 3)} % av poolishmelet)${ff.salt > 0.3 ? ` · ${fmt(ff.salt, 1)} g salt` : ''}.
        <br>Ferdig etter ${fmt(ff.timer, 1)} t ved ${fmt(ff.temp, 1)} °C. Brukbar ${fmt(ff.brukTidligst, 1)}–${fmt(ff.brukSenest, 1)} t, hardt tak ${fmt(ff.hardtTak, 1)} t.`));
+    if (r.vannUnderskudd > 0.5) fu.appendChild(el('div', 'note bad',
+      `<b>Forfermenten inneholder mer vann enn hele deigen skal ha.</b> Den tar ${fmt(ff.vann)} g, mens deigen totalt har ${fmt(r.vannTotal)} g —
+       hoveddeigen mangler ${fmt(r.vannUnderskudd)} g og står oppført med 0.
+       Senk andelen av melet (${fmt(ff.pctMel)} %) eller hydreringen i forfermenten (${fmt(ff.hydrering)} %).`));
     if (!utenforOmraade && r.gjaerHoved <= 0.01) fu.appendChild(el('div', 'note bad',
       `<b>Forfermenten krever mer gjær enn hele oppskriften har.</b> Den skal ha ${fmt(ff.gjaer, 2)} g, mens totalen er ${fmt(r.gjaerTotal, 2)} g.
        Hoveddeigen får da null, og den faktiske gjærmengden i brødet blir høyere enn gjæringsdosen er regnet ut fra.
@@ -1539,7 +1548,7 @@ function tegnOppskrift() {
     `<b>De fire tallene, som ofte forveksles:</b>
      «Grovt mel» (${fmt(r.grovMelAndel * 100, 1)} %) er andelen av <i>melet</i> som er sammalt — det er tallet regnearket ditt regner, og det som styrer hvor mye kli som kutter glutentrådene.
      «Frø i % av mel» (${fmt(r.froAndel * 100, 1)} %) er bakerprosent frø. Frø kutter <i>ikke</i> gluten slik kli gjør; de er inerte innslag som fortynner nettverket og stjeler vann.
-     «Brødskala'n» (${fmt(r.brodskala.pct, 1)} % — <b>${r.brodskala.klasse.toLowerCase()}</b>) er den <i>offisielle</i> grovheten: hele korn, sammalt mel, kli og korngryn delt på total melmengde. Frø og nøtter holdes helt utenfor brøken, så solsikke gjør ikke brødet grovere i lovens forstand. ${r.brodskala.nokkelhull ? 'Denne blandingen passerer Nøkkelhullets krav på 30 % fullkorn.' : `Nøkkelhullet krever 30 % — du mangler ${fmt(30 - r.brodskala.pct, 1)} prosentpoeng.`}
+     «Brødskala'n» (${fmt(r.brodskala.pct, 1)} % — <b>${r.brodskala.klasse.toLowerCase()}</b>) er den <i>offisielle</i> grovheten: hele korn, sammalt mel, kli og korngryn delt på total melmengde. Frø og nøtter holdes helt utenfor brøken, så solsikke gjør ikke brødet grovere i lovens forstand. ${r.brodskala.nokkelhullFullkorn ? 'Denne blandingen oppfyller Nøkkelhullets <i>fullkornkrav</i> på 30 % — men merkingen krever også bestemte nivåer av salt, fiber, sukker og fett, som appen ikke vurderer.' : `Nøkkelhullets fullkornkrav er 30 % — du mangler ${fmt(30 - r.brodskala.pct, 1)} prosentpoeng.`}
      «Strukturfortynning» (${fmt(r.fortynnetAndel * 100, 1)} %) er hvor stor del av alt tørrstoffet som ikke bygger struktur. Her teller frøene fullt, og det er dette som avgjør hvor tett brødet oppleves — ikke Brødskala'n.
      <br>Nøkkeltallet for bakingen er likevel <b>glutenbærende andel: ${fmt(r.glutenbaerende * 100, 1)} %</b>. Det er hvor lite mel som skal bære hele brødet.`));
 
@@ -1666,7 +1675,7 @@ function tegnGjaering() {
   stat('Estimert pH', fmt(estimerPH(g.ekvTimer), 2), '');
 
   const maalRise = maalHeveProsent(S.startTemp, {
-    hydrering: S.hydrering / 100, grovAndel: r.grovAndel, styrke: r.svakesteStyrke
+    hydrering: S.hydrering / 100, grovAndel: r.grovAndel, styrke: r.svakesteStyrke, etterKaldheving: harKaldheving()
   });
   stat('Mål heveprosent i bulk', `${fmt(maalRise, 0)}–${fmt(maalRise * 1.2, 0)}`, ' %');
   const startVol = r.melTotal * 1.5;
@@ -1949,6 +1958,12 @@ const FORVARM_MIN = {
    1,29 °C friksjonsvarme. En hjemmespiral på 0,4 °C/min trenger da 13 minutter,
    en kommersiell spiral på 1,0 bare 5. Det er derfor «6 minutter» og
    «18 minutter» kan beskrive samme arbeid på ulike maskiner. */
+/* Har planen et kaldt trinn etter bulken? Da er bulkens hevemål ikke hele
+   gjæringen, og en høyhydrert deig skal opp i stigning før den går på kjøl. */
+function harKaldheving(plan) {
+  return (plan || S.plan).some((t, i) => i > 0 && t.miljo < 10);
+}
+
 function anbefaltEltMin() {
   const f = S.dtMikser === 'egen' ? S.dtEgen : FRIKSJON[S.dtMikser];
   const maal = (ELTING.MAAL_LAV + ELTING.MAAL_HOY) / 2;
@@ -2049,7 +2064,7 @@ function bakeSteg() {
   const vt = vanntemperatur(deigtempInn(r));
 
   const maalRise = maalHeveProsent(S.startTemp, {
-    hydrering: S.hydrering / 100, grovAndel: r.grovAndel, styrke: r.svakesteStyrke
+    hydrering: S.hydrering / 100, grovAndel: r.grovAndel, styrke: r.svakesteStyrke, etterKaldheving: harKaldheving()
   });
   const gnavn = { fersk: 'Fersk gjær', torr: 'Tørrgjær', aktiv: 'Aktiv tørrgjær' }[S.gjaerType];
   const steg = [];
@@ -3315,9 +3330,25 @@ function init() {
   const paa = (id, hendelse, fn) => { const e = $(id); if (e) e[hendelse] = fn; };
 
   // Tallfelt
+  /* Feltets egne min/max håndheves her. Uten det ble et tømt felt til 0 midt i
+     skrivingen — «antall brød» 0 kollapser hele oppskriften, og ffTemp 0 ga
+     Infinity i forfermentGjaerPct. Verdier utenfor spennet ignoreres i stedet
+     for å skrives til tilstanden; feltet står som brukeren skrev det til han
+     har skrevet ferdig, og syncFelt retter det opp når fokus flyttes. */
   const bind = (id, key, fn) => {
     const e = $(id); if (!e) return;
-    e.oninput = () => { (fn || (v => S[key] = v))(e.type === 'number' ? (+e.value || 0) : e.value); oppdater(); };
+    e.oninput = () => {
+      let v;
+      if (e.type === 'number') {
+        v = parseFloat(e.value);
+        if (!isFinite(v)) return;                       // tomt eller halvskrevet
+        const min = e.min === '' ? -Infinity : parseFloat(e.min);
+        const max = e.max === '' ? Infinity : parseFloat(e.max);
+        if (v < min || v > max) return;
+      } else v = e.value;
+      (fn || (w => S[key] = w))(v);
+      oppdater();
+    };
     if (e.tagName === 'SELECT' || e.type === 'checkbox') e.onchange = e.oninput;
   };
   // Antall og vekt fantes i to uavhengige par som bare synket bygg → hoved.
