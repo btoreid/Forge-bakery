@@ -62,6 +62,11 @@ Prosjektet fryses (data slettes ikke) hvis ingen snakker med det på sju dager. 
 appen ukentlig, skjer det aldri. `.github/workflows/supabase-ping.yml` holder det uansett
 i live med et lite kall hvert døgn.
 
+**Den fila ligger på `master`** (commit `0d675a6`), ikke bare på utviklingsgrenen — GitHub
+leser `schedule:` kun fra standardgrenen. Endrer du pingen, må endringen dit for å få
+effekt. Første kjøring er 06:17 UTC; du kan også starte den manuelt under **Actions →
+Supabase ping → Run workflow**.
+
 ## Slik henger det sammen i koden
 
 | fil | rolle |

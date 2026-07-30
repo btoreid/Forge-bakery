@@ -77,16 +77,22 @@ fokusert felt ble fjernet under `replaceChildren` (blur midt i render). Rettet m
 2. ✅ **Gjæringsgrafen** har fasebånd, temp- og gjæringsakser, klokkeslett, halvveismerke og «nå»-markør.
 3. ✅ **Eltemaskinene** forklares med `MASKIN_INFO` + live utregning (friksjon × min → Wh/kg) og sammenligning.
 
+### Sky-oppsettet er i drift — 30.07.2026
+
+Begge punktene som stod åpne her er lukket:
+
+**Tabellen er opprettet.** `public.bakerstate` kjørt som migrasjon (`bakerstate_med_rls`)
+mot prosjekt `xoripdwbghqlzbgxkfps`, med RLS på og fire policyer — én per operasjon, alle
+på `auth.uid() = bruker_id`. UPDATE har både `using` og `with check`, så ingen kan flytte
+en rad over på en annen bruker. SQL-en står i `SUPABASE.md`.
+
+**Ping-jobben ligger nå på `master`** (`0d675a6`). GitHub leser `schedule:` kun fra
+standardgrenen, så på utviklingsgrenen ville den aldri kjørt. Husk det hvis pingen skal
+endres — en endring på featuregrenen får ingen effekt.
+
 ### Åpne V2-punkter
 
-**SQL-en i `SUPABASE.md` må kjøres én gang** før synken virker (tabell + RLS).
-Innloggingen og resten av laget er på plass og testet.
-
-**Ping-workflowen ligger på featuregrenen.** GitHub kjører planlagte jobber kun fra
-standardgrenen, så `.github/workflows/supabase-ping.yml` går ikke før den er på master.
-Inntil da holder ukentlig bruk av appen prosjektet i live på egen hånd.
-
-Ellers ingen kjente åpne punkter. Neste runde avventer Bjørns tilbakemelding.
+Ingen kjente åpne punkter. Neste runde avventer Bjørns tilbakemelding.
 
 ---
 
