@@ -325,3 +325,21 @@ input[type=range].skyver { width: 100%; margin: 12px 0 6px; height: 30px; }
 .plankort .p-loft { margin-left: auto; text-align: center; flex: 0 0 auto; padding-left: 8px; }
 .plankort .p-loft .v { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; color: var(--color-accent-700); }
 .plankort .p-loft .l { font-size: .56rem; font-weight: 800; letter-spacing: .08em; color: var(--color-neutral-500); }
+
+/* ============================================================
+   UX-REVIEW-RETTELSER
+   ============================================================ */
+/* 44px trykkflate på små ikon-knapper uten å endre den visuelle størrelsen */
+.info-knapp, .info-ring { position: relative; }
+.info-knapp::after, .info-ring::after { content: ''; position: absolute; inset: -9px; }
+
+/* Bedre kontrast: løft de minste grå etikettene fra neutral-500 til 600 */
+.plankort .p-loft .l { color: var(--color-neutral-600); }
+.info-ring { color: var(--color-neutral-600); }
+
+/* Høyrejuster ⓘ i parameterkort (manglet margin-left:auto) */
+.kort-num .info-knapp { margin-left: auto; }
+
+/* Safe-area for hakk/home-indikator */
+.topp { padding-top: max(16px, env(safe-area-inset-top)); }
+.bunnmeny { padding-bottom: env(safe-area-inset-bottom); }
