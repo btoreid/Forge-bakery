@@ -879,13 +879,18 @@ function tegnTid(r, K) {
   // Gjæringsgraf — den ekte fart- og akkumuleringskurven bak dosen.
   const pts = (typeof planProfil === 'function') ? planProfil(r.planTrinn, r.gjaerTorr, r.masseKg, { antall: S.antall, lokk: S.lokk, fulltKjol: S.fulltKjol }) : [];
   if (pts.length > 2) {
+    const bulkStart = (K.find(x => x.id === 'trinn-0') || {}).tid || K.start;
     wrap.appendChild(h('div', { class: 'kort' },
       h('div', { class: 'kort-num' }, 'Gjæringen over tid'),
-      gjaeringsGraf(pts, r),
-      h('div', { style: 'display:flex;gap:14px;margin-top:8px;font-size:.72rem;color:var(--color-neutral-600)' },
+      gjaeringsGraf(pts, r, bulkStart),
+      h('div', { style: 'display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:.7rem;color:var(--color-neutral-600)' },
+        legendePrikk('var(--color-accent-2-500)', 'Akkumulert gjæring (høyre)'),
+        legendePrikk('var(--color-neutral-500)', 'Deigtemp (venstre)'),
         legendePrikk('var(--color-accent-500)', 'Gjæringsfart'),
-        legendePrikk('var(--color-accent-2-500)', 'Akkumulert dose'),
-        legendePrikk('var(--color-neutral-400)', 'Deigtemp'))));
+        legendePrikk('var(--color-accent-2-700)', 'Halvveis'),
+        legendePrikk('var(--color-danger)', 'Nå')),
+      h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:8px;line-height:1.45' },
+        'Arealet under fartskurven er dosen. Grønne bånd er kald heving (≤ 12 °C), varme bånd romtemperatur — se hvordan farten stuper i kulda og skyter fart igjen når deigen tempereres.')));
   }
 
   // Rate-tabell: gjæringsfart mot temperatur
@@ -916,30 +921,98 @@ function legendePrikk(farge, tekst) {
   return h('span', { style: 'display:inline-flex;align-items:center;gap:5px' },
     h('span', { style: 'width:10px;height:3px;border-radius:2px;background:' + farge }), tekst);
 }
-/* Ren SVG-graf: gjæringsfart + akkumulert dose + deigtemp mot klokka. */
-function gjaeringsGraf(pts, r) {
+/* SVG-graf: fasebånd, temp- og gjæringsakser, gjæringsfart (areal), akkumulert
+   dose (hovedkurve), deigtemp, halvveismerke, klokkeslett og «nå»-markør.
+   `bulkStart` er Date-en for når gjæringen (bulk) begynner — gir ekte klokke. */
+function gjaeringsGraf(pts, r, bulkStart) {
   const NS = 'http://www.w3.org/2000/svg';
-  const W = 360, H = 130, pad = 6;
-  const tMax = pts[pts.length - 1].t || 1;
-  const fartMax = Math.max(...pts.map(p => p.fart)) || 1;
+  const W = 360, H = 210;
+  const pad = { l: 30, r: 30, t: 30, b: 30 };
+  const iW = W - pad.l - pad.r, iH = H - pad.t - pad.b;
+  const trinn = r.planTrinn || [];
+  const totalT = pts[pts.length - 1].t || 1;
   const doseMax = pts[pts.length - 1].dose || 1;
-  const tempMax = Math.max(...pts.map(p => p.temp), 28), tempMin = Math.min(...pts.map(p => p.temp), 0);
-  const x = t => pad + t / tMax * (W - 2 * pad);
-  const yf = v => H - pad - v / fartMax * (H - 2 * pad);
-  const yd = v => H - pad - v / doseMax * (H - 2 * pad);
-  const yt = v => H - pad - (v - tempMin) / Math.max(tempMax - tempMin, 1) * (H - 2 * pad);
+  const fartMax = Math.max(...pts.map(p => p.fart), 1e-6);
+  const tempMax = Math.max(30, Math.ceil(Math.max(...pts.map(p => p.temp)) / 5) * 5);
+  const X = t => pad.l + t / totalT * iW;
+  const Yt = v => pad.t + (1 - v / tempMax) * iH;   // temperatur 0..tempMax (venstre)
+  const Yd = f => pad.t + (1 - f) * iH;             // gjæringsandel 0..1 (høyre)
+  const startMs = bulkStart ? bulkStart.getTime() : Date.now();
+  const klAv = t => klHM(startMs + t * 3600000);
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const n = v => v.toFixed(1);
+  let s = '';
+
+  // Fasebånd med navn, tid og temperatur — kald heving (≤12 °C) i grønt, varm i terrakotta.
+  let acc = 0;
+  trinn.forEach((tr, i) => {
+    const x0 = X(acc), x1 = X(acc + (tr.timer || 0)), br = x1 - x0;
+    const kald = tr.miljo <= 12;
+    s += `<rect x="${n(x0)}" y="${pad.t}" width="${n(br)}" height="${iH}" fill="${kald ? 'var(--color-accent-2-500)' : 'var(--color-accent-500)'}" opacity="${i % 2 ? 0.06 : 0.11}"/>`;
+    if (i > 0) s += `<line x1="${n(x0)}" y1="${pad.t}" x2="${n(x0)}" y2="${pad.t + iH}" stroke="var(--color-neutral-300)" stroke-dasharray="3 3"/>`;
+    if (br > 42) {
+      const midt = n((x0 + x1) / 2);
+      s += `<text x="${midt}" y="${pad.t - 15}" fill="var(--color-neutral-700)" font-size="9.5" font-weight="700" text-anchor="middle">${esc(tr.navn)}</text>`;
+      s += `<text x="${midt}" y="${pad.t - 5}" fill="var(--color-neutral-500)" font-size="8.5" text-anchor="middle">${fmt(tr.timer, tr.timer < 10 ? 1 : 0)} t · ${fmt(tr.miljo, 0)}°</text>`;
+    }
+    acc += tr.timer || 0;
+  });
+
+  // Vannrett rutenett + temperaturakse (venstre).
+  for (let v = 0; v <= tempMax; v += 10) {
+    s += `<line x1="${pad.l}" y1="${n(Yt(v))}" x2="${pad.l + iW}" y2="${n(Yt(v))}" stroke="var(--color-neutral-200)"/>`;
+    s += `<text x="${pad.l - 5}" y="${n(Yt(v) + 3)}" fill="var(--color-neutral-500)" font-size="8.5" text-anchor="end">${v}°</text>`;
+  }
+  // Gjæringsakse (høyre): 0 / 50 / 100 %.
+  [0, 50, 100].forEach(p => s += `<text x="${pad.l + iW + 5}" y="${n(Yd(p / 100) + 3)}" fill="var(--color-neutral-500)" font-size="8.5">${p}%</text>`);
+
+  // Gjæringsfart som areal — arealet under kurven ER dosen.
+  let area = `M ${n(X(0))} ${n(pad.t + iH)}`;
+  pts.forEach(p => area += ` L ${n(X(p.t))} ${n(pad.t + iH - (p.fart / fartMax) * iH * 0.5)}`);
+  area += ` L ${n(X(totalT))} ${n(pad.t + iH)} Z`;
+  s += `<path d="${area}" fill="var(--color-accent-500)" opacity="0.18"/>`;
+
+  // Akkumulert dose (hovedkurven, høyre akse).
+  let dl = ''; pts.forEach((p, i) => dl += `${i ? 'L' : 'M'} ${n(X(p.t))} ${n(Yd(p.dose / doseMax))} `);
+  s += `<path d="${dl}" fill="none" stroke="var(--color-accent-2-500)" stroke-width="2.6"/>`;
+
+  // Deigtemperatur (venstre akse, stiplet).
+  let tl = ''; pts.forEach((p, i) => tl += `${i ? 'L' : 'M'} ${n(X(p.t))} ${n(Yt(p.temp))} `);
+  s += `<path d="${tl}" fill="none" stroke="var(--color-neutral-500)" stroke-width="1.6" stroke-dasharray="5 3"/>`;
+
+  // Halvveismerke — når er 50 % av gjæringen gjort?
+  const halv = pts.find(p => p.dose >= doseMax * 0.5);
+  if (halv) {
+    s += `<line x1="${n(X(halv.t))}" y1="${pad.t}" x2="${n(X(halv.t))}" y2="${pad.t + iH}" stroke="var(--color-accent-2-700)" stroke-width="1" stroke-dasharray="2 3"/>`;
+    s += `<circle cx="${n(X(halv.t))}" cy="${n(Yd(0.5))}" r="3.4" fill="var(--color-accent-2-700)"/>`;
+    const ank = X(halv.t) > pad.l + iW - 88 ? 'end' : 'start', dx = ank === 'end' ? -6 : 6;
+    s += `<text x="${n(X(halv.t) + dx)}" y="${n(Yd(0.5) - 6)}" fill="var(--color-accent-2-700)" font-size="8.5" font-weight="700" text-anchor="${ank}">halvveis ${klAv(halv.t)}</text>`;
+  }
+
+  // «Nå»-markør — bare hvis vi står inne i gjæringsvinduet.
+  const naaT = (Date.now() - startMs) / 3600000;
+  if (naaT > 0.02 && naaT < totalT) {
+    s += `<line x1="${n(X(naaT))}" y1="${pad.t - 2}" x2="${n(X(naaT))}" y2="${pad.t + iH}" stroke="var(--color-danger)" stroke-width="1.4"/>`;
+    s += `<circle cx="${n(X(naaT))}" cy="${pad.t - 2}" r="2.6" fill="var(--color-danger)"/>`;
+    s += `<text x="${n(X(naaT))}" y="${pad.t - 20}" fill="var(--color-danger)" font-size="8.5" font-weight="800" text-anchor="middle">nå</text>`;
+  }
+
+  // X-akse med klokkeslett.
+  s += `<line x1="${pad.l}" y1="${pad.t + iH}" x2="${pad.l + iW}" y2="${pad.t + iH}" stroke="var(--color-neutral-400)"/>`;
+  const steg = totalT <= 8 ? 2 : totalT <= 18 ? 4 : totalT <= 30 ? 6 : 8;
+  for (let t = 0; t <= totalT + 0.01; t += steg) {
+    s += `<line x1="${n(X(t))}" y1="${pad.t + iH}" x2="${n(X(t))}" y2="${pad.t + iH + 4}" stroke="var(--color-neutral-400)"/>`;
+    s += `<text x="${n(X(t))}" y="${pad.t + iH + 15}" fill="var(--color-neutral-500)" font-size="8.5" text-anchor="middle">${klAv(t)}</text>`;
+  }
+  // Aksetitler.
+  s += `<text x="${pad.l - 5}" y="${pad.t - 6}" fill="var(--color-neutral-500)" font-size="8" text-anchor="end">°C</text>`;
+  s += `<text x="${pad.l + iW + 5}" y="${pad.t - 6}" fill="var(--color-accent-2-700)" font-size="8">gjær</text>`;
+
   const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.setAttribute('width', '100%'); svg.setAttribute('style', 'display:block');
-  const linje = (yfn, farge, bredde, stipl) => {
-    const d = pts.map((p, i) => (i ? 'L' : 'M') + x(p.t).toFixed(1) + ' ' + yfn(p).toFixed(1)).join(' ');
-    const e = document.createElementNS(NS, 'path');
-    e.setAttribute('d', d); e.setAttribute('fill', 'none'); e.setAttribute('stroke', farge);
-    e.setAttribute('stroke-width', bredde); if (stipl) e.setAttribute('stroke-dasharray', '3 3');
-    svg.appendChild(e);
-  };
-  linje(p => yt(p.temp), 'var(--color-neutral-400)', 1.2, true);
-  linje(p => yd(p.dose), 'var(--color-accent-2-500)', 2);
-  linje(p => yf(p.fart), 'var(--color-accent-500)', 2);
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('style', 'display:block;overflow:visible');
+  svg.innerHTML = s;
   return svg;
 }
 /* Memoiser plan-forhåndsvisningene (teknisk #7): signaturen utelater melTemp,
