@@ -23,6 +23,7 @@ const STANDARD = {
   paramInfo: null, tilleggInfo: null, melInfo: null, meltallInfo: null,
   aktivSteg: 0, regnskapAapen: false, byttBekreft: null,
   loggListe: [], lgNavn: '', lgKar: 8, lgBilder: [], oppdatert: 0,
+  lgRediger: null, lgSlett: null, bildeVis: null,
   favoritter: [], oppslag: 'meny', oppslagSok: ''
 };
 let S = last();
@@ -44,6 +45,10 @@ function last() {
   if (!Array.isArray(s.loggListe)) s.loggListe = [];
   if (!Array.isArray(s.favoritter)) s.favoritter = [];
   if (!Array.isArray(s.lgBilder)) s.lgBilder = [];
+  // Hver loggpost trenger en stabil id, ellers ville rediger/slett pekt på
+  // posisjon — og posisjon flytter seg når noe slettes eller når skyen synker
+  // inn en annen liste. Eldre poster (lagret før id-en fantes) får en her.
+  s.loggListe = s.loggListe.map((b, i) => (b && b.id) ? b : Object.assign({}, b, { id: 'b' + i + '-' + (b && b.dato ? b.dato : 'x') }));
   if (!s.tillegg || typeof s.tillegg !== 'object') s.tillegg = {};
   s.tillegg = Object.assign({}, s.tillegg);
   s.loggListe = s.loggListe.slice(); s.favoritter = s.favoritter.slice();
@@ -206,6 +211,7 @@ function renderInner() {
   }
 
   tegnBunnlinje(r, K);
+  tegnBildeVis();
 
   byId('bunnmeny').replaceChildren(...SKJERMER.map(s =>
     h('button', { class: s.id === S.skjerm ? 'paa' : '', 'aria-current': s.id === S.skjerm ? 'page' : null, onClick: () => bytt(s.id) },
@@ -1391,16 +1397,9 @@ function tegnLogg(r) {
       h('div', { class: 'hjelpetekst' }, 'Ingen bak logget ennå. Referansen appen måler mot kommer fra forvalget til du lagrer ditt første bak — da får avvikstallene et ekte anker.')));
   } else {
     wrap.appendChild(h('div', { class: 'seksjonstittel' }, 'Tidligere bak'));
-    S.loggListe.slice().reverse().forEach(b => wrap.appendChild(h('div', { class: 'kort' },
-      h('div', { style: 'display:flex;align-items:baseline;gap:8px' },
-        h('span', { style: 'font-family:var(--font-heading);font-size:1.05rem' }, b.navn || 'Uten navn'),
-        h('span', { class: 'badge' }, b.kar + ' / 10'),
-        h('span', { style: 'margin-left:auto;font-size:.74rem;color:var(--color-neutral-600)' }, b.dato)),
-      h('div', { style: 'font-size:.8rem;color:var(--color-neutral-700);margin-top:4px;font-variant-numeric:tabular-nums' },
-        b.grov + ' % grovt · ' + b.hyd + ' % vann · løft ' + b.loft + ' · dose ' + b.dose),
-      (b.bilder && b.bilder.length) ? h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px' },
-        ...b.bilder.map((src, i) => h('img', { src, alt: 'Bilde ' + (i + 1) + ' av ' + (b.navn || 'baket'),
-          style: 'width:86px;height:86px;object-fit:cover;border-radius:12px;border:1px solid var(--color-neutral-300)' }))) : null)));
+    // Nyeste først, men med den EKTE indeksen i behold — reverse() på en kopi
+    // ville gitt feil rad ved rediger/slett.
+    for (let i = S.loggListe.length - 1; i >= 0; i--) wrap.appendChild(loggPost(S.loggListe[i], i));
   }
   const konto = tegnKonto();
   if (konto) wrap.appendChild(konto);
@@ -1409,6 +1408,7 @@ function tegnLogg(r) {
 }
 function lagreBak(r) {
   S.loggListe = S.loggListe.concat([{
+    id: 'b' + Date.now(),
     navn: S.lgNavn || ('Bak #' + (S.loggListe.length + 1)),
     kar: S.lgKar, dato: new Date().toLocaleDateString('nb-NO'),
     grov: fmt(r.brodskala.pct, 0), hyd: fmt(r.hyd * 100, 0), loft: r.loft.loft, dose: fmt(r.doseProfil.dose, 2),
@@ -1416,6 +1416,110 @@ function lagreBak(r) {
   }]);
   S.lgNavn = ''; S.lgBilder = [];
   oppdater();
+}
+
+/* ---------- Én post i bakeloggen: vis, rediger eller bekreft sletting ----------
+   `i` er den EKTE indeksen i S.loggListe. Redigering identifiseres likevel på
+   `id`, ikke indeks, så en synk fra skyen midt i redigeringen ikke flytter deg
+   over på en annen post. */
+function loggPost(b, i) {
+  if (S.lgSlett === b.id) return loggSlettBekreft(b, i);
+  if (S.lgRediger === b.id) return loggRediger(b, i);
+  const kortEl = h('div', { class: 'kort' },
+    h('div', { style: 'display:flex;align-items:baseline;gap:8px' },
+      h('span', { style: 'font-family:var(--font-heading);font-size:1.05rem;flex:1;min-width:0' }, b.navn || 'Uten navn'),
+      h('span', { class: 'badge' }, b.kar + ' / 10'),
+      h('span', { style: 'font-size:.74rem;color:var(--color-neutral-600);white-space:nowrap' }, b.dato)),
+    h('div', { style: 'font-size:.8rem;color:var(--color-neutral-700);margin-top:4px;font-variant-numeric:tabular-nums' },
+      b.grov + ' % grovt · ' + b.hyd + ' % vann · løft ' + b.loft + ' · dose ' + b.dose));
+  if (b.notat) kortEl.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:6px' }, b.notat));
+  if (b.bilder && b.bilder.length) kortEl.appendChild(h('div', { class: 'logg-bilder' },
+    ...b.bilder.map((src, j) => h('button', { class: 'logg-bilde', 'aria-label': 'Vis bilde ' + (j + 1) + ' i stort format',
+      onClick: () => { S.bildeVis = { id: b.id, i: j }; oppdater(); } },
+      h('img', { src, alt: 'Bilde ' + (j + 1) + ' av ' + (b.navn || 'baket') })))));
+  kortEl.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
+    h('button', { class: 'btn-ghost', style: 'font-size:.78rem;padding:4px 0', onClick: () => { S.lgRediger = b.id; S.lgSlett = null; oppdater(); } }, 'Rediger'),
+    h('button', { class: 'btn-ghost', style: 'font-size:.78rem;padding:4px 0;margin-left:auto;color:var(--color-danger)', onClick: () => { S.lgSlett = b.id; S.lgRediger = null; oppdater(); } }, 'Slett')));
+  return kortEl;
+}
+function loggSlettBekreft(b, i) {
+  return h('div', { class: 'kort' },
+    h('div', { style: 'font-weight:800;font-size:.9rem' }, 'Slette «' + (b.navn || 'Uten navn') + '»?'),
+    h('div', { class: 'hjelpetekst', style: 'margin-top:4px' },
+      'Posten og eventuelle bilder forsvinner for godt' + (b.bilder && b.bilder.length ? ' (' + b.bilder.length + (b.bilder.length === 1 ? ' bilde' : ' bilder') + ')' : '') + '. Dette kan ikke angres.'),
+    h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
+      h('button', { class: 'btn', style: 'flex:1;font-size:.82rem;background:var(--color-danger);color:#fff;border-color:transparent',
+        onClick: () => { S.loggListe = S.loggListe.filter((_, j) => j !== i); S.lgSlett = null; oppdater(); } }, 'Ja, slett'),
+      h('button', { class: 'btn', style: 'flex:1;font-size:.82rem', onClick: () => { S.lgSlett = null; oppdater(); } }, 'Avbryt')));
+}
+/* Redigerbart er det du selv har skrevet: navn, karakter, notat og bilder.
+   Tallene under (dose, hydrering, løft) er MÅLT fra baket og skal ikke kunne
+   endres i ettertid — da ville loggen sluttet å være et ærlig referansepunkt. */
+function loggRediger(b, i) {
+  const settFelt = (felt, verdi) => {
+    const liste = S.loggListe.slice();
+    liste[i] = Object.assign({}, liste[i], { [felt]: verdi });
+    S.loggListe = liste;
+  };
+  const inpFil = h('input', { type: 'file', accept: 'image/*', style: 'display:none',
+    'aria-label': 'Velg bilde', onchange: e => leggTilBilde(e.target.files && e.target.files[0], i) });
+  const boks = h('div', { class: 'kort', style: 'border-color:var(--color-accent-300);box-shadow:0 0 0 3px var(--color-accent-100)' },
+    h('div', { class: 'kort-num' }, 'Redigerer'),
+    h('input', { class: 'sok', style: 'margin-top:8px', placeholder: 'Navn', value: b.navn || '', 'data-fokus': 'lgnavn',
+      oninput: e => settFelt('navn', e.target.value) }),
+    h('div', { style: 'display:flex;align-items:center;gap:12px' },
+      h('div', { class: 'felt-label', style: 'flex:1' }, 'Karakter'),
+      h('div', { class: 'stepper', style: 'width:170px' },
+        h('button', { 'aria-label': 'Lavere karakter', onClick: () => { settFelt('kar', Math.max(1, (b.kar || 1) - 1)); oppdater(); } }, '−'),
+        h('input', { type: 'text', inputmode: 'numeric', 'aria-label': 'Karakter', value: String(b.kar),
+          onblur: e => { const v = parseInt(e.target.value); if (!isNaN(v)) settFelt('kar', Math.min(10, Math.max(1, v))); oppdater(); } }),
+        h('button', { 'aria-label': 'Høyere karakter', onClick: () => { settFelt('kar', Math.min(10, (b.kar || 0) + 1)); oppdater(); } }, '+'))),
+    h('div', { class: 'felt-label', style: 'margin-top:10px' }, 'Notat — hva lærte du?'),
+    h('textarea', { class: 'sok', rows: 2, style: 'border-radius:14px;resize:vertical', 'data-fokus': 'lgnotat',
+      placeholder: 'F.eks. for tett krumme, prøv 3 pp mer vann', value: b.notat || '',
+      oninput: e => settFelt('notat', e.target.value) }),
+    h('div', { class: 'felt-label' }, 'Bilder'));
+  const rad = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:6px' });
+  (b.bilder || []).forEach((src, j) => rad.appendChild(h('div', { style: 'position:relative' },
+    h('img', { src, alt: 'Bilde ' + (j + 1), style: 'width:64px;height:64px;object-fit:cover;border-radius:12px;border:1px solid var(--color-neutral-300);display:block' }),
+    h('button', { 'aria-label': 'Fjern bilde ' + (j + 1), class: 'bilde-fjern',
+      onClick: () => { settFelt('bilder', (b.bilder || []).filter((_, k) => k !== j)); oppdater(); } }, '×'))));
+  if ((b.bilder || []).length < 3) rad.appendChild(h('button', {
+    style: 'width:64px;height:64px;border-radius:12px;border:1.5px dashed var(--color-neutral-400);background:none;color:var(--color-neutral-600);font-size:1.4rem;cursor:pointer',
+    'aria-label': 'Legg til bilde', onClick: () => inpFil.click() }, '+'));
+  boks.appendChild(rad);
+  boks.appendChild(inpFil);
+  boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:12px' },
+    h('button', { class: 'btn btn-primary', style: 'flex:1;font-size:.82rem', onClick: () => { S.lgRediger = null; oppdater(); } }, 'Ferdig'),
+    h('button', { class: 'btn', style: 'flex:0 0 auto;font-size:.82rem;color:var(--color-danger)', onClick: () => { S.lgSlett = b.id; S.lgRediger = null; oppdater(); } }, 'Slett')));
+  boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-500);margin-top:8px' },
+    'Endringene lagres mens du skriver. Måletallene (dose, hydrering, løft) kan ikke endres — de er hentet fra baket slik det faktisk var.'));
+  return boks;
+}
+
+/* ---------- Bildet i stort format ----------
+   Ligger inne i #telefon (som klipper alt annet), over bunnmenyen. Trykk hvor
+   som helst, Esc eller ✕ lukker; piler bytter bilde når posten har flere. */
+function tegnBildeVis() {
+  const gml = byId('bildevis'); if (gml) gml.remove();
+  if (!S.bildeVis) return;
+  const post = S.loggListe.find(b => b.id === S.bildeVis.id);
+  const bilder = (post && post.bilder) || [];
+  if (!bilder.length) { S.bildeVis = null; return; }
+  const idx = Math.max(0, Math.min(S.bildeVis.i, bilder.length - 1));
+  const bytt = d => { S.bildeVis = { id: S.bildeVis.id, i: (idx + d + bilder.length) % bilder.length }; oppdater(); };
+  const stopp = e => e.stopPropagation();
+  const lag = h('div', { class: 'bildevis', id: 'bildevis', role: 'dialog', 'aria-label': 'Bilde i stort format',
+    onClick: () => { S.bildeVis = null; oppdater(); } },
+    h('img', { src: bilder[idx], alt: (post.navn || 'Baket') + ', bilde ' + (idx + 1), onClick: stopp }),
+    h('button', { class: 'bv-lukk', 'aria-label': 'Lukk' }, '✕'),
+    h('div', { class: 'bv-tekst' }, (post.navn || 'Uten navn') + ' · ' + post.dato +
+      (bilder.length > 1 ? ' · ' + (idx + 1) + ' av ' + bilder.length : '')),
+    bilder.length > 1 ? h('button', { class: 'bv-pil venstre', 'aria-label': 'Forrige bilde',
+      onClick: e => { stopp(e); bytt(-1); } }, '‹') : null,
+    bilder.length > 1 ? h('button', { class: 'bv-pil hoyre', 'aria-label': 'Neste bilde',
+      onClick: e => { stopp(e); bytt(1); } }, '›') : null);
+  byId('telefon').appendChild(lag);
 }
 /* Bilder av baket — designfasen hadde dem i loggen; nå er de tilbake. Skaleres
    ned til maks 480 px JPEG i canvas før lagring, så localStorage (~5 MB)
@@ -1438,7 +1542,9 @@ function tegnBildeVelger() {
   boks.appendChild(inp);
   return boks;
 }
-function leggTilBilde(fil) {
+/* `loggIdx` utelatt = bildet hører til skjemaet for det neste baket. Er den satt,
+   legges bildet på en allerede lagret loggpost i stedet. */
+function leggTilBilde(fil, loggIdx) {
   if (!fil) return;
   const les = new FileReader();
   les.onload = () => {
@@ -1455,7 +1561,13 @@ function leggTilBilde(fil) {
         alert('Lagringen i nettleseren er nesten full — last ned en sikkerhetskopi og slett gamle bilder først.');
         return;
       }
-      S.lgBilder = (S.lgBilder || []).concat([data]);
+      if (loggIdx == null) {
+        S.lgBilder = (S.lgBilder || []).concat([data]);
+      } else if (S.loggListe[loggIdx]) {
+        const liste = S.loggListe.slice();
+        liste[loggIdx] = Object.assign({}, liste[loggIdx], { bilder: (liste[loggIdx].bilder || []).concat([data]) });
+        S.loggListe = liste;
+      }
       oppdater();
     };
     img.src = les.result;
@@ -1728,6 +1840,18 @@ async function synkVedInnlogging() {
   }
   render();
 }
+
+/* Tastatur i bildevisningen: Esc lukker, piler blar. Én lytter for hele appen —
+   den sjekker selv om visningen er åpen, så den trenger aldri av- og påmelding. */
+document.addEventListener('keydown', e => {
+  if (!S.bildeVis) return;
+  if (e.key === 'Escape') { S.bildeVis = null; oppdater(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    const post = S.loggListe.find(b => b.id === S.bildeVis.id);
+    const n = (post && post.bilder && post.bilder.length) || 0;
+    if (n > 1) { S.bildeVis = { id: S.bildeVis.id, i: (S.bildeVis.i + (e.key === 'ArrowLeft' ? -1 : 1) + n) % n }; oppdater(); }
+  }
+});
 
 /* ---------- Start ---------- */
 if (typeof Sky !== 'undefined' && Sky.klar()) {

@@ -452,6 +452,50 @@ svg.kornsvg .s2 { fill: none; stroke: var(--kk); stroke-width: 1; stroke-linecap
 }
 .kort.fav { border: 2px solid var(--color-accent-500); box-shadow: 0 0 0 3px var(--color-accent-100); }
 
+/* ---------- Bilder i bakeloggen ---------- */
+.logg-bilder { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.logg-bilde {
+  padding: 0; border: 1px solid var(--color-neutral-300); border-radius: 12px;
+  background: none; cursor: pointer; overflow: hidden; line-height: 0;
+}
+.logg-bilde img { width: 86px; height: 86px; object-fit: cover; display: block; }
+.logg-bilde:active { transform: scale(.97); }
+.bilde-fjern {
+  position: absolute; top: -8px; right: -8px; width: 24px; height: 24px;
+  border-radius: 999px; border: 1px solid var(--color-neutral-300); background: #fff;
+  color: var(--color-danger); font-weight: 800; line-height: 1; cursor: pointer; padding: 0;
+}
+
+/* Bildet i stort format — dekker hele telefonrammen, over bunnmenyen (z 30). */
+.bildevis {
+  position: absolute; inset: 0; z-index: 60;
+  background: rgba(20, 18, 16, .92);
+  display: grid; place-items: center; padding: 20px;
+  animation: bakteppeInn .15s ease-out;
+}
+.bildevis img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain; border-radius: 10px; display: block;
+}
+.bildevis .bv-lukk {
+  position: absolute; top: 12px; right: 12px; width: 44px; height: 44px;
+  border-radius: 999px; border: none; background: rgba(255, 255, 255, .16);
+  color: #fff; font-size: 1.1rem; cursor: pointer; line-height: 1;
+}
+.bildevis .bv-tekst {
+  position: absolute; left: 0; right: 0; bottom: 14px; text-align: center;
+  color: rgba(255, 255, 255, .82); font-size: .78rem; padding: 0 20px;
+  font-variant-numeric: tabular-nums;
+}
+.bildevis .bv-pil {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 44px; height: 60px; border: none; border-radius: 12px;
+  background: rgba(255, 255, 255, .16); color: #fff; font-size: 1.7rem;
+  cursor: pointer; line-height: 1; padding: 0;
+}
+.bildevis .bv-pil.venstre { left: 8px; }
+.bildevis .bv-pil.hoyre { right: 8px; }
+
 /* ---------- Avviksrader («valgene mot normalen») i deigregnskap-arket ---------- */
 .ark-avvik { display: flex; flex-direction: column; gap: 1px; font-size: .78rem; padding: 5px 0; border-bottom: 1px dotted var(--color-neutral-300); }
 .ark-avvik b { font-weight: 700; }
