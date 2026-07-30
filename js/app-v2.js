@@ -1871,6 +1871,13 @@ document.addEventListener('keydown', e => {
   }
 });
 
+/* Snarveiene i manifestet (langtrykk på appikonet på Android) åpner appen med
+   ?skjerm=prosess eller ?skjerm=logg. Uten dette ville de bare åpnet forsiden. */
+(function apneFraAdresse() {
+  const bedt = new URLSearchParams(location.search).get('skjerm');
+  if (bedt && SKJERMER.some(s => s.id === bedt)) { S.skjerm = bedt; if (bedt === 'prosess') S.aktivSteg = 0; }
+})();
+
 /* ---------- Start ---------- */
 if (typeof Sky !== 'undefined' && Sky.klar()) {
   Sky.paaEndring(() => { render(); if (Sky.bruker()) synkVedInnlogging(); });

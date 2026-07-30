@@ -45,6 +45,35 @@ fungerer ellers uendret — inkludert lokal lagring uten konto.
 
 ---
 
+## 30.07.2026 (natt, sist) — Installerbar app på Android (PWA)
+
+Bjørn ba om å kunne installere appen fra Chrome på Android. Chrome krever tre ting:
+manifest, service worker med `fetch`-handler, og HTTPS (som GitHub Pages allerede gir).
+
+- **`manifest.webmanifest`** — `display: standalone` (ingen adressefelt), portrett,
+  bakgrunns- og temafarge fra designsystemet (`#f5ead8`), og **relative** `start_url`/`scope`
+  (`./`). Absolutte stier ville brutt både lokal testing og undermappa `/Forge-bakery/`.
+  Feltet `id` ble fjernet igjen av samme grunn — utledes fra `start_url` og er da riktig
+  begge steder.
+- **`icons/`** — 192, 512, maskable 512 og apple-touch 180, tegnet i Chromium fra appens
+  eget brødikon (krem på terrakotta). Maskable-varianten har motivet krympet til 56 % så
+  det overlever Androids ikonmaske, som kan klippe de ytterste 10 % på hver kant.
+- **`sw.js`** — **nett først, cache som reserve.** Med cache-først kunne en installert app
+  blitt hengende på gammel kode i dagevis uten at noe tydet på det, og appen pushes flere
+  ganger daglig. Nett-først koster noen hundre millisekunder på nett og faller umiddelbart
+  tilbake på cache uten. Kun same-origin GET røres — Supabase-kall går alltid rett på nettet,
+  og POST/PATCH aldri gjennom cachen. Bare `ok`+`basic`-svar lagres, ellers ville en 404
+  blitt servert videre offline. Navigasjon uten treff faller tilbake på `./`.
+- **Snarveier** i manifestet (langtrykk på appikonet) åpner Prosess og Logg direkte. De
+  virker fordi appen nå leser `?skjerm=` ved oppstart — uten den biten ville de bare åpnet
+  forsiden.
+
+Verifisert i Chromium: manifest og alle ikonfilene (riktig piksestørrelse og MIME-type),
+service worker aktiv og styrende, 13 filer i cachen, **full app offline** med fonter, layout
+og fungerende motor, og begge snarveiene.
+
+---
+
 ## 30.07.2026 (natt, senere) — Loggen, og Pyrexen som står i ovnen
 
 ### Bakeloggen: bilder i stort format, rediger og slett

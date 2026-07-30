@@ -6,6 +6,7 @@ HTML/CSS/JavaScript. Alt du legger inn lagres lokalt i nettleseren, og synkes ti
 ```
 index.html        appen (mobil-V2) — live på btoreid.github.io/Forge-bakery/
 index-v1.html     den gamle desktop-appen, frosset
+manifest.webmanifest · sw.js · icons/   gjør appen installerbar på Android
 css/style-v2.css  utseende (V2)
 js/data.js        mel, frø, forvalg, stekeprofiler, fagstoff
 js/engine.js      regnemotoren (fermenteringskinetikk, deigtemperatur, bakerprosent)

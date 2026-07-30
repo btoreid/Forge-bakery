@@ -77,7 +77,19 @@ fokusert felt ble fjernet under `replaceChildren` (blur midt i render). Rettet m
 2. ✅ **Gjæringsgrafen** har fasebånd, temp- og gjæringsakser, klokkeslett, halvveismerke og «nå»-markør.
 3. ✅ **Eltemaskinene** forklares med `MASKIN_INFO` + live utregning (friksjon × min → Wh/kg) og sammenligning.
 
-### Sist levert (30.07 natt, senere)
+### Sist levert (30.07 natt, sist) — appen kan installeres på Android
+
+`manifest.webmanifest` + `sw.js` + `icons/` gjør V2 til en installerbar PWA. Chrome på
+Android tilbyr «Installer app»; den åpner i standalone uten adressefelt og virker offline.
+
+**Service workeren er nett-først, ikke cache-først** — med cache-først kunne en installert
+app blitt hengende på gammel kode uten at noe tydet på det, og appen pushes flere ganger
+daglig. Den rører kun same-origin GET, så Supabase-kall går alltid rett på nettet.
+
+Stier i manifestet er **relative** (`./`). Absolutte ville brutt både lokal testing og
+undermappa `/Forge-bakery/`.
+
+### Levert like før (30.07 natt, senere)
 
 **Bakeloggen:** bilder åpnes i fullskjerm (piler, piltaster, Esc), og poster kan redigeres
 (navn, karakter, nytt notatfelt, bilder) og slettes med bekreftelse. Postene har fått
