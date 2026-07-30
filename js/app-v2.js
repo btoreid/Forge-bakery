@@ -21,7 +21,7 @@ const STANDARD = {
   saltPct: null, ferdigMs: null, tidModus: 'ferdig',
   heveplan: null,                 // null = planens standard; array = redigert
   paramInfo: null, tilleggInfo: null, melInfo: null, meltallInfo: null,
-  aktivSteg: 0, regnskapAapen: false, doseRespons: false,
+  aktivSteg: 0, regnskapAapen: false,
   loggListe: [], lgNavn: '', lgKar: 8,
   favoritter: [], oppslag: 'meny', oppslagSok: ''
 };
@@ -46,6 +46,15 @@ function last() {
   if (!s.tillegg || typeof s.tillegg !== 'object') s.tillegg = {};
   s.tillegg = Object.assign({}, s.tillegg);
   s.loggListe = s.loggListe.slice(); s.favoritter = s.favoritter.slice();
+  // Heveplan-INNHOLD må valideres, ellers gir et trinn uten numerisk timer/miljo
+  // NaN-dose og en tilsynelatende gyldig, men helt feil oppskrift (teknisk #5).
+  if (s.heveplan != null) {
+    if (!Array.isArray(s.heveplan)) s.heveplan = null;
+    else {
+      s.heveplan = s.heveplan.filter(t => t && isFinite(t.timer) && t.timer > 0 && isFinite(t.miljo)).map(t => ({ ...t }));
+      if (!s.heveplan.length) s.heveplan = null;
+    }
+  }
   return s;
 }
 function lagre() {
@@ -323,9 +332,12 @@ function velgBrotype(id) {
   const bt = BTYPER.find(b => b.id === id);
   if (bt && bt.antall) S.antall = bt.antall;
   if (bt && bt.vekt) S.vekt = bt.vekt;
+  // Nullstill det som er bundet til forrige brødtype, ellers lekker en redigert
+  // heveplan eller en avledet stekeprofil inn i et preset og overstyrer dets
+  // egen (teknisk review #1/#2).
+  S.heveplan = null; S.stekeProfil = null; S.stekeProfilManuell = false;
   // Preset forutsetter sin egen forferment (ciabatta = biga). Synk den, ellers
-  // ville motoren gitt presetet ingen forferment før brukeren slår den på manuelt
-  // (teknisk #6).
+  // ville motoren gitt presetet ingen forferment før brukeren slår den på manuelt.
   if (bt && bt.rute === 'preset') {
     const pr = PRESETS.find(p => p.id === id);
     if (pr && pr.forferment) { S.ff = !!pr.forferment.bruk; S.ffType = pr.forferment.type === 'pate' ? 'biga' : pr.forferment.type; }
@@ -637,22 +649,16 @@ function basePlan() {
   const tp = TIDSPLANER.find(t => t.id === S.tid) || TIDSPLANER[0];
   return (Array.isArray(S.heveplan) && S.heveplan.length ? S.heveplan : tp.plan).map(s => ({ ...s }));
 }
+const KALDGRENSE_APP = 12;
 function redigerTrinn(i, felt, val) {
   const p = basePlan();
-  if (felt !== 'navn') { val = parseFloat(String(val).replace(',', '.')); if (isNaN(val)) return; }
-  if (p[i]) p[i][felt] = felt === 'miljo' ? val : (felt === 'timer' ? Math.max(0, val) : val);
-  if (p[i] && felt === 'miljo') p[i].utbakt = val <= KALDGRENSE_APP ? p[i].utbakt : p[i].utbakt;
+  if (felt !== 'navn' && felt !== 'utbakt') { val = parseFloat(String(val).replace(',', '.')); if (isNaN(val)) return; }
+  if (p[i]) p[i][felt] = felt === 'timer' ? Math.max(0.05, val) : val;
   S.heveplan = p; oppdater();
 }
-const KALDGRENSE_APP = 12;
-function fjernTrinn(i) { const p = basePlan(); p.splice(i, 1); S.heveplan = p; oppdater(); }
-function leggTilTrinn() { const p = basePlan(); const sis = p[p.length - 1] || { timer: 2, miljo: 24 }; p.push({ navn: 'Nytt trinn', timer: 2, miljo: sis.miljo, utbakt: !!sis.utbakt }); S.heveplan = p; oppdater(); }
-function losBulkForDose(r) {
-  const p = basePlan(); if (!p.length) return;
-  if (typeof timerForTrinn !== 'function') return;
-  const t = timerForTrinn(r.maalDose, p, 0, r.gjaerTorr, r.masseKg, { antall: S.antall, lokk: S.lokk, fulltKjol: S.fulltKjol });
-  p[0].timer = Math.round(t * 4) / 4; S.heveplan = p; oppdater();
-}
+function fjernTrinn(i) { const p = basePlan(); if (p.length <= 1) return; p.splice(i, 1); S.heveplan = p; oppdater(); }
+// Nytt trinn er som standard et varmt bulk-trinn (ikke utbakt) — ikke arvet kaldt/utbakt.
+function leggTilTrinn() { const p = basePlan(); p.push({ navn: 'Nytt trinn', timer: 2, miljo: 24, utbakt: false }); S.heveplan = p; oppdater(); }
 function tegnHeveplan(r) {
   const boks = kort('Heveplan', null);
   const trinn = basePlan();
@@ -665,14 +671,19 @@ function tegnHeveplan(r) {
         trinn.length > 1 ? h('button', { class: 'info-knapp', 'aria-label': 'Fjern trinn', onClick: () => fjernTrinn(i) }, '×') : null),
       h('div', { style: 'display:flex;gap:8px;margin-top:6px' },
         trinnFelt('Timer', tr.timer, 't', v => redigerTrinn(i, 'timer', v)),
-        trinnFelt('Miljø', tr.miljo, '°C', v => redigerTrinn(i, 'miljo', v)))));
+        trinnFelt('Miljø', tr.miljo, '°C', v => redigerTrinn(i, 'miljo', v))),
+      // Eksplisitt utbakt-toggle: styrer om emnet er formet (kjøles som ett emne,
+      // uten lokk) — en modellforskjell som ikke kan avledes av temperaturen alene.
+      h('label', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.78rem;color:var(--color-neutral-700);cursor:pointer' },
+        h('input', { type: 'checkbox', checked: tr.utbakt ? 'checked' : null, style: 'width:20px;height:20px;accent-color:var(--color-accent-500)',
+          onchange: e => redigerTrinn(i, 'utbakt', e.target.checked) }),
+        'Utbakt i hevekurv (formet emne, ikke bulk i boks)')));
   });
   boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
     h('button', { class: 'btn', style: 'flex:1', onClick: () => leggTilTrinn() }, '+ Trinn'),
-    S.heveplan ? h('button', { class: 'btn', style: 'flex:1', onClick: () => { S.heveplan = null; oppdater(); } }, 'Tilbakestill') : null,
-    h('button', { class: 'btn btn-sage', style: 'flex:1', onClick: () => losBulkForDose(r) }, 'Løs bulk')));
+    S.heveplan ? h('button', { class: 'btn', style: 'flex:1', onClick: () => { S.heveplan = null; oppdater(); } }, 'Tilbakestill til planens standard') : null));
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
-    'Gjærmengden løses alltid mot måldosen (', h('b', null, fmt(r.maalDose, 2)), '). «Løs bulk» skalerer første trinn så dosen treffer med gjæren du har. Endrer du trinnene, regnes varm/kald-fordelingen om.'));
+    'Gjærmengden løses automatisk mot måldosen (', h('b', null, fmt(r.maalDose, 2)), '), uansett hvordan du setter trinnene. Rediger timer, temperatur og utbakt for å styre hvor mye av gjæringen som skjer varmt vs. kaldt — grafen og «andel av gjæringen» under regnes om.'));
   return boks;
 }
 function trinnFelt(lab, val, enhet, onSet) {
@@ -758,8 +769,8 @@ function tegnTid(r, K) {
   // Plan-kort
   TIDSPLANER.forEach(tp => {
     const paa = tp.id === S.tid;
-    const prov = paa ? r : regn(Object.assign({}, S, { tid: tp.id }));
-    const pK = paa ? K : kjede(Object.assign({}, S, { tid: tp.id }), prov, ferdigMs);
+    const fv = paa ? { prov: r, pK: K } : planForhaandsvis(tp.id, ferdigMs);
+    const prov = fv.prov, pK = fv.pK;
     // Etiketten leses fra EFFEKTIV tilstand (samme kilde som tallene), ikke fra
     // planens statiske forferment-spec (teknisk #5).
     const sub = (prov.ffPaa ? prov.ffT.navn.toLowerCase() + ' ' + prov.ffInn.pctMel + ' %' : 'ingen forferment') +
@@ -819,8 +830,7 @@ function isRad(r) {
   const spring = 12;
   if (r.vannTemp >= spring - 0.2) return null;
   const andel = isAndel(spring, r.vannTemp);
-  const vannGram = r.melTotal * (r.hyd);   // omtrentlig hovedvann
-  const is = vannGram * andel;
+  const is = Math.max(r.vannHoved, 1) * andel;   // eksakt hovedvann (teknisk #10)
   return h('div', { class: 'varsel', style: 'margin-top:8px' },
     'Vannet skal være kaldere enn springen (', grader(spring, 0), '). Bytt ut ', h('b', null, pst(andel * 100, 0)),
     ' av vannet med is — ca. ', h('b', null, g0(is)), ' isbiter, resten kaldt vann.');
@@ -863,6 +873,22 @@ function gjaeringsGraf(pts, r) {
   linje(p => yd(p.dose), 'var(--color-accent-2-500)', 2);
   linje(p => yf(p.fart), 'var(--color-accent-500)', 2);
   return svg;
+}
+/* Memoiser plan-forhåndsvisningene (teknisk #7): signaturen utelater melTemp,
+   eltMin og maskin fordi de bare påvirker vanntemperaturen — ikke løft, gjær
+   eller total tid. Dermed slipper vi 5 gjennomregninger ved hvert trykk på de
+   varmebalanse-kontrollene. */
+let _planMemo = { sig: null, data: {} };
+function planForhaandsvis(tpId, ferdigMs) {
+  const sig = JSON.stringify([S.brotype, S.grov, S.hyd, S.ff, S.ffType, S.tillegg, S.antall, S.vekt,
+    S.startTemp, S.saltPct, S.lokk, S.fulltKjol, S.heveplan, S.stekeProfil, ferdigMs]);
+  if (_planMemo.sig !== sig) _planMemo = { sig, data: {} };
+  if (!_planMemo.data[tpId]) {
+    const prov = regn(Object.assign({}, S, { tid: tpId }));
+    const pK = kjede(Object.assign({}, S, { tid: tpId }), prov, ferdigMs);
+    _planMemo.data[tpId] = { prov, pK };
+  }
+  return _planMemo.data[tpId];
 }
 function klHM(ms) { return new Date(ms).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' }); }
 function flyttFerdig(min) {
@@ -915,7 +941,13 @@ function tegnHandleliste(r) {
   if (r.malt > 0.01) smakRader.push(['Malt', veiG(r.malt)]);
   seksjon('Smak', smakRader);
   const u = (typeof UTSTYR !== 'undefined') && UTSTYR.find(x => x.id === S.utstyr);
-  seksjon('Utstyr', [['Stekeutstyr', u ? u.navn : '—'], ['Hevekurv', (FORMER.find(f => f.id === S.form) || {}).navn || '—'], ['Vekt', 'som viser ' + (S.vektTrinn >= 1 ? 'hele gram' : S.vektTrinn + ' g')]]);
+  const vektNavn = (S.vektTrinn || 1) >= 1 ? 'hele gram' : (S.vektTrinn === 0.1 ? '0,1 g' : '0,01 g');
+  const utstyrRader = [['Stekeutstyr', u ? u.navn : '—']];
+  // Hevekurv er bare relevant når brukeren faktisk velger form (bygg-ruta),
+  // ikke for presets som skjuler form/kurv (teknisk #6).
+  if (r.bt.rute !== 'preset') utstyrRader.push(['Hevekurv', (FORMER.find(f => f.id === S.form) || {}).navn || '—']);
+  utstyrRader.push(['Vekt', 'som viser ' + vektNavn]);
+  seksjon('Utstyr', utstyrRader);
   d.appendChild(kropp);
   return d;
 }
