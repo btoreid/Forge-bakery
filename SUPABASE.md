@@ -46,8 +46,12 @@ create policy "egen rad sletting"    on public.bakerstate
 *Redirect URLs*, ellers virker ikke «glemt passord»-lenken:
 
 ```
-https://btoreid.github.io/Forge-bakery/index-v2.html
+https://btoreid.github.io/Forge-bakery/
 ```
+
+Appen lå tidligere på `/Forge-bakery/index-v2.html`. Den adressen videresender nå hit — med
+fragmentet (`#access_token=…`) intakt, for det er der innloggingsnøkkelen fra e-postlenker
+ligger. Gamle bekreftelses-e-poster virker derfor fortsatt.
 
 **E-postbekreftelse** (*Confirm email*) er på som standard. Da må du bekrefte adressen
 før første innlogging. Vil du slippe det mens du tester, kan den slås av samme sted.

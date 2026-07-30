@@ -12,8 +12,13 @@ Forge Bakery er bygget om til en **mobil-app**. To parallelle apper i repoet nå
 
 | app | filer | status |
 |---|---|---|
-| **V2 (aktiv)** | `index-v2.html` + `js/data.js` · `js/engine.js` · `js/app-v2.js` | under utvikling, live |
-| V1 (frosset) | `index.html` + `js/app.js` | rør den ikke |
+| **V2 (aktiv)** | `index.html` + `js/data.js` · `js/engine.js` · `js/sky.js` · `js/app-v2.js` | under utvikling, live |
+| V1 (frosset) | `index-v1.html` + `js/app.js` | rør den ikke |
+
+**Adressene byttet plass 30.07 (natt):** V2 er nå `index.html` og ligger på
+`https://btoreid.github.io/Forge-bakery/`. V1 heter `index-v1.html`. Den gamle
+`index-v2.html` er beholdt som videresending — den tar med seg `#access_token`-fragmentet,
+så Supabase-lenker i eldre e-poster fortsatt virker.
 
 **Kjernen er to rene funksjoner i `engine.js`:** `regn(state)` (dose/hydrering/løft/varme) og
 `kjede(state, r)` (stegkjeden). All utregning der — `app-v2.js` tegner, regner aldri. Global

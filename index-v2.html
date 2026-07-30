@@ -2,26 +2,25 @@
 <html lang="nb">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Forge Bakery</title>
-  <link rel="stylesheet" href="css/fonts.css">
-  <link rel="stylesheet" href="css/style-v2.css">
+  <!-- V2 er flyttet til index.html. Denne fila blir stående som videresending,
+       fordi to ting fortsatt peker hit: bokmerker på telefonen, og Supabase-
+       lenkene i bekreftelses- og passord-e-poster. Fragmentet (#access_token=…)
+       må følge med — det er DER innloggingsnøkkelen ligger etter en e-postlenke,
+       og et vanlig <meta refresh> ville kastet den. -->
+  <script>
+    location.replace('./' + location.search + location.hash);
+  </script>
+  <meta http-equiv="refresh" content="0; url=./">
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f5ead8; color: #3c3427;
+           display: grid; place-items: center; height: 100vh; margin: 0; text-align: center; }
+    a { color: #8f4a20; }
+  </style>
 </head>
 <body>
-  <div id="telefon">
-    <div class="topp" id="topp"></div>
-    <div class="innhold" id="innhold"></div>
-    <div class="bunnlinje" id="bunnlinje"></div>
-    <nav class="bunnmeny" id="bunnmeny"></nav>
-  </div>
-
-  <!-- supabase-js er vendoret lokalt (som fontene): CDN-er er ikke garantert
-       tilgjengelige, og appen skal virke fra file:// også. -->
-  <script src="js/vendor/supabase.js"></script>
-  <script src="js/data.js"></script>
-  <script src="js/engine.js"></script>
-  <script src="js/sky.js"></script>
-  <script src="js/app-v2.js"></script>
+  <p>Forge Bakery har flyttet hit: <a href="./">btoreid.github.io/Forge-bakery/</a></p>
 </body>
 </html>

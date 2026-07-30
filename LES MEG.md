@@ -1,14 +1,17 @@
 # Forge Bakery
 
-Dobbeltklikk **index.html** for å åpne appen. Ingen installasjon, ingen internettforbindelse, ingenting å starte —
-det er ren HTML/CSS/JavaScript. Alt du legger inn lagres lokalt i nettleseren.
+Dobbeltklikk **index.html** for å åpne appen. Ingen installasjon, ingenting å starte — det er ren
+HTML/CSS/JavaScript. Alt du legger inn lagres lokalt i nettleseren, og synkes til skyen hvis du logger inn.
 
 ```
-index.html      appen
-css/style.css   utseende
-js/data.js      mel, frø, forvalg, stekeprofiler, fagstoff
-js/engine.js    regnemotoren (fermenteringskinetikk, deigtemperatur, bakerprosent)
-js/app.js       grensesnittet
+index.html        appen (mobil-V2) — live på btoreid.github.io/Forge-bakery/
+index-v1.html     den gamle desktop-appen, frosset
+css/style-v2.css  utseende (V2)
+js/data.js        mel, frø, forvalg, stekeprofiler, fagstoff
+js/engine.js      regnemotoren (fermenteringskinetikk, deigtemperatur, bakerprosent)
+js/app-v2.js      grensesnittet (V2) — tegner bare, regner aldri
+js/sky.js         innlogging og synk (Supabase) — se SUPABASE.md
+js/app.js         grensesnittet til V1, frosset
 ```
 
 ## Status
