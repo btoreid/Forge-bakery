@@ -15,7 +15,7 @@ const STANDARD = {
   ff: false, ffType: 'poolish',
   tillegg: { solsikke: 6, linfro: 3 },
   antall: 4, vekt: 900,
-  startTemp: 24, melTemp: 21, maskin: 'spiralHjemme', eltMin: 13,
+  startTemp: 24, melTemp: 21, maskin: 'spiralHjemme', eltMin: 13, romTemp: 22,
   stekeProfil: 'brod_kloke', stekeProfilManuell: false, lokk: true, fulltKjol: false,
   form: 'rund', utstyr: 'stal15', vektTrinn: 1, egenFriksjon: 0.4,
   saltPct: null, ferdigMs: null, tidModus: 'ferdig',
@@ -149,7 +149,15 @@ function kornTegning(flourId) {
 }
 
 let _nullstillScroll = false;
+let _rendrer = false;
 function render() {
+  // Re-entrans-vern: når replaceChildren fjerner et fokusert felt, fyrer
+  // nettleseren en ekte blur MIDT i renderen — og feltets onblur ville startet
+  // en ny render oppå den halvferdige (NotFoundError, og feilgrensa nullstilte
+  // hele appen). Tilstanden er allerede oppdatert, så det nestede kallet kan
+  // trygt hoppes over.
+  if (_rendrer) return;
+  _rendrer = true;
   try { renderInner(); }
   catch (e) {
     // Feilgrense: en korrupt tilstand skal aldri gi en blank app (teknisk #4).
@@ -158,6 +166,7 @@ function render() {
     try { localStorage.removeItem(LAGER); } catch (e2) {}
     try { renderInner(); } catch (e3) { byId('innhold').textContent = 'Noe gikk galt — appen ble nullstilt.'; }
   }
+  finally { _rendrer = false; }
 }
 function renderInner() {
   const r = regn(S);
@@ -234,12 +243,22 @@ function tegnBunnlinje(r, K) {
       ['Total tid', fmt(K.totalT, 1) + ' t'],
       ['Kostnad', fmt(r.kost.total, 0) + ' kr']
     ].filter(Boolean);
+    // «Hva valgene koster» hører hjemme her: totalen over, avvikene mot
+    // normalen (brød uten tillegg) under — samme tall som dose–respons-panelet.
+    const avvik = doseResponsRader();
     // Arket popper opp OVER bunnlinja (position:absolute; bottom:100%).
-    barn.push(h('div', { class: 'regnskap-ark' },
+    // Trykk hvor som helst på arket lukker det — ikke bare på bakteppet.
+    barn.push(h('div', { class: 'regnskap-ark', onClick: () => { S.regnskapAapen = false; oppdater(); } },
       h('div', { class: 'ark-hank' }),
       h('div', { class: 'ark-tittel' }, 'Deigregnskap'),
       h('div', { class: 'regnskap' }, ...rader.map(([k, v]) =>
-        h('div', { class: 'rad' }, h('span', null, k), h('b', null, v))))));
+        h('div', { class: 'rad' }, h('span', null, k), h('b', null, v)))),
+      avvik.length ? h('div', { class: 'ark-tittel', style: 'margin-top:12px' }, 'Valgene dine mot normalen') : null,
+      ...avvik.map(rad => h('div', { class: 'ark-avvik' },
+        h('b', null, rad.navn),
+        h('span', null, rad.verdier.map(([lab, v]) => lab + ' ' + fmtDelta(v)).join(' · ')))),
+      avvik.length ? h('div', { style: 'font-size:.68rem;color:var(--color-neutral-500);margin-top:4px' },
+        '± er endring mot samme brød uten tillegg. Detaljer i «Hva valgene koster» på Deig.') : null));
     // Bakteppe over innholdet — lukker ved trykk.
     byId('telefon').appendChild(h('div', { class: 'regnskap-bakteppe', id: 'bakteppe',
       onClick: () => { S.regnskapAapen = false; oppdater(); } }));
@@ -398,9 +417,11 @@ function tegnDeigen(r) {
     const flour = FLOURS.find(f => f.id === m.id) || {};
     const bidrag = info && GLUTENBIDRAG_TEKST[info.glutenbidrag] ? GLUTENBIDRAG_TEKST[info.glutenbidrag].navn : '';
     const fav = (S.favoritter || []).includes(m.id);
+    // Favoritt vises som egen merkelapp, ikke ★ foran navnet — flere melnavn
+    // har allerede ★ i seg (kvalitetsmerke), og to stjerner leste som støy.
     melBoks.appendChild(h('div', { class: 'melrad2' + (i === 0 ? ' forst' : '') },
       h('div', { class: 'm-navn' },
-        h('div', { class: 'n' }, (fav ? '★ ' : '') + m.navn),
+        h('div', { class: 'n' }, m.navn, fav ? h('span', { class: 'fav-pille' }, 'favoritt') : null),
         h('div', { class: 'sub' }, [bidrag, flour.protein != null ? fmt(flour.protein, 1) + ' g protein' : null].filter(Boolean).join(' · '))),
       h('div', { class: 'm-tall' }, h('div', { class: 'g' }, g0(m.gram)), h('div', { class: 'p' }, fmt(m.pct, 0) + ' %')),
       h('button', { class: 'info-ring', 'aria-label': 'Info om ' + m.navn, onClick: () => { S.tilleggInfo = null; S.melInfo = S.melInfo === m.id ? null : m.id; oppdater(); } }, 'ⓘ')));
@@ -458,10 +479,18 @@ function tegnDeigen(r) {
   if (!erPreset) {
     const saltN = S.saltPct != null ? S.saltPct : 1.8;
     const saltVerdiEl = h('span', { class: 'skyver-verdi' }, fmt(saltN, 1) + ' %');
+    const sm0 = saltMerke(saltN);
+    const saltMerkeEl = h('span', { class: 'skyver-klasse', style: 'background:' + sm0.bg + ';color:' + sm0.farge }, sm0.merke);
     wrap.appendChild(kort('7 · Salt', 'saltPct',
-      h('div', { class: 'skyver-topp' }, saltVerdiEl),
+      h('div', { class: 'skyver-topp' }, saltVerdiEl, saltMerkeEl),
       h('input', { type: 'range', class: 'skyver', min: 1.4, max: 2.4, step: 0.1, value: saltN,
-        oninput: e => { saltVerdiEl.textContent = fmt(+e.target.value, 1) + ' %'; },
+        oninput: e => {
+          const v = +e.target.value;
+          saltVerdiEl.textContent = fmt(v, 1) + ' %';
+          const m = saltMerke(v);
+          saltMerkeEl.textContent = m.merke;
+          saltMerkeEl.setAttribute('style', 'background:' + m.bg + ';color:' + m.farge);
+        },
         onchange: e => { S.saltPct = +e.target.value; oppdater(); } }),
       h('div', { class: 'konsekvens' }, g0(r.salt) + ' salt. Salt strammer glutenet og bremser gjæren; 1,8–2,0 % er sonen.'),
       infoUtfelling('saltPct')));
@@ -508,7 +537,32 @@ function tilleggSeksjon(r) {
     items.forEach(t => boks.appendChild(tilleggRad(t, r)));
     wrap.appendChild(boks);
   });
+  const komp = tegnKompensasjon(r);
+  if (komp) wrap.appendChild(komp);
   return wrap;
+}
+
+/* «Hva vil du gjøre med endringen?» — tillegg tar plass i en fast deigvekt, så
+   melet faller. Panelet viser hva som faktisk skjedde og tilbyr alternativet:
+   øk deigen i stedet, så melmengden blir som uten tillegg. Vannet justeres
+   alltid automatisk for det frøene binder. */
+function tegnKompensasjon(r) {
+  if (!Object.keys(S.tillegg || {}).length) return null;
+  const r0 = regn(Object.assign({}, S, { tillegg: {} }));
+  const tap = r0.melTotal - r.melTotal;
+  if (tap < 1) return null;
+  const faktor = r0.melTotal / Math.max(r.melTotal, 1);
+  const nyVekt = Math.round(S.vekt * faktor / 10) * 10;
+  const boks = kort('Hva vil du gjøre med endringen?', null);
+  boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:6px' },
+    'Tilleggene tar plass i en fast deigvekt på ', h('b', null, g0(r.totalVekt)), ': melet faller ',
+    h('b', null, g0(tap)), ' (fra ' + g0(r0.melTotal) + ' til ' + g0(r.melTotal) + '). Vannet er allerede justert for det frøene binder.'));
+  boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
+    h('button', { class: 'btn', style: 'flex:1;font-size:.8rem;background:var(--color-accent-2-100);border-color:var(--color-accent-2-300)' }, '✓ Behold deigvekten (som nå)'),
+    nyVekt > S.vekt ? h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: () => { S.vekt = nyVekt; oppdater(); } }, 'Øk deigen: ' + nyVekt + ' g/brød') : null));
+  boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
+    'Å øke deigen gir like mye mel som uten tillegg, men hvert brød blir tyngre. Å beholde vekten gir samme brødstørrelse med litt mindre mel og litt tettere krumme.'));
+  return boks;
 }
 function soakerKorn(id) { const s = SOAKERS.find(x => x.id === id); return s && s.korn; }
 function tilleggRad(t, r) {
@@ -517,10 +571,19 @@ function tilleggRad(t, r) {
   const frr = r.fro.find(f => f.id === t.id);
   const gramV = frr ? frr.gram : 0;
   const erSmak = t.type === 'smak';
+  // Sone mot anbefalingen: grønn t.o.m. anbefalt dose, gul over, rød nær taket.
+  // Grensene er relative til spennet anbefalt→maks, så de skalerer per tillegg.
+  let sone = '', soneOrd = '';
+  if (paa) {
+    const anb = t.pct || 6, maks = t.max || 30;
+    const over = (pct - anb) / Math.max(maks - anb, 0.001);
+    if (over >= 0.6) { sone = ' rod'; soneOrd = ' · nær maks — les ⓘ'; }
+    else if (over > 0.12) { sone = ' gul'; soneOrd = ' · over anbefalt ' + fmt(anb, erSmak ? 1 : 0) + ' %'; }
+  }
   const status = paa
-    ? fmt(pct, 1) + ' % · ' + g0(gramV) + (erSmak ? '' : ' · ' + behandlingOrd(t.id))
+    ? fmt(pct, 1) + ' % · ' + g0(gramV) + (erSmak ? '' : ' · ' + behandlingOrd(t.id)) + soneOrd
     : 'trykk for å legge til (' + fmt(t.pct, 1) + ' %)';
-  const rad = h('div', { class: 'tillegg-rad' + (paa ? ' paa' : '') },
+  const rad = h('div', { class: 'tillegg-rad' + (paa ? ' paa' : '') + sone },
     h('div', { style: 'display:flex;align-items:center;gap:8px' },
       // Trykkbar toggle: av → legg til på anbefalt verdi, på → fjern.
       h('button', { class: 'tillegg-toggle', 'aria-pressed': paa ? 'true' : 'false', onClick: () => togglTillegg(t) },
@@ -636,48 +699,70 @@ function spalte(tittel, punkter, farge) {
 }
 function tallrad(k, v) { return v == null ? null : h('div', { class: 'tallrad' }, h('span', null, k), h('b', null, v)); }
 
-/* ---------- Dose–respons: «hva valgene koster» ---------- */
-function tegnDoseRespons(r) {
-  const boks = kort('Hva valgene koster', null);
-  if (typeof TILLEGG_EFFEKT === 'undefined') return boks;
+/* ---------- Dose–respons: «hva valgene koster» — som ± mot normalen ----------
+   Baseline er første punkt på hver målekurve (0 % tillegg), så alt vises som
+   pluss/minus mot samme brød uten tillegget. Radene deles med totalen i
+   deigregnskapet, så de to aldri kan drifte fra hverandre. */
+function doseResponsRader() {
+  if (typeof TILLEGG_EFFEKT === 'undefined') return [];
   const e = TILLEGG_EFFEKT, til = S.tillegg || {};
   const froPct = TILLEGG.filter(t => t.type === 'fro' && !soakerKorn(t.id)).reduce((s, t) => s + (til[t.id] || 0), 0);
   const honning = til.honning || 0, olje = til.olje || 0, malt = til.malt || 0;
+  const d = (xs, ys, x, enh, t) => {
+    const delta = interp(xs, ys, x) - ys[0];
+    const tone = t === 'noytral' ? 'noytral' : t === 'darlig-opp' ? (delta > 0.01 ? 'darlig' : 'god') : (delta >= -0.01 ? 'god' : 'darlig');
+    return { delta, enh, tone };
+  };
   const rader = [];
-  if (froPct > 0) rader.push(['Frø ' + fmt(froPct, 0) + ' %', [
-    ['Ovnsløft', interp(e.fro.pct, e.fro.loftBloet, froPct), 100],
-    ['Smak', interp(e.fro.pct, e.fro.smak, froPct), 10],
-    ['Saftighet', interp(e.fro.pct, e.fro.saftighet, froPct), 10]], e.fro.kilde]);
-  if (honning > 0) rader.push(['Honning ' + fmt(honning, 1) + ' %', [
-    ['Ovnsløft', interp(e.honning.pct, e.honning.loft, honning), 120],
-    ['Bruning', interp(e.honning.pct, e.honning.bruning, honning), 290],
-    ['Saftighet', interp(e.honning.pct, e.honning.saftighet, honning), 10]], e.honning.kilde]);
-  if (olje > 0) rader.push(['Olje ' + fmt(olje, 1) + ' %', [
-    ['Volum', interp(e.fett.pct, e.fett.olje, olje), 120],
-    ['Saftighet', interp(e.fett.pct, e.fett.saftighet, olje), 10]], e.fett.kilde]);
-  if (malt > 0) rader.push(['Malt ' + fmt(malt, 2) + ' %', [
-    ['Ovnsløft', interp(e.malt.pct, e.malt.loft, malt), 110],
-    ['Falltall', interp(e.malt.pct, e.malt.falltall, malt), 320],
-    ['Gummi', interp(e.malt.pct, e.malt.gummi, malt), 10]], e.malt.kilde]);
+  if (froPct > 0) rader.push({ navn: 'Frø ' + fmt(froPct, 0) + ' %', kilde: e.fro.kilde, verdier: [
+    ['Ovnsløft', d(e.fro.pct, e.fro.loftBloet, froPct, '%'), 50],
+    ['Smak', d(e.fro.pct, e.fro.smak, froPct, 'p'), 10],
+    ['Saftighet', d(e.fro.pct, e.fro.saftighet, froPct, 'p'), 10]] });
+  if (honning > 0) rader.push({ navn: 'Honning ' + fmt(honning, 1) + ' %', kilde: e.honning.kilde, verdier: [
+    ['Ovnsløft', d(e.honning.pct, e.honning.loft, honning, '%'), 50],
+    ['Bruning', d(e.honning.pct, e.honning.bruning, honning, '%', 'noytral'), 200],
+    ['Saftighet', d(e.honning.pct, e.honning.saftighet, honning, 'p'), 10]] });
+  if (olje > 0) rader.push({ navn: 'Olje ' + fmt(olje, 1) + ' %', kilde: e.fett.kilde, verdier: [
+    ['Volum', d(e.fett.pct, e.fett.olje, olje, '%'), 50],
+    ['Saftighet', d(e.fett.pct, e.fett.saftighet, olje, 'p'), 10]] });
+  if (malt > 0) rader.push({ navn: 'Malt ' + fmt(malt, 2) + ' %', kilde: e.malt.kilde, verdier: [
+    ['Ovnsløft', d(e.malt.pct, e.malt.loft, malt, '%'), 50],
+    ['Falltall', d(e.malt.pct, e.malt.falltall, malt, 's'), 200],
+    ['Gummi', d(e.malt.pct, e.malt.gummi, malt, 'p', 'darlig-opp'), 10]] });
+  return rader;
+}
+function fmtDelta(v) {
+  const tall = fmt(Math.abs(v.delta), Math.abs(v.delta) < 10 ? 1 : 0);
+  const fortegn = v.delta >= 0.05 ? '+' : v.delta <= -0.05 ? '−' : '±';
+  return fortegn + tall + (v.enh === '%' ? ' %' : v.enh === 's' ? ' s' : '');
+}
+function tegnDoseRespons(r) {
+  const boks = kort('Hva valgene koster', null);
+  const rader = doseResponsRader();
   if (!rader.length) {
     boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:4px' },
-      'Legg til frø, honning, olje eller malt over, så viser panelet hva de koster og gir i ovnsløft, smak og saftighet — interpolert fra måleserier, ikke gjettet.'));
+      'Legg til frø, honning, olje eller malt over, så viser panelet hva de koster og gir som pluss og minus mot samme brød uten tillegget — interpolert fra måleserier, ikke gjettet.'));
     return boks;
   }
-  rader.forEach(([navn, verdier, kilde]) => boks.appendChild(h('div', { style: 'margin-top:10px' },
-    h('div', { style: 'font-weight:700;font-size:.86rem;margin-bottom:4px' }, navn),
-    ...verdier.map(([lab, v, maks]) => barRad(lab, v, maks)),
-    h('div', { style: 'font-size:.64rem;color:var(--color-neutral-500);margin-top:4px' }, 'Kilde: ' + kilde))));
+  boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:4px' },
+    'Pluss og minus mot samme brød uten tillegget. Streken i midten er normalen (0).'));
+  rader.forEach(rad => boks.appendChild(h('div', { style: 'margin-top:10px' },
+    h('div', { style: 'font-weight:700;font-size:.86rem;margin-bottom:4px' }, rad.navn),
+    ...rad.verdier.map(([lab, v, skala]) => deltaRad(lab, v, skala)),
+    h('div', { style: 'font-size:.64rem;color:var(--color-neutral-500);margin-top:4px' }, 'Kilde: ' + rad.kilde))));
   return boks;
 }
-function barRad(lab, v, maks) {
-  const pct = Math.max(0, Math.min(100, v / maks * 100));
-  const farge = /Ovnsløft|Volum/.test(lab) ? 'var(--color-accent-500)' : /Gummi|Falltall/.test(lab) ? 'var(--color-danger)' : 'var(--color-accent-2-500)';
+/* Divergerende søyle: 0 i midten, pluss mot høyre, minus mot venstre. Grønn når
+   endringen er en gevinst, rød når den koster, terrakotta når den er nøytral. */
+function deltaRad(lab, v, skala) {
+  const br = Math.min(50, Math.abs(v.delta) / skala * 50);
+  const farge = v.tone === 'god' ? 'var(--color-accent-2-500)' : v.tone === 'darlig' ? 'var(--color-danger)' : 'var(--color-accent-500)';
   return h('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:3px' },
     h('span', { style: 'flex:0 0 74px;font-size:.74rem;color:var(--color-neutral-600)' }, lab),
-    h('span', { style: 'flex:1;height:6px;border-radius:3px;background:var(--color-neutral-200);overflow:hidden' },
-      h('span', { style: 'display:block;height:100%;width:' + pct.toFixed(0) + '%;background:' + farge })),
-    h('span', { style: 'flex:0 0 42px;text-align:right;font-size:.74rem;font-weight:700;font-variant-numeric:tabular-nums' }, fmt(v, v < 20 ? 1 : 0)));
+    h('span', { style: 'flex:1;height:8px;border-radius:4px;background:var(--color-neutral-200);position:relative;overflow:hidden' },
+      h('span', { style: 'position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--color-neutral-400)' }),
+      h('span', { style: 'position:absolute;top:0;bottom:0;background:' + farge + ';' + (v.delta >= 0 ? 'left:50%;width:' + br.toFixed(1) + '%' : 'right:50%;width:' + br.toFixed(1) + '%') })),
+    h('span', { style: 'flex:0 0 52px;text-align:right;font-size:.74rem;font-weight:700;font-variant-numeric:tabular-nums;color:' + (v.tone === 'darlig' ? 'var(--color-danger)' : 'inherit') }, fmtDelta(v)));
 }
 
 /* ---------- Redigerbar heveplan + «løs for» ---------- */
@@ -698,6 +783,12 @@ function leggTilTrinn() { const p = basePlan(); p.push({ navn: 'Nytt trinn', tim
 function tegnHeveplan(r) {
   const boks = kort('Heveplan', null);
   const trinn = basePlan();
+  // Rommet deigen faktisk skal stå i — «Rommet ditt»-knappen per trinn bruker
+  // denne, så du slipper å taste temperatur i hvert felt.
+  const rt = S.romTemp || 22;
+  boks.appendChild(miniStepper('Romtemp der deigen hever', rt, 'romTemp', 14, 30, 0.5, ' °C'));
+  boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:4px' },
+    'Sett temperaturen i rommet deigen skal stå i, og merk trinn som skal i kjøleskapet (4 °C). Gjærmengden løses om automatisk.'));
   trinn.forEach((tr, i) => {
     const kaldt = tr.miljo <= KALDGRENSE_APP;
     boks.appendChild(h('div', { style: 'border-top:1px solid var(--color-neutral-200);padding:9px 0' },
@@ -708,6 +799,10 @@ function tegnHeveplan(r) {
       h('div', { style: 'display:flex;gap:8px;margin-top:6px' },
         trinnFelt('Timer', tr.timer, 't', v => redigerTrinn(i, 'timer', v)),
         trinnFelt('Miljø', tr.miljo, '°C', v => redigerTrinn(i, 'miljo', v))),
+      // Hurtigvalg for hvor deigen står: kjøleskapet eller rommet ditt.
+      h('div', { class: 'piller', style: 'margin-top:6px' },
+        h('button', { class: Math.abs(tr.miljo - 4) < 0.6 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', 4) }, 'Kjøleskap 4°'),
+        h('button', { class: Math.abs(tr.miljo - rt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', rt) }, 'Rommet ditt ' + fmt(rt, 0) + '°')),
       // Eksplisitt utbakt-toggle: styrer om emnet er formet (kjøles som ett emne,
       // uten lokk) — en modellforskjell som ikke kan avledes av temperaturen alene.
       h('label', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.78rem;color:var(--color-neutral-700);cursor:pointer' },
@@ -766,6 +861,12 @@ function grovKonsekvens(r) {
   if (g <= 76) return 'Grovt etter norsk standard. Koster ca. ' + t + ' løftpoeng — form er det trygge valget, mer vann trengs.';
   return 'Ekstra grovt. Bare ' + fmt(100 - g, 0) + ' % siktet mel å bygge nettverk av: formbrød, tett og saftig krumme framfor hull.';
 }
+/* Saltsonen er 1,8–2,0 % (samme tall som konsekvensteksten under skyveren). */
+function saltMerke(v) {
+  if (v >= 1.8 && v <= 2.0) return { merke: 'I SONEN', bg: 'var(--color-accent-2-100)', farge: 'var(--color-accent-2-700)' };
+  if (v >= 1.6 && v <= 2.2) return { merke: 'UTENFOR SONEN', bg: '#f6ecd2', farge: '#7a5a12' };
+  return { merke: 'LANGT UTENFOR', bg: '#f6ddd6', farge: 'var(--color-danger)' };
+}
 function vannMerke(hyd) {
   if (hyd <= 68) return { merke: 'STRAMT', bg: 'var(--color-neutral-200)', farge: 'var(--color-neutral-700)' };
   if (hyd <= 71) return { merke: 'TRYGT', bg: 'var(--color-accent-2-100)', farge: 'var(--color-accent-2-700)' };
@@ -798,7 +899,10 @@ function tegnTid(r, K) {
   const kort1 = h('div', { class: 'kort' });
   kort1.appendChild(h('div', { class: 'toggle2' },
     h('button', { class: S.tidModus !== 'start' ? 'paa' : '', onClick: () => { S.tidModus = 'ferdig'; oppdater(); } }, 'Ferdig ' + ukedagKort(ferdigMs) + ' ' + klHM(ferdigMs)),
-    h('button', { class: S.tidModus === 'start' ? 'paa' : '', onClick: () => { S.tidModus = 'start'; oppdater(); } }, 'Start nå')));
+    // «Start nå» ankrer kjeden til NÅ: ferdig settes til nå + total tid. Uten
+    // dette viste den bare starttiden som fulgte av gammelt ferdigtidspunkt —
+    // og nå-markøren i grafen hadde ingenting ekte å peke på.
+    h('button', { class: S.tidModus === 'start' ? 'paa' : '', onClick: () => { S.tidModus = 'start'; S.ferdigMs = Date.now() + K.totalT * 3600000; oppdater(); } }, 'Start nå')));
   const erStart = S.tidModus === 'start';
   const startMs = K.start.getTime();
   const visMs = erStart ? startMs : ferdigMs;
@@ -808,6 +912,13 @@ function tegnTid(r, K) {
       h('div', { class: 'kl' }, klHM(visMs)),
       h('div', { class: 'note' }, erStart ? 'her setter du deigen i gang' : 'ut av ovnen')),
     h('button', { onClick: () => flyttFerdig(60) }, '+')));
+  // Direkte valg av dato og klokkeslett for ferdig — ±-knappene er for
+  // finjustering, ikke for å flytte seg tre døgn fram.
+  if (!erStart) kort1.appendChild(h('div', { style: 'margin-top:10px' },
+    h('div', { class: 'felt-label' }, 'Eller velg dato og klokkeslett ferdig'),
+    h('input', { type: 'datetime-local', class: 'dato-inp', 'aria-label': 'Dato og klokkeslett ferdig',
+      value: tilDatoLokal(ferdigMs),
+      onchange: e => { const t = new Date(e.target.value).getTime(); if (isFinite(t)) { S.ferdigMs = t; oppdater(); } } })));
 
   // Start → ferdig, alltid begge ender med ukedag og dato, så det er tydelig
   // hvilket døgn du starter og hvilket du er ferdig (baken går over døgnskiller).
@@ -840,7 +951,7 @@ function tegnTid(r, K) {
     // planens statiske forferment-spec (teknisk #5).
     const sub = (prov.ffPaa ? prov.ffT.navn.toLowerCase() + ' ' + prov.ffInn.pctMel + ' %' : 'ingen forferment') +
       ' · gjær ' + fmt(prov.gjaerTorr, 3) + ' % = ' + fmt(prov.gjaerTotal, 2) + ' g';
-    wrap.appendChild(h('button', { class: 'valgkort' + (paa ? ' paa' : ''), onClick: () => { S.tid = tp.id; S.heveplan = null; oppdater(); } },
+    wrap.appendChild(h('button', { class: 'valgkort plan-valg' + (paa ? ' paa' : ''), onClick: () => { S.tid = tp.id; S.heveplan = null; oppdater(); } },
       h('div', { class: 'plankort' },
         h('div', { style: 'flex:1;min-width:0' },
           h('div', null, h('span', { class: 'p-navn' }, tp.navn), h('span', { class: 'p-tid' }, fmt(pK.totalT, 1) + ' t')),
@@ -880,15 +991,19 @@ function tegnTid(r, K) {
   const pts = (typeof planProfil === 'function') ? planProfil(r.planTrinn, r.gjaerTorr, r.masseKg, { antall: S.antall, lokk: S.lokk, fulltKjol: S.fulltKjol }) : [];
   if (pts.length > 2) {
     const bulkStart = (K.find(x => x.id === 'trinn-0') || {}).tid || K.start;
+    // «Nå»-markøren gir bare mening når prosessen faktisk er i gang («Start
+    // nå»-modus). Med et ferdigtidspunkt fram i tid er planen hypotetisk, og
+    // en nå-strek i en ikke-startet gjæring ville pekt på ingenting.
+    const visNaa = S.tidModus === 'start';
     wrap.appendChild(h('div', { class: 'kort' },
       h('div', { class: 'kort-num' }, 'Gjæringen over tid'),
-      gjaeringsGraf(pts, r, bulkStart),
+      gjaeringsGraf(pts, r, bulkStart, visNaa),
       h('div', { style: 'display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:.7rem;color:var(--color-neutral-600)' },
         legendePrikk('var(--color-accent-2-500)', 'Akkumulert gjæring (høyre)'),
         legendePrikk('var(--color-neutral-500)', 'Deigtemp (venstre)'),
         legendePrikk('var(--color-accent-500)', 'Gjæringsfart'),
         legendePrikk('var(--color-accent-2-700)', 'Halvveis'),
-        legendePrikk('var(--color-danger)', 'Nå')),
+        visNaa ? legendePrikk('var(--color-danger)', 'Nå') : null),
       h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:8px;line-height:1.45' },
         'Arealet under fartskurven er dosen. Grønne bånd er kald heving (≤ 12 °C), varme bånd romtemperatur — se hvordan farten stuper i kulda og skyter fart igjen når deigen tempereres.')));
   }
@@ -937,6 +1052,7 @@ function maskinInfoPanel(r) {
       h('span', { class: 'mi-frik' }, mid === 'egen' ? 'målt ' + fmt(frik, 2) + ' °C/min' : fmt(frik, 2) + ' °C/min')),
     h('div', { class: 'mi-hva' }, info.hva),
     h('div', { class: 'mi-hva', style: 'margin-top:4px' }, info.tid),
+    info.fart ? h('div', { class: 'mi-hva', style: 'margin-top:4px' }, h('b', null, 'Hastighet: '), info.fart) : null,
     // Den levende utregningen — samme tall som varmebalansen bruker.
     h('div', { class: 'mi-regn' },
       h('span', null, fmt(frik, 2), ' °C/min × ', String(min), ' min = '),
@@ -970,7 +1086,7 @@ function maskinInfoPanel(r) {
 /* SVG-graf: fasebånd, temp- og gjæringsakser, gjæringsfart (areal), akkumulert
    dose (hovedkurve), deigtemp, halvveismerke, klokkeslett og «nå»-markør.
    `bulkStart` er Date-en for når gjæringen (bulk) begynner — gir ekte klokke. */
-function gjaeringsGraf(pts, r, bulkStart) {
+function gjaeringsGraf(pts, r, bulkStart, visNaa) {
   const NS = 'http://www.w3.org/2000/svg';
   const W = 360, H = 210;
   const pad = { l: 30, r: 30, t: 30, b: 30 };
@@ -1035,9 +1151,9 @@ function gjaeringsGraf(pts, r, bulkStart) {
     s += `<text x="${n(X(halv.t) + dx)}" y="${n(Yd(0.5) - 6)}" fill="var(--color-accent-2-700)" font-size="8.5" font-weight="700" text-anchor="${ank}">halvveis ${klAv(halv.t)}</text>`;
   }
 
-  // «Nå»-markør — bare hvis vi står inne i gjæringsvinduet.
+  // «Nå»-markør — bare når prosessen er startet OG vi står inne i vinduet.
   const naaT = (Date.now() - startMs) / 3600000;
-  if (naaT > 0.02 && naaT < totalT) {
+  if (visNaa && naaT > 0.02 && naaT < totalT) {
     s += `<line x1="${n(X(naaT))}" y1="${pad.t - 2}" x2="${n(X(naaT))}" y2="${pad.t + iH}" stroke="var(--color-danger)" stroke-width="1.4"/>`;
     s += `<circle cx="${n(X(naaT))}" cy="${pad.t - 2}" r="2.6" fill="var(--color-danger)"/>`;
     s += `<text x="${n(X(naaT))}" y="${pad.t - 20}" fill="var(--color-danger)" font-size="8.5" font-weight="800" text-anchor="middle">nå</text>`;
@@ -1078,6 +1194,11 @@ function planForhaandsvis(tpId, ferdigMs) {
   return _planMemo.data[tpId];
 }
 function klHM(ms) { return new Date(ms).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' }); }
+/* Lokal tid på formen datetime-local krever: YYYY-MM-DDTHH:MM (uten sekunder). */
+function tilDatoLokal(ms) {
+  const d = new Date(ms), p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
 /* Full dato med ukedag — baken går over døgnskiller, så «17:00» alene sier ikke
    hvilken dag. «fredag 31. juli, 17:00». */
 function klDato(ms) {
@@ -1270,7 +1391,8 @@ function oppslagMel() {
         style: 'background:none;border:none;padding:0;font:inherit;cursor:pointer;color:inherit;text-align:left',
         'aria-label': lab + ' — forklaring', onClick: () => { S.meltallInfo = S.meltallInfo === (f.id + nokkel) ? null : (f.id + nokkel); oppdater(); } },
         lab + ' ', h('b', null, verdi), h('span', { style: 'color:var(--color-neutral-400);font-size:.7em' }, ' ⓘ'));
-      const kortEl = h('div', { class: 'kort flat' },
+      // Favoritter utheves med ramme rundt hele kortet, ikke bare stjerna.
+      const kortEl = h('div', { class: 'kort flat' + (fav ? ' fav' : '') },
         h('div', { style: 'display:flex;align-items:flex-start;gap:10px' },
           kornTegning(f.id),
           h('div', { style: 'flex:1;min-width:0' },

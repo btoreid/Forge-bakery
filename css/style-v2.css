@@ -426,3 +426,33 @@ svg.kornsvg .s2 { fill: none; stroke: var(--kk); stroke-width: 1; stroke-linecap
   font-weight: 800; font-size: 1rem; color: var(--color-neutral-500); background: #fff;
 }
 .tillegg-hake.paa { background: var(--color-accent-2-500); border-color: transparent; color: #fff; }
+
+/* Utenfor anbefalt sone: gul over anbefalingen, rød nær maksgrensen */
+.tillegg-rad.paa.gul { background: #f6ecd2; }
+.tillegg-rad.paa.gul .tillegg-hake.paa { background: #b98a1f; }
+.tillegg-rad.paa.rod { background: #f6ddd6; }
+.tillegg-rad.paa.rod .tillegg-hake.paa { background: var(--color-danger); }
+
+/* ---------- Litt luft mellom plankortene på Tid ---------- */
+.plan-valg { margin-bottom: 8px; }
+
+/* ---------- Dato/klokkeslett-velger (Tid) ---------- */
+.dato-inp {
+  width: 100%; min-height: 44px; border-radius: 12px; margin-top: 4px;
+  border: 1px solid var(--color-neutral-300); background: #fff; color: var(--color-text);
+  font: inherit; font-weight: 700; font-variant-numeric: tabular-nums; padding: 8px 12px;
+}
+
+/* ---------- Favoritter: merkelapp i Deig, ramme rundt kortet i Oppslag ---------- */
+.fav-pille {
+  display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 999px;
+  font-size: .58rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+  background: var(--color-accent-100); color: var(--color-accent-700);
+  border: 1px solid var(--color-accent-300); vertical-align: 2px;
+}
+.kort.fav { border: 2px solid var(--color-accent-500); box-shadow: 0 0 0 3px var(--color-accent-100); }
+
+/* ---------- Avviksrader («valgene mot normalen») i deigregnskap-arket ---------- */
+.ark-avvik { display: flex; flex-direction: column; gap: 1px; font-size: .78rem; padding: 5px 0; border-bottom: 1px dotted var(--color-neutral-300); }
+.ark-avvik b { font-weight: 700; }
+.ark-avvik span { color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }

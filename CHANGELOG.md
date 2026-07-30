@@ -7,6 +7,60 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 30.07.2026 (kveld) — V2: ti punkter fra andre brukertest
+
+Bjørns andre testrunde ga ti punkter i én melding. Alle er levert, verifisert i ekte
+Chromium (31 automatiske sjekker på 390 px + skjermbilder av hver endring) og pushet.
+
+### Tid
+- **Velg dato og klokkeslett for ferdig.** ±-knappene (à 60 min) var eneste vei til et
+  annet døgn. Ny `<input type="datetime-local">` (`.dato-inp`) under tidstepperen i
+  Ferdig-modus, hjelper `tilDatoLokal()` i `app-v2.js`.
+- **Litt luft mellom plankortene** — ny klasse `plan-valg` (8 px margin-bottom).
+- **«Start nå» ankrer nå kjeden til nå:** ferdig settes til nå + total tid ved trykk.
+  Før byttet knappen bare visning og viste starttiden som fulgte av et gammelt
+  ferdigtidspunkt — «Start nå» startet ingenting.
+- **Nå-markøren i gjæringsgrafen vises kun når prosessen er startet** («Start nå»-modus,
+  og nå er inne i gjæringsvinduet). Bjørns poeng: en nå-strek i en ikke-startet,
+  hypotetisk plan peker på ingenting. `gjaeringsGraf(..., visNaa)`; legenden følger med.
+- **Heveplan: romtemperatur og kjøleskap.** Ny stepper «Romtemp der deigen hever»
+  (`S.romTemp`) og hurtigknapper per trinn: «Kjøleskap 4°» / «Rommet ditt X°» som setter
+  trinnets miljø. Gjærdosen løses om automatisk, som før, når miljøet endres.
+
+### Deig
+- **«Hva vil du gjøre med endringen?»** (`tegnKompensasjon()`): når tillegg er på, viser
+  et panel at melet faller i en fast deigvekt (fra X til Y, −Z g) og at vannet alt er
+  justert — og tilbyr alternativet «Øk deigen: N g/brød», som skalerer brødvekten så
+  melmengden blir som uten tillegg. Da kan Bjørn ta stilling til hva endringen gjør.
+- **Soner mot anbefalingen:** tilleggsrader skifter fra grønn til gul («over anbefalt»)
+  og rød («nær maks»), relativt til spennet anbefalt→maks per tillegg (solsikke: gul fra
+  ~7,7 %, rød fra ~14,4 %). Salt fikk sonemerke (I SONEN / UTENFOR / LANGT UTENFOR) på
+  samme måte som vann. Statuslinja i raden sier hvorfor den er gul/rød.
+- **«Hva valgene koster» viser nå ± mot normalen** (samme brød uten tillegget):
+  divergerende søyler med 0-strek i midten, grønt = gevinst, rødt = kostnad, terrakotta
+  = nøytralt (bruning). Baseline er første punkt på hver målekurve.
+  `doseResponsRader()` / `deltaRad()` / `fmtDelta()`.
+- **Totalen ligger i deigregnskapet:** arket har fått seksjonen «Valgene dine mot
+  normalen», bygget av samme `doseResponsRader()` som panelet — de to kan ikke drifte.
+
+### Diverse
+- **Deigregnskapet lukker nå ved trykk på selve arket**, ikke bare på bakteppet over.
+- **Eltemaskin:** «Spiral hjemme» heter nå «Ooni Halo Pro (spiral hjemme)» — maskinen
+  Bjørn faktisk har. Alle maskinene i `MASKIN_INFO` fikk et `fart`-felt med hastighetsråd
+  (lav fart til samling, middels til utvikling; planetmaskin: produsentene fraråder over
+  trinn 2 for gjærdeig), vist som egen «Hastighet:»-linje i maskinpanelet.
+- **Favoritter uten dobbeltmerking:** ★-prefikset i Deig er fjernet — flere melnavn har
+  allerede ★ i seg som kvalitetsmerke, så favoritter leste som «★ … ★». Favoritt vises nå
+  som «FAVORITT»-merkelapp i Deig (`.fav-pille`) og som ramme rundt hele kortet i
+  Oppslag (`.kort.fav`). ☆/★-knappen er fortsatt selve bryteren.
+- **Kritisk følgefunn rettet — re-entrant render:** når `replaceChildren` fjernet et
+  fokusert inputfelt, fyrte nettleseren en ekte blur MIDT i renderen; feltets onblur
+  startet en ny render oppå den halvferdige → `NotFoundError` → feilgrensa nullstilte
+  hele appen, inkludert loggen. Nytt `_rendrer`-vern i `render()` gjør det nestede
+  kallet til en no-op (tilstanden er allerede lagret).
+
+---
+
 ## 30.07.2026 — V2: appen bygget om til en mobil-app
 
 Stor omlegging over én økt, etter Bjørns oppdrag: bygg Forge Bakery om til en **mobil-app**

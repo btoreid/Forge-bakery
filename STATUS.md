@@ -29,9 +29,22 @@ iterasjon — den divergerte).
 **Live på GitHub Pages** med `noindex`. Auto-deploy ved push til
 `claude/forge-bakery-mobile-v2-l4ean3`.
 
-### Nylig levert (30.07, siste brukertest)
+### Nylig levert (30.07 kveld, andre brukertest — ti punkter)
 
-Alle tre punktene fra siste testrunde er gjort — se CHANGELOG-post 30.07, del H:
+Alle ti punktene fra Bjørns andre testrunde er levert og Chromium-verifisert — se
+CHANGELOG-posten «30.07.2026 (kveld)» for detaljene. Kort: dato/klokkeslett-velger for
+ferdig · luft mellom plankortene · «Start nå» ankrer kjeden til nå og nå-markøren i
+grafen vises kun da · romtemp + kjøleskap-knapper i heveplanen · kompensasjonspanel
+(«Hva vil du gjøre med endringen?») · gul/rød sone over anbefalt dose på tillegg og
+salt · «Hva valgene koster» som ± mot normalen, med total i deigregnskapet · regnskapet
+lukker ved trykk på arket · Ooni Halo Pro + hastighetsråd per maskin · favoritter som
+merkelapp/ramme i stedet for dobbel ★.
+
+Viktig følgefunn i samme runde: **re-entrant render** kunne nullstille hele appen når et
+fokusert felt ble fjernet under `replaceChildren` (blur midt i render). Rettet med
+`_rendrer`-vern i `render()` — ikke fjern det.
+
+### Tidligere levert (30.07, første brukertest)
 
 1. ✅ **Tid** viser ukedag + dato for både start og ferdig, med egen linje når baken krysser midnatt.
 2. ✅ **Gjæringsgrafen** har fasebånd, temp- og gjæringsakser, klokkeslett, halvveismerke og «nå»-markør.
@@ -39,7 +52,7 @@ Alle tre punktene fra siste testrunde er gjort — se CHANGELOG-post 30.07, del 
 
 ### Åpne V2-punkter
 
-Ingen kjente åpne punkter fra brukertesten nå. Neste runde avventer Bjørns tilbakemelding.
+Ingen kjente åpne punkter fra brukertestene nå. Neste runde avventer Bjørns tilbakemelding.
 
 ---
 
