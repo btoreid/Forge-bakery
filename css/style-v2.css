@@ -106,10 +106,12 @@ input[type=range] { accent-color: var(--color-accent); }
 }
 .bunnlinje .stripe {
   width: 100%; border: none; background: none; cursor: pointer;
-  display: flex; align-items: center; gap: 10px; padding: 11px 18px;
-  font: inherit; text-align: left; min-height: 48px;
+  display: flex; align-items: center; gap: 6px; padding: 11px 16px;
+  font: inherit; font-size: .78rem; text-align: left; min-height: 48px;
+  white-space: nowrap; overflow: hidden;
   font-variant-numeric: tabular-nums;
 }
+.bunnlinje .stripe .sep { padding: 0 1px; }
 .bunnlinje .stripe b { font-weight: 800; }
 .bunnlinje .stripe .sep { color: var(--color-neutral-400); }
 .bunnlinje .stripe .pil { margin-left: auto; color: var(--color-neutral-500); transition: transform .15s; }

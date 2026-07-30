@@ -67,9 +67,9 @@ const SKJERMER = [
   { id: 'brodet',  navn: 'Brød',    kicker: 'FORBEREDELSE · 1 AV 3', tittel: 'Brødet' },
   { id: 'deigen',  navn: 'Deig',    kicker: 'FORBEREDELSE · 2 AV 3', tittel: 'Mel, vann og frø' },
   { id: 'tid',     navn: 'Tid',     kicker: 'FORBEREDELSE · 3 AV 3', tittel: 'Når vil du ha brød?' },
-  { id: 'prosess', navn: 'Prosess', kicker: 'BAKINGEN', tittel: 'Prosessen' },
-  { id: 'logg',    navn: 'Logg',    kicker: 'ETTER BAKET', tittel: 'Bakeloggen' },
-  { id: 'oppslag', navn: 'Oppslag', kicker: 'SLÅ OPP', tittel: 'Oppslag' }
+  { id: 'prosess', navn: 'Prosess', kicker: 'BAKING', tittel: 'Følg prosessen' },
+  { id: 'logg',    navn: 'Logg',    kicker: 'LOGG', tittel: 'Bakeloggen' },
+  { id: 'oppslag', navn: 'Oppslag', kicker: 'OPPSLAG', tittel: 'Oppslag' }
 ];
 /* Brødtypene som designet viser dem — «Brød» er én type der grovheten settes i
    deigen (loff = grov 0), de tre andre er kalibrerte forvalg. */
@@ -509,41 +509,44 @@ function flyttFerdig(min) {
 function tegnProsess(r, K) {
   const wrap = h('div');
   const i = Math.min(S.aktivSteg, K.length - 1);
-  wrap.appendChild(h('div', { class: 'framdrift' }, ...K.map((s, j) =>
-    h('div', { class: 'prikk' + (j < i ? ' gjort' : j === i ? ' naa' : '') }))));
-  wrap.appendChild(h('div', { style: 'text-align:center;font-size:.74rem;color:var(--color-neutral-600);margin-bottom:8px' },
-    'Steg ' + (i + 1) + ' av ' + K.length + ' · totalt ' + fmt(K.totalT, 1) + ' t'));
+  wrap.appendChild(h('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:12px' },
+    h('div', { class: 'framdrift', style: 'flex:1;margin:0' }, ...K.map((s, j) =>
+      h('div', { class: 'prikk' + (j < i ? ' gjort' : j === i ? ' naa' : '') }))),
+    h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);white-space:nowrap;font-variant-numeric:tabular-nums' }, 'steg ' + (i + 1) + ' av ' + K.length)));
 
-  const steg = K[i];
-  wrap.appendChild(stegKort(steg, true));
+  wrap.appendChild(stegKort(K[i], 'I GANG'));
 
-  // Naviger
   wrap.appendChild(h('div', { style: 'display:flex;gap:8px;margin:6px 0 14px' },
     h('button', { class: 'btn', style: 'flex:1', disabled: i === 0 ? '' : null, onClick: () => { S.aktivSteg = Math.max(0, i - 1); oppdater(); } }, '‹ Forrige'),
     h('button', { class: 'btn btn-primary', style: 'flex:1', disabled: i === K.length - 1 ? '' : null, onClick: () => { S.aktivSteg = Math.min(K.length - 1, i + 1); oppdater(); } }, 'Neste ›')));
 
-  // Hele kjeden kompakt
-  wrap.appendChild(h('div', { class: 'seksjonstittel' }, 'Hele prosessen'));
+  wrap.appendChild(h('div', { class: 'seksjonstittel' }, 'Hele prosessen · totalt ' + fmt(K.totalT, 1) + ' t'));
   K.forEach((s, j) => wrap.appendChild(h('button', { class: 'valgkort' + (j === i ? ' paa' : ''), style: 'min-height:48px', onClick: () => { S.aktivSteg = j; oppdater(); } },
-    h('span', { class: 'nr', style: 'flex:0 0 24px;height:24px;border-radius:999px;display:grid;place-items:center;font-size:.72rem;font-weight:800;background:var(--color-neutral-200)' }, String(j + 1)),
+    h('span', { style: 'flex:0 0 24px;height:24px;border-radius:999px;display:grid;place-items:center;font-size:.72rem;font-weight:800;' + (j < i ? 'background:var(--color-accent-2-500);color:#fff' : 'background:var(--color-neutral-200)') }, j < i ? '✓' : String(j + 1)),
     h('span', { style: 'flex:1;font-size:.86rem;font-weight:600' }, s.navn),
     h('span', { style: 'font-size:.74rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums' }, klokke(s.tid)))));
   return wrap;
 }
-function stegKort(steg, aapen) {
+function stegKort(steg, status) {
   const kropp = h('div', { class: 'kropp' });
   if (steg.hoved) {
-    kropp.appendChild(h('div', { class: 'hovedtall' }, steg.hoved));
-    if (steg.hovedNote) kropp.appendChild(h('div', { class: 'hovednote' }, steg.hovedNote));
+    kropp.appendChild(h('div', { style: 'display:flex;align-items:flex-end;gap:12px' },
+      h('div', { style: 'flex:1;min-width:0' },
+        h('div', { class: 'hovedtall' }, steg.hoved),
+        steg.hovedNote ? h('div', { class: 'hovednote' }, steg.hovedNote) : null),
+      steg.sideV ? h('div', { style: 'text-align:right' },
+        h('div', { style: 'font-size:.64rem;font-weight:800;letter-spacing:.06em;color:var(--color-neutral-500);text-transform:uppercase' }, steg.sideK || ''),
+        h('div', { style: 'font-size:1.15rem;font-weight:800;font-variant-numeric:tabular-nums' }, steg.sideV)) : null));
   }
-  if (steg.tall && steg.tall.length) kropp.appendChild(h('div', null, ...steg.tall.map(([k, v]) => h('div', { class: 'tallrad' }, h('span', null, k), h('b', null, v)))));
-  if (steg.gjor) kropp.appendChild(h('div', { class: 'instruks' }, h('span', { class: 'lab' }, 'Gjør'), steg.gjor));
+  if (steg.tall && steg.tall.length) kropp.appendChild(h('div', { style: 'margin-top:8px' }, ...steg.tall.map(([k, v]) => h('div', { class: 'tallrad' }, h('span', null, k), h('b', null, v)))));
+  if (steg.gjor) kropp.appendChild(h('div', { class: 'instruks' }, h('span', { class: 'lab' }, 'Slik gjør du'), steg.gjor));
   if (steg.sjekk) kropp.appendChild(h('div', { class: 'instruks sjekk' }, h('span', { class: 'lab' }, 'Sjekk'), steg.sjekk));
+  const pilleBg = status === 'I GANG' ? 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)' : 'background:var(--color-neutral-200);color:var(--color-neutral-700)';
   return h('div', { class: 'stegkort ' + (steg.tone || 'noytral') },
-    h('div', { class: 'hode' },
-      h('span', { class: 'nr' }, String(steg.nr)),
-      h('span', { class: 'navn' }, steg.navn),
-      h('span', { class: 'kl' }, klokke(steg.tid), h('br'), fmtTimer(steg.varighet / 60))),
+    h('div', { style: 'display:flex;align-items:center;padding:14px 16px 2px' },
+      status ? h('span', { class: 'pille', style: pilleBg }, status) : null,
+      h('span', { style: 'margin-left:auto;font-size:.74rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums' }, klokke(steg.tid) + ' · ' + fmtTimer(steg.varighet / 60))),
+    h('div', { style: 'font-family:var(--font-heading);font-size:1.3rem;line-height:1.15;padding:2px 16px 6px' }, steg.navn),
     kropp);
 }
 
@@ -552,13 +555,30 @@ function stegKort(steg, aapen) {
    ============================================================ */
 function tegnLogg(r) {
   const wrap = h('div');
-  wrap.appendChild(h('div', { class: 'kort' },
+  const form = h('div', { class: 'kort' },
     h('div', { class: 'kort-num' }, 'Loggfør dette baket'),
-    h('input', { class: 'sok', style: 'margin-top:10px', placeholder: 'Navn (f.eks. Halvgrovt #1)', value: S.lgNavn,
+    h('div', { class: 'hjelpetekst', style: 'margin-top:6px' }, 'Forskjellen mellom en god og en fantastisk gjærbaker er en loggbok, ikke en surdeig. Endre én variabel per bak.'),
+    h('input', { class: 'sok', style: 'margin-top:10px', placeholder: 'Navn — f.eks. Halvgrovt med svedjerug', value: S.lgNavn,
       oninput: e => { S.lgNavn = e.target.value; } }),
-    h('div', { class: 'felt-label' }, 'Karakter: ' + S.lgKar + ' / 10'),
-    h('input', { type: 'range', class: 'skyver', min: 1, max: 10, step: 1, value: S.lgKar, oninput: e => { S.lgKar = +e.target.value; oppdater(); } }),
-    h('button', { class: 'btn btn-primary btn-full', onClick: () => lagreBak(r) }, 'Lagre baket')));
+    h('div', { style: 'display:flex;align-items:center;gap:12px;margin-top:4px' },
+      h('div', { class: 'felt-label', style: 'flex:1' }, 'Karakter'),
+      h('div', { class: 'stepper', style: 'width:170px' },
+        h('button', { onClick: () => { S.lgKar = Math.max(1, S.lgKar - 1); oppdater(); } }, '−'),
+        h('input', { type: 'text', inputmode: 'numeric', value: String(S.lgKar), onblur: e => { const v = parseInt(e.target.value); if (!isNaN(v)) S.lgKar = Math.min(10, Math.max(1, v)); oppdater(); } }),
+        h('button', { onClick: () => { S.lgKar = Math.min(10, S.lgKar + 1); oppdater(); } }, '+'))));
+  // Lagres automatisk med baket
+  const auto = h('div', { class: 'info-boks', style: 'margin-top:12px' },
+    h('div', { style: 'font-size:.66rem;font-weight:800;letter-spacing:.06em;color:var(--color-neutral-600);text-transform:uppercase;margin-bottom:6px' }, 'Lagres automatisk med baket'));
+  [['Gjæringsdose', fmt(r.doseProfil.dose, 2)],
+   ['Hydrering (effektiv)', fmt(r.hyd * 100, 0) + ' % (' + fmt(r.effektivHydrering * 100, 1) + ' %)'],
+   ['Grovhet', fmt(r.brodskala.pct, 0) + ' % · ' + r.brodskala.kort.toLowerCase()],
+   ['Tørrgjær', fmt(r.gjaerTorr, 3) + ' % = ' + fmt(r.gjaerTotal, 2) + ' g'],
+   ['Deigtemp ut av maskin', grader(S.startTemp || 24, 1)],
+   ['Løftindeks', r.loft.loft + ' / 100']
+  ].forEach(([k, v]) => auto.appendChild(h('div', { class: 'tallrad' }, h('span', null, k), h('b', null, v))));
+  form.appendChild(auto);
+  form.appendChild(h('button', { class: 'btn btn-primary btn-full', style: 'margin-top:12px', onClick: () => lagreBak(r) }, 'Lagre baket'));
+  wrap.appendChild(form);
 
   if (!S.loggListe.length) {
     wrap.appendChild(h('div', { class: 'tomkort', style: 'margin-top:12px' },
