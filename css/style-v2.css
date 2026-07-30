@@ -1,0 +1,262 @@
+/* ============================================================
+   FORGE BAKERY — MOBIL V2
+   Designsystem «Organic»: terrakotta + salvie på varm krem.
+   Tokens hentet fra design_handoff_bakeprosess/README.md; rampene
+   er utledet fra basefargene (designsystemets egen styles.css lå
+   ikke i handoffen).
+   ============================================================ */
+:root {
+  --color-bg: #f5ead8;
+  --color-text: #201e1d;
+
+  --color-accent: #c67139;         /* terrakotta */
+  --color-accent-100: #f6e4d6;
+  --color-accent-200: #edcbb0;
+  --color-accent-300: #e0ac86;
+  --color-accent-500: #c67139;
+  --color-accent-700: #8f4a20;
+  --color-accent-900: #5c2f14;
+
+  --color-accent-2: #7a8a5e;       /* salvie */
+  --color-accent-2-100: #e7ecdd;
+  --color-accent-2-200: #d0d8bf;
+  --color-accent-2-300: #b2bf97;
+  --color-accent-2-500: #7a8a5e;
+  --color-accent-2-700: #4f5c3a;
+  --color-accent-2-900: #333c24;
+
+  --color-neutral-100: #f0e7d5;
+  --color-neutral-200: #e4d8c1;
+  --color-neutral-300: #d4c4a8;
+  --color-neutral-400: #b6a488;
+  --color-neutral-500: #96856c;
+  --color-neutral-600: #77694f;    /* dempet tekst */
+  --color-neutral-700: #574c39;
+  --color-neutral-800: #3c3427;
+
+  --color-danger: #a3372c;
+
+  --font-heading: 'Caprasimo', Georgia, serif;
+  --font-body: 'Figtree', system-ui, -apple-system, sans-serif;
+
+  --radius-lg: 20px;
+  --radius-md: 14px;
+
+  --shadow-sm: 0 1px 2px rgba(60, 40, 20, .06), 0 1px 3px rgba(60, 40, 20, .05);
+  --shadow-md: 0 4px 10px rgba(60, 40, 20, .09);
+  --shadow-lg: 0 10px 28px rgba(60, 40, 20, .14);
+
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: #1c1a18;
+  font-family: var(--font-body);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+button { font-family: inherit; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=range] { accent-color: var(--color-accent); }
+
+/* ---------- Telefonramme ---------- */
+#telefon {
+  max-width: 430px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+@media (min-width: 460px) {
+  body { padding: 18px 0; }
+  #telefon { min-height: calc(100vh - 36px); border-radius: 40px; overflow: hidden; box-shadow: var(--shadow-lg); }
+}
+
+/* ---------- Topp ---------- */
+.topp {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--color-neutral-200);
+  background: var(--color-bg);
+  position: sticky; top: 0; z-index: 20;
+}
+.topp .kicker {
+  font-size: .68rem; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--color-accent-2-700); font-weight: 800;
+}
+.topp h1 {
+  font-family: var(--font-heading); font-weight: 400;
+  font-size: 1.35rem; line-height: 1.1; margin: 3px 0 0;
+}
+.topp .undertittel { font-size: .82rem; color: var(--color-neutral-600); margin-top: 3px; }
+
+/* ---------- Innhold ---------- */
+.innhold { flex: 1; overflow-y: auto; padding: 16px 16px 8px; }
+
+/* ---------- Bunnlinje (deigregnskap) ---------- */
+.bunnlinje {
+  border-top: 1px solid var(--color-neutral-200);
+  background: var(--color-neutral-100);
+}
+.bunnlinje .stripe {
+  width: 100%; border: none; background: none; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; padding: 11px 18px;
+  font: inherit; text-align: left; min-height: 48px;
+  font-variant-numeric: tabular-nums;
+}
+.bunnlinje .stripe b { font-weight: 800; }
+.bunnlinje .stripe .sep { color: var(--color-neutral-400); }
+.bunnlinje .stripe .pil { margin-left: auto; color: var(--color-neutral-500); transition: transform .15s; }
+.bunnlinje.open .stripe .pil { transform: rotate(180deg); }
+.bunnlinje .regnskap { padding: 4px 18px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.bunnlinje .regnskap .rad { display: flex; justify-content: space-between; font-size: .82rem; border-bottom: 1px dotted var(--color-neutral-300); padding: 4px 0; font-variant-numeric: tabular-nums; }
+.bunnlinje .regnskap .rad span:first-child { color: var(--color-neutral-600); }
+.bunnlinje .regnskap .rad b { font-weight: 700; }
+
+/* ---------- Bunnmeny ---------- */
+.bunnmeny {
+  display: flex; border-top: 1px solid var(--color-neutral-200);
+  background: var(--color-bg);
+}
+.bunnmeny button {
+  flex: 1; border: none; background: none; cursor: pointer;
+  padding: 8px 2px 10px; min-height: 56px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  font-size: .64rem; font-weight: 700; color: var(--color-neutral-600);
+}
+.bunnmeny button .ikon {
+  width: 24px; height: 24px; display: grid; place-items: center;
+}
+.bunnmeny button.paa { color: var(--color-accent-700); }
+.bunnmeny button.paa .ikon { background: var(--color-accent-100); border-radius: 999px; }
+
+/* ---------- Kort ---------- */
+.kort {
+  background: #fff; border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg); padding: 14px 16px;
+  box-shadow: var(--shadow-sm); margin-bottom: 12px;
+}
+.kort.flat { box-shadow: none; }
+.kort-num {
+  font-size: .7rem; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--color-neutral-600); font-weight: 800;
+  display: flex; align-items: center; gap: 8px;
+}
+.kort-num .info { margin-left: auto; }
+
+/* ---------- Knapper ---------- */
+.btn {
+  border-radius: 999px; border: 1px solid var(--color-neutral-300);
+  background: #fff; cursor: pointer; font: inherit; font-weight: 700;
+  min-height: 44px; padding: 10px 18px; color: var(--color-text);
+}
+.btn-primary { background: var(--color-accent-500); color: #fdf6ec; border-color: transparent; font-weight: 800; }
+.btn-sage { background: var(--color-accent-2-500); color: #f7f4ec; border-color: transparent; }
+.btn-full { width: 100%; }
+.btn-ghost { background: none; border: none; color: var(--color-accent-700); font-weight: 800; padding: 8px 0; min-height: 44px; }
+.info-knapp {
+  width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--color-neutral-300);
+  background: #fff; color: var(--color-accent-700); cursor: pointer; font-weight: 800;
+  font-size: .82rem; line-height: 1; display: grid; place-items: center; padding: 0;
+}
+
+/* ---------- Valgkort (brødtype, forferment m.m.) ---------- */
+.valg { display: flex; flex-direction: column; gap: 8px; }
+.valgkort {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  background: #fff; border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg); padding: 13px 15px; cursor: pointer;
+  font: inherit; color: inherit; min-height: 60px; width: 100%;
+}
+.valgkort.paa { background: var(--color-accent-100); border-color: var(--color-accent-300); }
+.valgkort .tittel { font-family: var(--font-heading); font-weight: 400; font-size: 1.02rem; }
+.valgkort .undertittel { display: block; font-size: .78rem; color: var(--color-neutral-600); margin-top: 2px; }
+.valgkort .badge {
+  margin-left: auto; flex: 0 0 auto; font-size: .66rem; font-weight: 800;
+  padding: 4px 9px; border-radius: 999px; white-space: nowrap;
+  background: var(--color-accent-2-100); color: var(--color-accent-2-700);
+}
+
+/* ---------- Rutenett 2×2 ---------- */
+.rutenett { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* ---------- Skyver ---------- */
+.skyver-topp { display: flex; align-items: baseline; gap: 8px; }
+.skyver-verdi { font-family: var(--font-heading); font-size: 1.6rem; line-height: 1; }
+.skyver-klasse { font-size: .72rem; font-weight: 800; padding: 3px 9px; border-radius: 999px; margin-left: auto; }
+input[type=range].skyver { width: 100%; margin: 12px 0 6px; height: 30px; }
+.konsekvens {
+  margin-top: 8px; font-size: .82rem; line-height: 1.5; color: var(--color-neutral-700);
+  background: var(--color-neutral-100); border-radius: var(--radius-md); padding: 10px 12px;
+}
+.konsekvens .merke { font-weight: 800; padding: 2px 8px; border-radius: 999px; font-size: .68rem; margin-right: 6px; }
+
+/* ---------- Tallfelt med steppere ---------- */
+.stepper { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.stepper button {
+  flex: 0 0 44px; min-height: 44px; border-radius: 12px; border: 1px solid var(--color-neutral-300);
+  background: #fff; font: inherit; font-size: 1.2rem; font-weight: 800; cursor: pointer; color: var(--color-accent-700);
+}
+.stepper input {
+  flex: 1; min-width: 0; width: 100%; min-height: 44px; text-align: center;
+  font: inherit; font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: var(--color-text); background: var(--color-neutral-100);
+  border: 1px solid var(--color-neutral-300); border-radius: 12px; padding: 4px 0;
+}
+.felt-label { font-size: .76rem; color: var(--color-neutral-600); }
+
+/* ---------- Tabellrad (tall i steg m.m.) ---------- */
+.tallrad { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px dotted var(--color-neutral-200); font-size: .84rem; font-variant-numeric: tabular-nums; }
+.tallrad:last-child { border-bottom: none; }
+.tallrad span:first-child { color: var(--color-neutral-600); }
+.tallrad b { font-weight: 700; }
+
+/* ---------- Info-utfelling ---------- */
+.info-boks { background: var(--color-neutral-100); border-radius: var(--radius-md); padding: 12px 13px; margin-top: 10px; }
+.info-linje { display: flex; gap: 10px; margin-top: 8px; }
+.info-linje:first-child { margin-top: 0; }
+.info-linje .etikett { flex: 0 0 52px; font-size: .7rem; font-weight: 800; padding-top: 2px; }
+.info-linje .tekst { flex: 1; font-size: .82rem; color: var(--color-neutral-800); line-height: 1.5; }
+
+/* ---------- Meltyperad ---------- */
+.melrad { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--color-neutral-200); }
+.melrad:first-child { border-top: none; }
+.melrad .navn { flex: 1; min-width: 0; }
+.melrad .navn .n { font-weight: 600; font-size: .9rem; }
+.melrad .navn .pct { font-size: .74rem; color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }
+.melrad .gram { font-variant-numeric: tabular-nums; font-weight: 700; font-size: .9rem; }
+
+/* ---------- Steg (Prosess) ---------- */
+.stegkort { background: #fff; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 10px; }
+.stegkort .hode { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; }
+.stegkort .nr { flex: 0 0 26px; height: 26px; border-radius: 999px; display: grid; place-items: center; font-size: .74rem; font-weight: 800; background: var(--color-neutral-200); color: var(--color-neutral-700); font-variant-numeric: tabular-nums; }
+.stegkort.accent .nr { background: var(--color-accent-100); color: var(--color-accent-700); }
+.stegkort.sage .nr { background: var(--color-accent-2-100); color: var(--color-accent-2-700); }
+.stegkort .navn { flex: 1; min-width: 0; font-weight: 700; font-size: .92rem; }
+.stegkort .kl { font-size: .74rem; color: var(--color-neutral-600); font-variant-numeric: tabular-nums; text-align: right; }
+.stegkort .kropp { padding: 0 14px 14px; }
+.stegkort .hovedtall { font-family: var(--font-heading); font-size: 1.5rem; line-height: 1.1; }
+.stegkort .hovednote { font-size: .78rem; color: var(--color-neutral-600); margin-bottom: 8px; }
+.instruks { margin-top: 10px; font-size: .84rem; line-height: 1.5; }
+.instruks .lab { font-weight: 800; color: var(--color-accent-700); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; display: block; }
+.instruks.sjekk .lab { color: var(--color-accent-2-700); }
+
+/* ---------- Framdrift (Prosess) ---------- */
+.framdrift { display: flex; gap: 4px; margin-bottom: 12px; }
+.framdrift .prikk { flex: 1; height: 5px; border-radius: 999px; background: var(--color-neutral-200); }
+.framdrift .prikk.gjort { background: var(--color-accent-2-500); }
+.framdrift .prikk.naa { background: var(--color-accent-500); }
+
+/* ---------- Diverse ---------- */
+.tomkort { background: #fff; border: 1px dashed var(--color-neutral-300); border-radius: var(--radius-lg); padding: 15px 16px; }
+.seksjonstittel { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--color-neutral-600); font-weight: 800; margin: 14px 2px 8px; }
+.pille { display: inline-block; font-size: .68rem; font-weight: 800; padding: 3px 8px; border-radius: 999px; }
+.varsel { background: #f7e9d9; border: 1px solid var(--color-accent-200); color: var(--color-accent-900); border-radius: var(--radius-md); padding: 10px 12px; font-size: .82rem; line-height: 1.45; margin-top: 10px; }
+.hjelpetekst { font-size: .8rem; color: var(--color-neutral-700); line-height: 1.55; }
+.sok { width: 100%; min-height: 44px; border-radius: 999px; border: 1px solid var(--color-neutral-300); padding: 10px 16px; font: inherit; background: #fff; margin-bottom: 10px; }
