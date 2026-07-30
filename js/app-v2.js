@@ -394,18 +394,28 @@ function tilleggRad(t, r) {
   const paa = pct > 0;
   const frr = r.fro.find(f => f.id === t.id);
   const gramV = frr ? frr.gram : 0;
+  const erSmak = t.type === 'smak';
   const rad = h('div', { style: 'padding:10px 0;border-top:1px solid var(--color-neutral-200)' },
     h('div', { style: 'display:flex;align-items:center;gap:10px' },
       h('div', { style: 'flex:1;min-width:0' },
         h('div', { style: 'font-weight:600;font-size:.9rem' }, t.navn),
-        h('div', { style: 'font-size:.74rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums' },
-          paa ? fmt(pct, 1) + ' % · ' + g0(gramV) + (t.type === 'fro' ? ' · ' + behandlingOrd(t.id) : '') : 'av')),
-      h('div', { class: 'stepper', style: 'flex:0 0 auto;width:150px' },
-        h('button', { onClick: () => endreTillegg(t, -(t.type === 'smak' ? 0.5 : 1)) }, '−'),
-        h('input', { type: 'text', inputmode: 'decimal', value: paa ? fmt(pct, 1) : '0', style: 'font-size:1.05rem',
+        h('div', { style: 'font-size:.74rem;color:var(--color-neutral-600)' },
+          paa ? (erSmak ? 'i deigen' : behandlingOrd(t.id)) : 'av')),
+      h('button', { class: 'info-knapp', 'aria-label': 'Info om ' + t.navn, onClick: () => { S.tilleggInfo = S.tilleggInfo === t.id ? null : t.id; oppdater(); } }, 'ⓘ')),
+    // Prosent (stepper) OG redigerbart gramfelt — gramfeltet løser prosenten ved
+    // fikspunkt mot melmengden (designet: «prosent, et redigerbart gramfelt og ⓘ»).
+    h('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px' },
+      h('div', { class: 'stepper', style: 'flex:1' },
+        h('button', { 'aria-label': 'Mindre', onClick: () => endreTillegg(t, -(erSmak ? 0.5 : 1)) }, '−'),
+        h('input', { type: 'text', inputmode: 'decimal', 'aria-label': t.navn + ' prosent', value: paa ? fmt(pct, 1) : '0', style: 'font-size:1.05rem',
           onblur: e => { const v = parseFloat(e.target.value.replace(',', '.')); settTillegg(t, isNaN(v) ? 0 : v); } }),
-        h('button', { onClick: () => endreTillegg(t, (t.type === 'smak' ? 0.5 : 1)) }, '+')),
-      h('button', { class: 'info-knapp', 'aria-label': 'Info om ' + t.navn, onClick: () => { S.tilleggInfo = S.tilleggInfo === t.id ? null : t.id; oppdater(); } }, 'ⓘ')));
+        h('button', { 'aria-label': 'Mer', onClick: () => endreTillegg(t, (erSmak ? 0.5 : 1)) }, '+')),
+      h('span', { style: 'font-size:.8rem;color:var(--color-neutral-600);font-weight:800' }, '%'),
+      erSmak ? null : h('div', { style: 'display:flex;align-items:center;gap:4px;flex:0 0 auto' },
+        h('input', { type: 'text', inputmode: 'numeric', 'aria-label': t.navn + ' gram', value: paa ? fmt(gramV, 0) : '0',
+          style: 'width:64px;min-height:44px;text-align:center;font:inherit;font-weight:800;font-variant-numeric:tabular-nums;background:var(--color-neutral-100);border:1px solid var(--color-neutral-300);border-radius:12px',
+          onblur: e => { const v = parseFloat(e.target.value.replace(/\s/g, '').replace(',', '.')); settTilleggGram(t, isNaN(v) ? 0 : v); } }),
+        h('span', { style: 'font-size:.8rem;color:var(--color-neutral-600);font-weight:800' }, 'g'))));
   if (S.tilleggInfo === t.id) {
     const linjer = [];
     if (t.hvorfor) linjer.push(['HVORFOR', t.hvorfor, 'var(--color-neutral-600)']);
@@ -423,6 +433,17 @@ function behandlingOrd(id) {
   return { rist: 'ristes', bloet: 'bløtlegges', skald: 'skåldes' }[s && s.behandling] || '';
 }
 function endreTillegg(t, d) { settTillegg(t, ((S.tillegg || {})[t.id] || 0) + d); }
+/* Gram → prosent ved fikspunkt: melmengden faller når tilleggsprosenten stiger,
+   så vi itererer pct = gram / melTotal (fire runder er nok — samme som README). */
+function settTilleggGram(t, gram) {
+  if (!(gram > 0)) { settTillegg(t, 0); return; }
+  let pct = ((S.tillegg || {})[t.id]) || t.pct || 6;
+  for (let i = 0; i < 5; i++) {
+    const prov = regn(Object.assign({}, S, { tillegg: Object.assign({}, S.tillegg, { [t.id]: pct }) }));
+    pct = gram / Math.max(prov.melTotal, 1) * 100;
+  }
+  settTillegg(t, pct);
+}
 function settTillegg(t, v) {
   S.tillegg = Object.assign({}, S.tillegg);
   const min = t.min || 0, max = t.max || 30;
@@ -550,7 +571,79 @@ function tegnTid(r, K) {
           h('div', { class: 'p-sub' }, sub)),
         h('div', { class: 'p-loft' }, h('div', { class: 'v' }, String(prov.loft.loft)), h('div', { class: 'l' }, 'LØFT')))));
   });
+
+  // Varmebalanse — vanntemperaturen fra mel- og romtemperatur (README: Tid har
+  // varmebalanse). Alle tallene kommer fra regn(); her er bare kontrollene.
+  const vb = kort('Varmebalanse', 'startTemp',
+    h('div', { style: 'display:flex;align-items:baseline;gap:8px;margin-top:2px' },
+      h('span', { class: 'skyver-verdi' }, grader(r.vannTemp, 1)),
+      h('span', { style: 'font-size:.8rem;color:var(--color-neutral-600)' }, 'vann inn'),
+      h('span', { style: 'margin-left:auto;font-size:.8rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums' }, fmt(r.wh, 1) + ' Wh/kg')),
+    h('div', { class: 'konsekvens', style: 'margin-top:8px' },
+      'For å treffe ', h('b', null, grader(S.startTemp || 24, 0)), ' deigtemp med mel på ', h('b', null, grader(S.melTemp || 21, 0)),
+      ' og ', h('b', null, (S.eltMin || 13) + ' min'), ' elting: bruk vann på ', h('b', null, grader(r.vannTemp, 1)), '.',
+      r.wh < 3 ? ' Arbeidet er under målsonen (3–5 Wh/kg) — elt lengre for åpnere krumme.' : r.wh > 8.3 ? ' Over metning (8,3 Wh/kg) — mer elting gir ikke mer nettverk.' : ' Arbeidet er i målsonen 3–5 Wh/kg.'),
+    h('div', { style: 'margin-top:10px' },
+      miniStepper('Ønsket deigtemp', S.startTemp || 24, 'startTemp', 18, 30, 0.5, ' °C'),
+      miniStepper('Meltemperatur', S.melTemp || 21, 'melTemp', 4, 30, 1, ' °C'),
+      miniStepper('Eltetid', S.eltMin || 13, 'eltMin', 3, 25, 1, ' min')),
+    h('div', { style: 'margin-top:10px' },
+      h('div', { class: 'felt-label' }, 'Maskin'),
+      h('div', { class: 'piller', style: 'flex-wrap:wrap' }, ...[['hand', 'For hånd'], ['planet', 'Kjøkkenmaskin'], ['spiralHjemme', 'Spiral hjemme'], ['spiralProff', 'Spiral proff']].map(([id, navn]) =>
+        h('button', { class: (S.maskin || 'spiralHjemme') === id ? 'paa' : '', style: 'flex:1 1 45%;font-size:.78rem', onClick: () => { S.maskin = id; oppdater(); } }, navn)))));
+  wrap.appendChild(vb);
+
+  // Gjæringsgraf — den ekte fart- og akkumuleringskurven bak dosen.
+  const pts = (typeof planProfil === 'function') ? planProfil(r.planTrinn, r.gjaerTorr, r.masseKg, { antall: S.antall, lokk: S.lokk, fulltKjol: S.fulltKjol }) : [];
+  if (pts.length > 2) {
+    wrap.appendChild(h('div', { class: 'kort' },
+      h('div', { class: 'kort-num' }, 'Gjæringen over tid'),
+      gjaeringsGraf(pts, r),
+      h('div', { style: 'display:flex;gap:14px;margin-top:8px;font-size:.72rem;color:var(--color-neutral-600)' },
+        legendePrikk('var(--color-accent-500)', 'Gjæringsfart'),
+        legendePrikk('var(--color-accent-2-500)', 'Akkumulert dose'),
+        legendePrikk('var(--color-neutral-400)', 'Deigtemp'))));
+  }
   return wrap;
+}
+function miniStepper(label, verdi, felt, min, max, steg, enhet) {
+  return h('div', { style: 'display:flex;align-items:center;gap:10px;margin-top:6px' },
+    h('div', { class: 'felt-label', style: 'flex:1' }, label),
+    h('div', { class: 'stepper', style: 'width:160px' },
+      h('button', { 'aria-label': 'Mindre ' + label, onClick: () => { S[felt] = Math.max(min, (S[felt] || min) - steg); oppdater(); } }, '−'),
+      h('input', { type: 'text', inputmode: 'decimal', 'aria-label': label, value: fmt(verdi, steg < 1 ? 1 : 0) + enhet, style: 'font-size:1rem',
+        onblur: e => { const v = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(v)) S[felt] = Math.min(max, Math.max(min, v)); oppdater(); } }),
+      h('button', { 'aria-label': 'Mer ' + label, onClick: () => { S[felt] = Math.min(max, (S[felt] || min) + steg); oppdater(); } }, '+')));
+}
+function legendePrikk(farge, tekst) {
+  return h('span', { style: 'display:inline-flex;align-items:center;gap:5px' },
+    h('span', { style: 'width:10px;height:3px;border-radius:2px;background:' + farge }), tekst);
+}
+/* Ren SVG-graf: gjæringsfart + akkumulert dose + deigtemp mot klokka. */
+function gjaeringsGraf(pts, r) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const W = 360, H = 130, pad = 6;
+  const tMax = pts[pts.length - 1].t || 1;
+  const fartMax = Math.max(...pts.map(p => p.fart)) || 1;
+  const doseMax = pts[pts.length - 1].dose || 1;
+  const tempMax = Math.max(...pts.map(p => p.temp), 28), tempMin = Math.min(...pts.map(p => p.temp), 0);
+  const x = t => pad + t / tMax * (W - 2 * pad);
+  const yf = v => H - pad - v / fartMax * (H - 2 * pad);
+  const yd = v => H - pad - v / doseMax * (H - 2 * pad);
+  const yt = v => H - pad - (v - tempMin) / Math.max(tempMax - tempMin, 1) * (H - 2 * pad);
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.setAttribute('width', '100%'); svg.setAttribute('style', 'display:block');
+  const linje = (yfn, farge, bredde, stipl) => {
+    const d = pts.map((p, i) => (i ? 'L' : 'M') + x(p.t).toFixed(1) + ' ' + yfn(p).toFixed(1)).join(' ');
+    const e = document.createElementNS(NS, 'path');
+    e.setAttribute('d', d); e.setAttribute('fill', 'none'); e.setAttribute('stroke', farge);
+    e.setAttribute('stroke-width', bredde); if (stipl) e.setAttribute('stroke-dasharray', '3 3');
+    svg.appendChild(e);
+  };
+  linje(p => yt(p.temp), 'var(--color-neutral-400)', 1.2, true);
+  linje(p => yd(p.dose), 'var(--color-accent-2-500)', 2);
+  linje(p => yf(p.fart), 'var(--color-accent-500)', 2);
+  return svg;
 }
 function klHM(ms) { return new Date(ms).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' }); }
 function flyttFerdig(min) {
