@@ -780,10 +780,12 @@ function tegnStart() {
 
    Merk at kvartilbredden er nesten 2×: profesjonell praksis spenner vidt,
    så dosen er et planleggingstall med ca. ±35 % toleranse. Målekrukka
-   avgjør, ikke dette tallet. */
-function maalDoseFor(grovAndel, pff = 0) {
-  return (2.30 - 0.40 * grovAndel) * (1 - 0.6 * pff);
-}
+   avgjør, ikke dette tallet.
+
+   maalDoseFor() er flyttet til js/engine.js (delt kilde for V1 og V2 —
+   duplikatet her ble fjernet i teknisk review #5 for å unngå at V1 og V2
+   spriker om formelen). Funksjonen er global fra engine.js, som lastes før
+   app.js, så V1 leser den derfra. */
 
 /* Bygger en komplett oppskrift av grovhet + tid + tillegg.
    Frø oppgis i % av mel, så melmengden løses iterativt (konvergerer på 3–4 runder). */
