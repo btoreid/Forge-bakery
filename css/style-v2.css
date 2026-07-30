@@ -260,3 +260,66 @@ input[type=range].skyver { width: 100%; margin: 12px 0 6px; height: 30px; }
 .varsel { background: #f7e9d9; border: 1px solid var(--color-accent-200); color: var(--color-accent-900); border-radius: var(--radius-md); padding: 10px 12px; font-size: .82rem; line-height: 1.45; margin-top: 10px; }
 .hjelpetekst { font-size: .8rem; color: var(--color-neutral-700); line-height: 1.55; }
 .sok { width: 100%; min-height: 44px; border-radius: 999px; border: 1px solid var(--color-neutral-300); padding: 10px 16px; font: inherit; background: #fff; margin-bottom: 10px; }
+
+/* ============================================================
+   V2-KOMPONENTER — pikselnær match mot designet
+   ============================================================ */
+.topp h1 { font-size: 1.22rem; }
+
+/* Segmenterte piller (grovhet) */
+.piller { display: flex; gap: 6px; margin-top: 10px; }
+.piller button {
+  flex: 1; min-height: 44px; border-radius: 14px; border: 1px solid var(--color-neutral-300);
+  background: #fff; font: inherit; font-weight: 800; font-size: .84rem; cursor: pointer;
+  color: var(--color-neutral-700); font-variant-numeric: tabular-nums;
+}
+.piller button.paa { background: var(--color-accent-500); color: #fdf6ec; border-color: transparent; }
+
+/* Korthode med høyre-verdi */
+.kort-hode { display: flex; align-items: baseline; gap: 8px; }
+.kort-hode .h-verdi { margin-left: auto; font-size: .96rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.kort-hode .h-meta { margin-left: auto; font-size: .76rem; color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }
+
+/* Rund badge på brødtype */
+.badge-rund {
+  flex: 0 0 46px; width: 46px; height: 46px; border-radius: 999px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1;
+}
+.badge-rund .b1 { font-size: .82rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.badge-rund .b2 { font-size: .5rem; font-weight: 800; letter-spacing: .05em; margin-top: 2px; }
+.badge-grov { background: var(--color-accent-500); color: #fdf6ec; }
+.badge-vann { background: var(--color-neutral-200); color: var(--color-neutral-700); }
+.valgt-merke { margin-left: auto; font-size: .78rem; font-weight: 800; color: var(--color-accent-2-700); white-space: nowrap; }
+
+/* Mel-rad V2 */
+.melrad2 { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--color-neutral-200); }
+.melrad2.forst { border-top: none; }
+.melrad2 .m-navn { flex: 1; min-width: 0; }
+.melrad2 .m-navn .n { font-weight: 700; font-size: .92rem; }
+.melrad2 .m-navn .sub { font-size: .74rem; color: var(--color-neutral-600); margin-top: 2px; }
+.melrad2 .m-tall { text-align: right; }
+.melrad2 .m-tall .g { font-weight: 800; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.melrad2 .m-tall .p { font-size: .72rem; color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }
+.info-ring {
+  flex: 0 0 26px; width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--color-neutral-300);
+  background: #fff; color: var(--color-neutral-500); font-size: .76rem; cursor: pointer; display: grid; place-items: center; padding: 0;
+}
+
+/* Tid: Ferdig/Start-veksler + stepper */
+.toggle2 { display: flex; background: var(--color-neutral-100); border-radius: 999px; padding: 4px; gap: 4px; }
+.toggle2 button { flex: 1; min-height: 44px; border: none; border-radius: 999px; background: none; font: inherit; font-weight: 800; cursor: pointer; color: var(--color-neutral-600); }
+.toggle2 button.paa { background: var(--color-accent-500); color: #fdf6ec; }
+.tidstepper { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.tidstepper .midt { flex: 1; text-align: center; }
+.tidstepper .kl { font-family: var(--font-heading); font-size: 1.7rem; line-height: 1; }
+.tidstepper .note { font-size: .72rem; color: var(--color-neutral-600); margin-top: 3px; }
+.tidstepper button { flex: 0 0 48px; min-height: 48px; border-radius: 14px; border: 1px solid var(--color-neutral-300); background: #fff; font-size: 1.3rem; font-weight: 800; color: var(--color-accent-700); cursor: pointer; }
+
+/* Plan-kort (Tid) */
+.plankort { display: flex; align-items: flex-start; gap: 10px; text-align: left; width: 100%; }
+.plankort .p-navn { font-family: var(--font-heading); font-size: 1.05rem; }
+.plankort .p-tid { font-size: .82rem; color: var(--color-neutral-600); font-weight: 600; margin-left: 6px; }
+.plankort .p-sub { font-size: .78rem; color: var(--color-neutral-600); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.plankort .p-loft { margin-left: auto; text-align: center; flex: 0 0 auto; padding-left: 8px; }
+.plankort .p-loft .v { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; color: var(--color-accent-700); }
+.plankort .p-loft .l { font-size: .56rem; font-weight: 800; letter-spacing: .08em; color: var(--color-neutral-500); }

@@ -64,12 +64,20 @@ const g0 = v => gram(v, 0);
    RENDER
    ============================================================ */
 const SKJERMER = [
-  { id: 'brodet',  navn: 'Brød',    kicker: 'Hva skal du bake', tittel: 'Brødet' },
-  { id: 'deigen',  navn: 'Deig',    kicker: 'Sett sammen deigen', tittel: 'Deigen' },
-  { id: 'tid',     navn: 'Tid',     kicker: 'Når vil du ha brød', tittel: 'Tiden' },
-  { id: 'prosess', navn: 'Prosess', kicker: 'Steg for steg', tittel: 'Prosessen' },
-  { id: 'logg',    navn: 'Logg',    kicker: 'Det du har bakt', tittel: 'Bakeloggen' },
-  { id: 'oppslag', navn: 'Oppslag', kicker: 'Slå opp', tittel: 'Oppslag' }
+  { id: 'brodet',  navn: 'Brød',    kicker: 'FORBEREDELSE · 1 AV 3', tittel: 'Brødet' },
+  { id: 'deigen',  navn: 'Deig',    kicker: 'FORBEREDELSE · 2 AV 3', tittel: 'Mel, vann og frø' },
+  { id: 'tid',     navn: 'Tid',     kicker: 'FORBEREDELSE · 3 AV 3', tittel: 'Når vil du ha brød?' },
+  { id: 'prosess', navn: 'Prosess', kicker: 'BAKINGEN', tittel: 'Prosessen' },
+  { id: 'logg',    navn: 'Logg',    kicker: 'ETTER BAKET', tittel: 'Bakeloggen' },
+  { id: 'oppslag', navn: 'Oppslag', kicker: 'SLÅ OPP', tittel: 'Oppslag' }
+];
+/* Brødtypene som designet viser dem — «Brød» er én type der grovheten settes i
+   deigen (loff = grov 0), de tre andre er kalibrerte forvalg. */
+const BTYPER = [
+  { id: 'grovbrod', navn: 'Brød', undertittel: 'Fra loff til ekstra grovt — du setter grovheten i deigen', rute: 'bygg', antall: 4, vekt: 900 },
+  { id: 'ciabatta', navn: 'Ciabatta', undertittel: 'Stiv biga, åpen krumme · kalibrert deig', rute: 'preset', antall: 8, vekt: 280 },
+  { id: 'baguette', navn: 'Baguetter', undertittel: 'Poolish og kort bulk · kalibrert deig', rute: 'preset', antall: 6, vekt: 330 },
+  { id: 'focaccia', navn: 'Focaccia', undertittel: 'Hever i formen, olje i deigen · kalibrert deig', rute: 'preset', antall: 1, vekt: 1000 }
 ];
 const IKON = { brodet: '◗', deigen: '◍', tid: '◔', prosess: '❯', logg: '▤', oppslag: '❔' };
 
@@ -156,23 +164,25 @@ function tegnBrodet(r) {
     wrap.appendChild(h('div', { class: 'tomkort' },
       h('div', { style: 'font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--color-neutral-600);font-weight:800' }, 'Bakeloggen er tom'),
       h('div', { class: 'hjelpetekst', style: 'margin-top:6px' },
-        'Første gang har appen ingenting å sammenligne med. Start fra forvalget — det er kalibrert mot 24 publiserte formler — og loggfør baket når det er ute av ovnen. Da måles alt du endrer senere mot noe du faktisk har smakt.'),
+        'Første gang har appen ingenting å sammenligne med. Start fra et forvalg — de er kalibrert mot 24 publiserte formler — og loggfør baket når det er ute av ovnen. Da måles alt du endrer senere mot noe du faktisk har smakt.'),
       h('button', { class: 'btn btn-primary btn-full', style: 'margin-top:12px', onClick: startForvalg },
-        'Start fra forvalget: brød på 40 % grovt')));
+        'Start fra forvalget «Halvgrovt 40 %»')));
   }
-  wrap.appendChild(h('div', { class: 'seksjonstittel' }, 'Velg brødtype'));
-  wrap.appendChild(h('div', { class: 'valg' }, ...BROTYPER.map(bt => {
-    const paa = bt.id === S.brotype;
+  wrap.appendChild(h('div', { class: 'seksjonstittel' }, 'Eller velg brødtype'));
+  wrap.appendChild(h('div', { class: 'valg' }, ...BTYPER.map(bt => {
+    const paa = bt.id === S.brotype || (bt.id === 'grovbrod' && S.brotype === 'loff');
     const erPreset = bt.rute === 'preset';
-    const preset = erPreset ? PRESETS.find(p => p.id === bt.preset) : null;
-    const badge = erPreset && preset ? fmt(preset.hydrering, 0) + ' % VANN'
-                : bt.id === 'grovbrod' ? fmt(regnGrovFor(bt), 0) + ' % GROVT'
-                : (bt.grovhet != null ? bt.grovhet + ' % GROVT' : '');
+    const preset = erPreset ? PRESETS.find(p => p.id === bt.id) : null;
+    const grov = erPreset ? null : Math.round(paa ? regn(S).brodskala.pct : S.grov);
+    const badge = erPreset
+      ? h('span', { class: 'badge-rund badge-vann' }, h('span', { class: 'b1' }, fmt(preset.hydrering, 0) + ' %'), h('span', { class: 'b2' }, 'VANN'))
+      : h('span', { class: 'badge-rund badge-grov' }, h('span', { class: 'b1' }, grov + ' %'), h('span', { class: 'b2' }, 'GROVT'));
     return h('button', { class: 'valgkort' + (paa ? ' paa' : ''), aria: { pressed: paa }, onClick: () => velgBrotype(bt.id) },
+      badge,
       h('span', { style: 'flex:1;min-width:0' },
         h('span', { class: 'tittel' }, bt.navn),
         h('span', { class: 'undertittel' }, bt.undertittel || '')),
-      badge ? h('span', { class: 'badge' }, badge) : null);
+      paa ? h('span', { class: 'valgt-merke' }, '✓ valgt') : null);
   })));
 
   // Størrelse
@@ -184,11 +194,10 @@ function tegnBrodet(r) {
       'Deigvekt ', h('b', null, g0(r.totalVekt)), ' · hver ca. ', h('b', null, g0(r.totalVekt / Math.max(S.antall, 1))))));
   return wrap;
 }
-function regnGrovFor(bt) { return bt.grovhet != null ? bt.grovhet : (bt.id === 'grovbrod' ? S.grov : 0); }
 function startForvalg() { S.brotype = 'grovbrod'; S.grov = 40; S.tid = 'lang'; S.skjerm = 'deigen'; oppdater(); }
 function velgBrotype(id) {
   S.brotype = id;
-  const bt = BROTYPER.find(b => b.id === id);
+  const bt = BTYPER.find(b => b.id === id);
   if (bt && bt.antall) S.antall = bt.antall;
   if (bt && bt.vekt) S.vekt = bt.vekt;
   oppdater();
@@ -211,26 +220,47 @@ function tegnDeigen(r) {
   const wrap = h('div');
   const erPreset = r.bt.rute === 'preset';
 
-  // 1 · Grovhet (skjules for preset — grovhet gjelder ikke)
+  // 1 · Grovhet — segmenterte piller (0/10/25/40/60/80), som designet
   if (!erPreset) {
     const bk = r.brodskala;
-    wrap.appendChild(kort('1 · Hvor grovt', null,
-      h('div', { class: 'skyver-topp' },
-        h('span', { class: 'skyver-verdi' }, fmt(bk.pct, 0) + ' %'),
-        h('span', { class: 'skyver-klasse', style: klasseStil(bk.kort) }, bk.kort)),
-      h('input', { type: 'range', class: 'skyver', min: 0, max: 100, step: 1, value: S.grov,
-        oninput: e => { S.grov = +e.target.value; oppdater(); } }),
-      h('div', { class: 'konsekvens' }, grovKonsekvens(r))));
+    const trinn = [0, 10, 25, 40, 60, 80];
+    const boks = h('div', { class: 'kort' },
+      h('div', { class: 'kort-hode' },
+        h('span', { class: 'kort-num', style: 'display:inline' }, '1 · Hvor grovt'),
+        h('span', { class: 'h-verdi' }, fmt(bk.pct, 0) + ' % · ' + bk.kort.toLowerCase())),
+      h('div', { class: 'piller' }, ...trinn.map(t =>
+        h('button', { class: S.grov === t ? 'paa' : '', onClick: () => { S.grov = t; oppdater(); } }, t + ' %'))),
+      h('div', { class: 'konsekvens', style: 'margin-top:12px' }, grovKonsekvens(r)));
+    wrap.appendChild(boks);
   }
 
-  // 2 · Mel
-  const melBoks = kort('2 · Meltypene', null);
-  r.mel.forEach(m => {
-    melBoks.appendChild(h('div', { class: 'melrad' },
-      h('div', { class: 'navn' }, h('div', { class: 'n' }, m.navn), h('div', { class: 'pct' }, fmt(m.pct, 0) + ' %')),
-      h('div', { class: 'gram' }, g0(m.gram))));
+  // 2 · Meltypene — glutenbidrag + protein, stort gramtall, ⓘ
+  const sumKr = r.mel.reduce((s, m) => s + (m.kost || 0), 0);
+  const melBoks = h('div', { class: 'kort' },
+    h('div', { class: 'kort-hode' },
+      h('span', { class: 'kort-num', style: 'display:inline' }, '2 · Meltypene'),
+      h('span', { class: 'h-meta' }, 'Sum mel ' + g0(r.melTotal) + ' · 100 % · ' + fmt(sumKr, 0) + ' kr')));
+  r.mel.forEach((m, i) => {
+    const info = (typeof MEL_INFO !== 'undefined') && MEL_INFO[m.id];
+    const flour = FLOURS.find(f => f.id === m.id) || {};
+    const bidrag = info && GLUTENBIDRAG_TEKST[info.glutenbidrag] ? GLUTENBIDRAG_TEKST[info.glutenbidrag].navn : '';
+    const fav = (S.favoritter || []).includes(m.id);
+    melBoks.appendChild(h('div', { class: 'melrad2' + (i === 0 ? ' forst' : '') },
+      h('div', { class: 'm-navn' },
+        h('div', { class: 'n' }, (fav ? '★ ' : '') + m.navn),
+        h('div', { class: 'sub' }, [bidrag, flour.protein != null ? fmt(flour.protein, 1) + ' g protein' : null].filter(Boolean).join(' · '))),
+      h('div', { class: 'm-tall' }, h('div', { class: 'g' }, g0(m.gram)), h('div', { class: 'p' }, fmt(m.pct, 0) + ' %')),
+      h('button', { class: 'info-ring', onClick: () => { S.tilleggInfo = null; S.melInfo = S.melInfo === m.id ? null : m.id; oppdater(); } }, 'ⓘ')));
+    if (S.melInfo === m.id && info) {
+      const linjer = [];
+      if (info.plus) info.plus.forEach(p => linjer.push(['+', p, 'var(--color-accent-2-700)']));
+      if (info.minus) info.minus.forEach(p => linjer.push(['−', p, 'var(--color-danger)']));
+      if (!linjer.length && flour.notat) linjer.push(['', flour.notat, 'var(--color-neutral-700)']);
+      melBoks.appendChild(h('div', { class: 'info-boks' }, ...linjer.map(([l, tk, f]) =>
+        h('div', { class: 'info-linje' }, h('span', { class: 'etikett', style: 'flex:0 0 18px;color:' + f }, l), h('span', { class: 'tekst' }, tk)))));
+    }
   });
-  melBoks.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:6px', onClick: () => { S.skjerm = 'oppslag'; S.oppslag = 'mel'; oppdater(); } },
+  melBoks.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:8px', onClick: () => { S.skjerm = 'oppslag'; S.oppslag = 'mel'; oppdater(); } },
     'Se melbiblioteket — fordeler, ulemper og tak ›'));
   wrap.appendChild(melBoks);
 
@@ -432,35 +462,45 @@ function vannKonsekvens(r) {
    ============================================================ */
 function tegnTid(r) {
   const wrap = h('div');
-  wrap.appendChild(h('div', { class: 'hjelpetekst', style: 'margin:0 2px 12px' },
-    'Samme brød, ulik klokke. Hver plan viser prisen: hvilken forferment den forutsetter, hvor mange timer, og hva gjærdosen lander på.'));
+  const ferdigMs = S.ferdigMs != null ? S.ferdigMs : standardFerdig();
+  const K = kjede(S, r, ferdigMs);
+
+  // Ferdig/Start-veksler + tidsstepper
+  const kort1 = h('div', { class: 'kort' });
+  kort1.appendChild(h('div', { class: 'toggle2' },
+    h('button', { class: S.tidModus !== 'start' ? 'paa' : '', onClick: () => { S.tidModus = 'ferdig'; oppdater(); } }, 'Ferdig ' + klHM(ferdigMs)),
+    h('button', { class: S.tidModus === 'start' ? 'paa' : '', onClick: () => { S.tidModus = 'start'; oppdater(); } }, 'Start nå')));
+  const erStart = S.tidModus === 'start';
+  const visMs = erStart ? K.start.getTime() : ferdigMs;
+  kort1.appendChild(h('div', { class: 'tidstepper' },
+    h('button', { onClick: () => flyttFerdig(-60) }, '−'),
+    h('div', { class: 'midt' },
+      h('div', { class: 'kl' }, klHM(visMs)),
+      h('div', { class: 'note' }, erStart ? 'du starter — ut av ovnen ' + klHM(ferdigMs) : 'ut av ovnen — første steg blir ' + klHM(K.start.getTime()))),
+    h('button', { onClick: () => flyttFerdig(60) }, '+')));
+  wrap.appendChild(kort1);
+
+  // Plan-kort
   TIDSPLANER.forEach(tp => {
     const paa = tp.id === S.tid;
     const prov = regn(Object.assign({}, S, { tid: tp.id }));
-    const K = kjede(Object.assign({}, S, { tid: tp.id }), prov, S.ferdigMs != null ? S.ferdigMs : standardFerdig());
+    const pK = kjede(Object.assign({}, S, { tid: tp.id }), prov, ferdigMs);
     const ff = tp.forferment;
-    wrap.appendChild(h('button', { class: 'valgkort' + (paa ? ' paa' : ''), style: 'flex-direction:column;align-items:stretch;gap:6px', onClick: () => { S.tid = tp.id; oppdater(); } },
-      h('div', { style: 'display:flex;align-items:baseline;gap:8px' },
-        h('span', { class: 'tittel' }, tp.navn),
-        h('span', { class: 'badge' }, fmt(K.totalT, 1) + ' t total'),
-        h('span', { style: 'margin-left:auto;font-size:.8rem;font-weight:800;color:var(--color-accent-700);font-variant-numeric:tabular-nums' }, prov.loft.loft + ' løft')),
-      h('div', { style: 'font-size:.8rem;color:var(--color-neutral-700);line-height:1.45;text-align:left' }, tp.om),
-      h('div', { style: 'display:flex;gap:14px;font-size:.76rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums;text-align:left' },
-        h('span', null, 'Forferment: ', h('b', null, ff.bruk ? (ff.type + ' ' + ff.pctMel + ' %') : 'ingen')),
-        h('span', null, 'Gjær: ', h('b', null, fmt(prov.gjaerTorr, 3) + ' %')))));
+    const sub = (ff.bruk ? ff.type + ' ' + ff.pctMel + ' %' : 'ingen forferment') +
+      ' · gjær ' + fmt(prov.gjaerTorr, 3) + ' % = ' + fmt(prov.gjaerTotal, 2) + ' g';
+    wrap.appendChild(h('button', { class: 'valgkort' + (paa ? ' paa' : ''), onClick: () => { S.tid = tp.id; oppdater(); } },
+      h('div', { class: 'plankort' },
+        h('div', { style: 'flex:1;min-width:0' },
+          h('div', null, h('span', { class: 'p-navn' }, tp.navn), h('span', { class: 'p-tid' }, fmt(pK.totalT, 1) + ' t')),
+          h('div', { class: 'p-sub' }, sub)),
+        h('div', { class: 'p-loft' }, h('div', { class: 'v' }, String(prov.loft.loft)), h('div', { class: 'l' }, 'LØFT')))));
   });
-
-  // Ferdig-tid
-  wrap.appendChild(h('div', { class: 'kort', style: 'margin-top:14px' },
-    h('div', { class: 'kort-num' }, 'Når skal brødet være ferdig'),
-    h('input', { type: 'datetime-local', class: 'sok', style: 'margin-top:8px', value: tilLokalInput(S.ferdigMs != null ? S.ferdigMs : standardFerdig()),
-      onchange: e => { const d = new Date(e.target.value); if (!isNaN(d.getTime())) { S.ferdigMs = d.getTime(); oppdater(); } } }),
-    h('div', { class: 'hjelpetekst' }, 'Kjeden regnes bakover herfra — stekingen er det faste punktet.')));
   return wrap;
 }
-function tilLokalInput(ms) {
-  const d = new Date(ms - new Date().getTimezoneOffset() * 60000);
-  return d.toISOString().slice(0, 16);
+function klHM(ms) { return new Date(ms).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' }); }
+function flyttFerdig(min) {
+  const base = S.ferdigMs != null ? S.ferdigMs : standardFerdig();
+  S.ferdigMs = base + min * 60000; oppdater();
 }
 
 /* ============================================================
