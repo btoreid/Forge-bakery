@@ -93,21 +93,29 @@ Publisert på **GitHub Pages** (gratis, offentlig repo er greit ifølge Bjørn) 
 - **Stekeutstyr:** deig rett på stålet er nå det anbefalte valget (★), Pyrexen er avlang og
   uten unødig advarsel.
 
+### H · Tre punkter til fra brukertesten (samme dag, etter G)
+
+- **Tid viser nå ukedag + dato for både start og ferdig.** «17:00» alene sa ikke hvilken dag,
+  og baken går over døgnskiller. Ny start→ferdig-oppsummering i `tegnTid` viser alltid begge
+  ender fullt ut («Fredag 31. juli, kl. 07:05»), første steg, total tid, og en egen linje når
+  baken krysser midnatt. Hjelpere `klDato()`, `ukedagKort()`, `dagSpenn()`.
+- **Gjæringsgrafen bygget om fra en naken tre-linjers skisse** til V1s fyldige graf, mobil-
+  tilpasset: fasebånd med navn/tid/temp (kald heving grønn, varm terrakotta), temperaturakse
+  venstre, gjæringsakse høyre, gjæringsfart som areal (arealet ER dosen), akkumulert dose som
+  hovedkurve, deigtemp stiplet, halvveismerke med klokkeslett, ekte klokkeslett på x-aksen,
+  aksetitler og en «nå»-markør. `gjaeringsGraf()` tar nå `bulkStart` for ekte klokke.
+- **Eltemaskinene forklares nå.** Ny `MASKIN_INFO` i `data.js` (friksjonstall, hva maskinen er,
+  typisk eltetid). `maskinInfoPanel()` viser den valgte maskinens forklaring, den levende
+  utregningen (friksjon × min → +°C → ÷ 1,29 → Wh/kg med målsone-flagg) og en sammenligning av
+  alle maskinene ved gjeldende eltetid. Bruker `r.friksjon`/`r.wh` — samme tall som
+  varmebalansen, så forklaring og resultat ikke kan drifte fra hverandre.
+
 ### Arkitekturregler for V2 (ikke bryt)
 
     All utregning i regn()/kjede() i engine.js. app-v2.js tegner, regner aldri.
     Globale script-tagger, ingen import/bundler — virker fra file://.
     State i localStorage 'forgebakery.v2', normaliseres i last()/nyStandard().
     V1 (index.html / js/app.js) er frosset — rør den ikke.
-
-### Åpne V2-punkter (jobbes med)
-
-- **Tid: dato + ukedag** for både start og ferdig (baker går over døgnskiller; nå vises bare
-  HH:MM via `klHM`).
-- **Gjæringsgrafen** skal bli rikere (akser, klokkeslett, temp-skala, trinngrenser, «nå»-markør —
-  V1 hadde en fyldigere `tegnTempChart`).
-- **Eltemaskin-info:** mye mer om hva hand/planet/spiralHjemme/spiralProff/egen er, og hvordan
-  friksjon/Wh regnes.
 
 ---
 

@@ -29,14 +29,17 @@ iterasjon — den divergerte).
 **Live på GitHub Pages** med `noindex`. Auto-deploy ved push til
 `claude/forge-bakery-mobile-v2-l4ean3`.
 
-### Åpne V2-punkter (rekkefølge fra siste brukertest)
+### Nylig levert (30.07, siste brukertest)
 
-1. **Tid: dato + ukedag** for start og ferdig — baken går over døgnskiller, og nå vises bare
-   HH:MM (`klHM` i `app-v2.js` → `tegnTid`).
-2. **Gjæringsgrafen** (`gjaeringsGraf()`) er for enkel — trenger akser, klokkeslett, temp-skala,
-   trinngrenser og «nå»-markør, slik V1s `tegnTempChart` hadde.
-3. **Eltemaskin-info** — piller for hand/planet/spiralHjemme/spiralProff/egen finnes, men mangler
-   forklaring på hva de er og hvordan friksjon/Wh regnes.
+Alle tre punktene fra siste testrunde er gjort — se CHANGELOG-post 30.07, del H:
+
+1. ✅ **Tid** viser ukedag + dato for både start og ferdig, med egen linje når baken krysser midnatt.
+2. ✅ **Gjæringsgrafen** har fasebånd, temp- og gjæringsakser, klokkeslett, halvveismerke og «nå»-markør.
+3. ✅ **Eltemaskinene** forklares med `MASKIN_INFO` + live utregning (friksjon × min → Wh/kg) og sammenligning.
+
+### Åpne V2-punkter
+
+Ingen kjente åpne punkter fra brukertesten nå. Neste runde avventer Bjørns tilbakemelding.
 
 ---
 
