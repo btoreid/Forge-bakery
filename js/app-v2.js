@@ -207,11 +207,13 @@ function standardFerdig() {
 /* ============================================================
    BUNNLINJE — deigregnskap
    ============================================================ */
+function fjernBakteppe() { const b = byId('bakteppe'); if (b) b.remove(); }
 function tegnBunnlinje(r, K) {
   const bl = byId('bunnlinje');
-  if (['logg', 'oppslag'].includes(S.skjerm)) { bl.replaceChildren(); bl.className = 'bunnlinje'; return; }
+  fjernBakteppe();
+  if (['logg', 'oppslag'].includes(S.skjerm)) { bl.replaceChildren(); bl.className = 'bunnlinje'; S.regnskapAapen = false; return; }
   bl.className = 'bunnlinje' + (S.regnskapAapen ? ' open' : '');
-  const stripe = h('button', { class: 'stripe', onClick: () => { S.regnskapAapen = !S.regnskapAapen; oppdater(); } },
+  const stripe = h('button', { class: 'stripe', 'aria-expanded': S.regnskapAapen ? 'true' : 'false', onClick: () => { S.regnskapAapen = !S.regnskapAapen; oppdater(); } },
     h('b', null, g0(r.totalVekt)), ' deig', sep(),
     h('b', null, fmt(r.doseProfil.dose, 2)), ' GD', sep(),
     h('b', null, fmt(r.gjaerTotal, 2) + ' g'), ' gjær', sep(),
@@ -232,8 +234,15 @@ function tegnBunnlinje(r, K) {
       ['Total tid', fmt(K.totalT, 1) + ' t'],
       ['Kostnad', fmt(r.kost.total, 0) + ' kr']
     ].filter(Boolean);
-    barn.push(h('div', { class: 'regnskap' }, ...rader.map(([k, v]) =>
-      h('div', { class: 'rad' }, h('span', null, k), h('b', null, v)))));
+    // Arket popper opp OVER bunnlinja (position:absolute; bottom:100%).
+    barn.push(h('div', { class: 'regnskap-ark' },
+      h('div', { class: 'ark-hank' }),
+      h('div', { class: 'ark-tittel' }, 'Deigregnskap'),
+      h('div', { class: 'regnskap' }, ...rader.map(([k, v]) =>
+        h('div', { class: 'rad' }, h('span', null, k), h('b', null, v))))));
+    // Bakteppe over innholdet — lukker ved trykk.
+    byId('telefon').appendChild(h('div', { class: 'regnskap-bakteppe', id: 'bakteppe',
+      onClick: () => { S.regnskapAapen = false; oppdater(); } }));
   }
   bl.replaceChildren(...barn);
 }

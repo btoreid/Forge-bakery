@@ -65,18 +65,24 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 input[type=range] { accent-color: var(--color-accent); }
 
 /* ---------- Telefonramme ---------- */
+/* Fast skjermhøyde, ikke min-height: da vokser IKKE hele rammen forbi skjermen.
+   Bare .innhold scroller, mens topp, bunnlinje og bunnmeny står fast — som en
+   ekte app, ikke en scrollende nettside. 100dvh følger mobilnettleserens
+   dynamiske høyde (adressefelt som gjemmer seg), med 100vh som fallback. */
 #telefon {
   max-width: 430px;
   margin: 0 auto;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   background: var(--color-bg);
   display: flex;
   flex-direction: column;
   position: relative;
+  overflow: hidden;
 }
 @media (min-width: 460px) {
   body { padding: 18px 0; }
-  #telefon { min-height: calc(100vh - 36px); border-radius: 40px; overflow: hidden; box-shadow: var(--shadow-lg); }
+  #telefon { height: calc(100vh - 36px); height: calc(100dvh - 36px); border-radius: 40px; box-shadow: var(--shadow-lg); }
 }
 
 /* ---------- Topp ---------- */
@@ -97,13 +103,39 @@ input[type=range] { accent-color: var(--color-accent); }
 .topp .undertittel { font-size: .82rem; color: var(--color-neutral-600); margin-top: 3px; }
 
 /* ---------- Innhold ---------- */
-.innhold { flex: 1; overflow-y: auto; padding: 16px 16px 8px; }
+/* min-height:0 er nødvendig for at en flex-barn faktisk skal kunne scrolle
+   internt i stedet for å dytte rammen større. -webkit-overflow-scrolling for
+   myk treghetsscroll på iOS. */
+.innhold { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px 16px 8px; }
 
 /* ---------- Bunnlinje (deigregnskap) ---------- */
 .bunnlinje {
   border-top: 1px solid var(--color-neutral-200);
   background: var(--color-neutral-100);
+  position: relative;
+  z-index: 30;
 }
+.topp, .bunnmeny { z-index: 30; }
+
+/* Deigregnskapet popper opp som et ark rett over bunnlinja, med bakteppe over
+   innholdet. Bakteppet lukker ved trykk. */
+.regnskap-bakteppe {
+  position: absolute; inset: 0; z-index: 15;
+  background: rgba(32, 30, 29, .32);
+  animation: bakteppeInn .18s ease-out;
+}
+@keyframes bakteppeInn { from { opacity: 0; } to { opacity: 1; } }
+.regnskap-ark {
+  position: absolute; left: 0; right: 0; bottom: 100%;
+  background: #fff;
+  border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg);
+  box-shadow: 0 -10px 28px rgba(60, 40, 20, .18);
+  padding: 6px 18px 16px; max-height: 62vh; overflow-y: auto;
+  animation: arkOpp .2s cubic-bezier(.2, .8, .2, 1);
+}
+@keyframes arkOpp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.regnskap-ark .ark-hank { width: 40px; height: 4px; border-radius: 999px; background: var(--color-neutral-300); margin: 6px auto 10px; }
+.regnskap-ark .ark-tittel { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--color-neutral-600); font-weight: 800; margin-bottom: 6px; }
 .bunnlinje .stripe {
   width: 100%; border: none; background: none; cursor: pointer;
   display: flex; align-items: center; gap: 6px; padding: 11px 16px;
@@ -116,7 +148,7 @@ input[type=range] { accent-color: var(--color-accent); }
 .bunnlinje .stripe .sep { color: var(--color-neutral-400); }
 .bunnlinje .stripe .pil { margin-left: auto; color: var(--color-neutral-500); transition: transform .15s; }
 .bunnlinje.open .stripe .pil { transform: rotate(180deg); }
-.bunnlinje .regnskap { padding: 4px 18px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.bunnlinje .regnskap { padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
 .bunnlinje .regnskap .rad { display: flex; justify-content: space-between; font-size: .82rem; border-bottom: 1px dotted var(--color-neutral-300); padding: 4px 0; font-variant-numeric: tabular-nums; }
 .bunnlinje .regnskap .rad span:first-child { color: var(--color-neutral-600); }
 .bunnlinje .regnskap .rad b { font-weight: 700; }
