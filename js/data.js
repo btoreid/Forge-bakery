@@ -430,39 +430,91 @@ const GROVHET = [
 
 /* ---------- TIDSBUDSJETT ----------
    Gjærmengden er ikke oppgitt — appen LØSER den slik at alle planene gir
-   samme gjæringsdose. Det er hele poenget: samme brød, ulik klokke.         */
+   samme gjæringsdose. Det er hele poenget: samme brød, ulik klokke.
+
+   `ovnslos` er den historiske takverdien PER PLAN, og den inneholder allerede
+   at de lange planene forutsetter forferment (Optimal 100 = med biga). Det var
+   nettopp dobbelttellingen L-14 pekte på: legger man en egen forferment-gevinst
+   oppå `ovnslos`, teller gevinsten to ganger, og skrur man forfermenten AV
+   endrer taket seg ikke. `ovnslosBasis` er derfor taket UTEN forferment —
+   løftindeksen (loftIndeks() i engine.js) bygger på basis og legger forfermentens
+   faktor på selv. Basis er regnet bakover: basis × ffFaktor(planens standard-
+   forferment, middels mel) ≈ den historiske `ovnslos`.                        */
 const TIDSPLANER = [
   { id:'optimal', navn:'Optimal', timer:null, kort:'26–34 timer',
     forferment:{ bruk:true, type:'biga', pctMel:30, hydrering:50, timer:16, temp:18 },
     plan:[ { navn:'Bulk', timer:4, miljo:24 },
            { navn:'Kaldheving, utbakt i kurv', timer:14, miljo:3.5, utbakt:true } ],
     om:'Alt forskningen peker på: stiv biga for styrke, full bulk ved kontrollert temperatur, og 14 timers kaldheving på utbakte emner. Kaldhevingen gir blemmer, rent snitt og et bredt hevevindu — og fordi gjærdeig ligger på pH 5,5–6 tåler den dette uten å bli sur.',
-    ovnslos:100 },
+    ovnslos:100, ovnslosBasis:95 },
   { id:'lang', navn:'Lang', timer:20, kort:'18–20 timer',
     forferment:{ bruk:true, type:'poolish', pctMel:25, hydrering:100, timer:12, temp:21 },
     plan:[ { navn:'Bulk', timer:3.5, miljo:24 },
            { navn:'Kaldheving, utbakt i kurv', timer:3, miljo:3.5, utbakt:true } ],
     om:'Poolish over natta på benken, deig og steking neste dag. Nesten all smaken fra optimal-planen, halve klokka. Poolish er lettere å treffe hjemme enn biga, som vil ha 16–18 °C.',
-    ovnslos:96 },
+    ovnslos:96, ovnslosBasis:93 },
   { id:'dag', navn:'Én dag', timer:9, kort:'8–9 timer',
     forferment:{ bruk:true, type:'poolish', pctMel:20, hydrering:100, timer:4, temp:24 },
     plan:[ { navn:'Bulk', timer:3, miljo:25 },
            { navn:'Etterheving utbakt', timer:1.25, miljo:24, utbakt:true } ],
     om:'Start om morgenen, brød til middag. En kort poolish på 4 timer gir fortsatt merkbart mer smak enn ingen.',
-    ovnslos:90 },
+    ovnslos:90, ovnslosBasis:88 },
   { id:'kort', navn:'Kort', timer:5, kort:'4–5 timer',
     forferment:{ bruk:false, type:'poolish', pctMel:20, hydrering:100, timer:4, temp:24 },
     plan:[ { navn:'Bulk', timer:2.5, miljo:26 },
            { navn:'Etterheving utbakt', timer:1.25, miljo:25, utbakt:true } ],
     om:'Ingen forferment. Bruk lang autolyse (1 time) i stedet — det er den billigste smaken du får når klokka er knapp.',
-    ovnslos:82 },
+    ovnslos:82, ovnslosBasis:82 },
   { id:'ekspress', navn:'Ekspress', timer:3, kort:'under 3 timer',
     forferment:{ bruk:false, type:'poolish', pctMel:20, hydrering:100, timer:4, temp:24 },
     plan:[ { navn:'Bulk', timer:1.25, miljo:27 },
            { navn:'Etterheving utbakt', timer:0.75, miljo:26, utbakt:true } ],
     om:'Nødplan. Hevevinduet er nå 10–20 minutter bredt, så følg deigen, ikke klokka. Smaken blir tydelig flatere — det er tiden du mister, ikke teknikken.',
-    ovnslos:70 }
+    ovnslos:70, ovnslosBasis:70 }
 ];
+
+/* ---------- FORFERMENT-TYPER (L-14) ----------
+   Datatabellen bak forferment-valget. Porta fra designets `FF_TYPER` med to
+   endringer Bjørn har bestilt: pâte fermentée er FJERNET (ikke aktuelt å bruke),
+   og surdeig (levain) er LAGT TIL som fjerde valg.
+
+   Løftparametrene (`loftBase`, `refAndel`, `syre`) mater loftIndeks() i engine.js.
+   `loftBase` er løftgevinsten i PROSENT ved referanseandelen `refAndel`, og
+   skalerer lineært med faktisk melandel. Tallene er ESTIMAT/fagresonnement, ikke
+   publisert måling — på linje med at `ovnslos` selv er merket «plausible, ikke
+   målte». Bakefaglig ramme (GUIDE Del 1): gjæraktivitet er bare 2–5 % av løftet;
+   hevegrad, bunnvarme, damp og hydrering eier det. Derfor er forfermentens
+   gevinst bevisst holdt til ±5–6 %, og surdeig kan IKKE eie toppen av skalaen —
+   kommersiell gjær gir mest volum. En optimal biga på passe sterkt mel er
+   referansemaks (100); surdeig lander på poolish-nivå og under bigas optimum,
+   og et oversurt/overmodnet levann SENKER løftet.                             */
+const FF_TYPER = [
+  { id:'ingen', navn:'Ingen', kort:'1 t autolyse i stedet',
+    pctMel:0, hyd:0, timer:0, temp:0, salt:false, loftBase:0, refAndel:1, syre:false,
+    hvorfor:'Ingen forferment. Bruk 1 times autolyse i stedet — mel og vann uten salt og gjær, som lar melet drikke og glutenet bygge seg selv. Den billigste smaken du får når klokka er knapp.',
+    merke:'RASKEST',
+    plus:['Ingen planlegging dagen før','Ett kar mindre å vaske','Fungerer greit til hverdagsbrød'],
+    minus:['Tydelig grunnere smak','Trenger mer gjær, som gir mer gjærpreg','Svakere deig ved høy hydrering'] },
+  { id:'poolish', navn:'Poolish', kort:'Tynn røre · 100 % vann · 21 °C',
+    pctMel:25, hyd:100, timer:12, temp:21, salt:false, loftBase:3.5, refAndel:0.25, syre:false,
+    hvorfor:'Like deler mel og vann — en tynn røre. Gir ekstensibilitet og en kremet, mildt vinøs smak. Lettest å lese av alle forfermentene: den er klar når kuppelen akkurat begynner å synke i midten.',
+    merke:'MEST EKSTENSIBILITET',
+    plus:['Trives på 20–22 °C, altså vanlig romtemperatur','Du ser når den er klar — kuppelen synker','Mest ekstensibilitet: deigen strekker seg lett — og på sterkt mel (W300+) gir det faktisk mest løft'],
+    minus:['Mindre deigstyrke enn biga','Proteasene får friere spillerom i den våte røra','12 timer må inn i planen'] },
+  { id:'biga', navn:'Biga', kort:'Stiv · 50 % vann · 18 °C',
+    pctMel:30, hyd:50, timer:16, temp:18, salt:false, loftBase:5.0, refAndel:0.30, syre:false,
+    hvorfor:'Stiv forferment på 45–55 % hydrering. Gir styrke og ekstensibilitet samtidig, og en dypere, mer vinøs smak enn poolish. Den stive matrisen beskytter glutenet og bremser proteasene, så den tåler tid bedre. Veien til høyest løft på butikkmel.',
+    merke:'MEST LØFT',
+    plus:['Mest deigstyrke av alle forfermentene','Dypere, mer vinøs smak','Tåler lang modning uten å bli slapp'],
+    minus:['Vil ha 16–18 °C, som er vanskelig hjemme om sommeren','Vanskeligere å lese enn poolish','Gir mest når melet er svakt/middels — på veldig sterkt mel (W300+) mangler du ekstensibilitet, ikke styrke, og poolish kan gå forbi'] },
+  { id:'surdeig', navn:'Surdeig', kort:'Levain · 100 % vann · ungt og aktivt',
+    pctMel:20, hyd:100, timer:8, temp:24, salt:false, loftBase:3.0, refAndel:0.20, syre:true,
+    hvorfor:'Et levain av surdeigskultur i stedet for kommersiell gjær. Fortrinnet er smak, aroma, holdbarhet og fordøyelighet — IKKE løft. Kommersiell gjær gir mest volum; et ungt, velstyrt levain (nylig toppet, mild pH ~4,2) lander på poolish-nivå. Går byggingen for lenge, våkner proteasene og syren degraderer glutenet — da synker løftet.',
+    merke:'MEST SMAK OG HOLDBARHET',
+    plus:['Dybde og syrlig aroma ingen gjærforferment matcher','Lengst holdbarhet — syre og dekstriner bremser staling og mugg','Lavere glykemisk indeks og bedre fordøyelighet (fytinsyre brytes ned)'],
+    minus:['Gir IKKE mer løft enn en gjærbiga — ofte litt mindre, og et surdeigsbrød er typisk tettere','Smalt vindu: umodent levain hever dårlig, oversurt levain degraderer glutenet','Krever at du steller en surdeigskultur'] }
+];
+const ffTypeFor = id => FF_TYPER.find(x => x.id === id) || FF_TYPER.find(x => x.id === 'poolish');
 
 /* ---------- TILLEGGSMENY ----------
    pct = anbefalt bakerprosent av MEL. Appen viser effekten på grovhet og vann. */

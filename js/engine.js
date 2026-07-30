@@ -633,6 +633,110 @@ function brodskalan(grovMelGram, melTotal, kornTillegg = 0) {
            nokkelhullFullkorn: pct >= 30 };
 }
 
+/* ---------- OVNSLØFT-INDEKS (L-01 + L-14) ----------
+   Én samlet størrelse 0–100 for hvor mye ovnsløft du kan vente. Før fantes den
+   ikke i appen — bare `TIDSPLANER[].ovnslos` og spredte kostnader — og designets
+   interpolasjon lot forfermenten være HELT UTENFOR (L-14): en biga på 30 % endret
+   ikke tallet med ett poeng.
+
+   Modellen er MULTIPLIKATIV, ikke addisjon av løse poeng. Grunnen er at kildene
+   selv er prosenter: GROVHET-tekstene sier «25–35 % lavere», TILLEGG_EFFEKT.fro
+   er en relativ verdi mot 100, og forfermentens reelle effekt er ±% på volumet.
+   Da er et produkt av faktorer mer trofast enn å trekke fra poeng.
+
+     loft = ovnslosBasis(plan) · grovFaktor · froFaktor · hydFaktor · ffFaktor
+
+   Rangorden (GUIDE Del 1): hevegrad, bunnvarme, damp og hydrering EIER løftet;
+   gjæraktivitet er 2–5 %. Derfor er ffFaktor bundet til ~±5 %, og verken
+   forferment eller surdeig kan eie toppen. Basisen er normalisert (se TIDSPLANER
+   i data.js) så plan- og forfermentvalg ikke teller samme gevinst to ganger. */
+
+/* Grovhetens løfttap. Konveks kurve forankret i GROVHET-tekstene i data.js
+   (10 % ~uendret · 25 % 5–10 % · 40 % 25–35 % · 60 % 40–50 % · 80 % 55–65 %),
+   ikke designets mildere lineære formel som underpenaliserer systematisk.
+   Tallene «baker inn» at appens grove blandinger inneholder rug (bryterned) —
+   en ren rug-fri grovblanding taper mindre; en framtidig forbedring er å vekte
+   med FLOURS[].glutenbidrag i stedet for grovandel alene.                     */
+const LOFT_GROV = { pct: [0, 10, 25, 40, 60, 80, 100], tap: [0, 3, 8, 30, 45, 60, 68] };
+function grovLoftFaktor(grovPct) {
+  return 1 - interp(LOFT_GROV.pct, LOFT_GROV.tap, grovPct) / 100;
+}
+
+/* Frøenes løfttap fra de MÅLTE dose–responskurvene (TILLEGG_EFFEKT.fro,
+   Aldawsari & Simsek 2014). Bløtlagte frø koster mindre løft enn tørre — begge
+   kurver er relative til 100. `tortFrak` er andelen av frøvekten som ligger
+   tørt/ristet i deigen (default 0: appen bløtlegger som standard).            */
+function froLoftFaktor(froPct, tortFrak = 0) {
+  if (froPct <= 0) return 1;
+  const e = TILLEGG_EFFEKT.fro;
+  const fB = interp(e.pct, e.loftBloet, froPct);
+  const fT = interp(e.pct, e.loftTort, froPct);
+  return (fB * (1 - tortFrak) + fT * tortFrak) / 100;
+}
+
+/* Hydreringens løfteffekt. Damp er ~halve løftet, så mer vann hjelper — helt til
+   melets tak, der deigen flyter ut sidelengs i stedet for å reise seg. Vindu
+   68–78 % er fullt; under det blir deigen strammere med mindre damp, over melets
+   tak kollapser løftet. `tak` er melblandingens hydreringstak i prosent.       */
+function hydLoftFaktor(hydPct, tak = 82) {
+  if (hydPct < 68) return 1 - 0.010 * (68 - hydPct);
+  if (hydPct <= 78) return 1;
+  if (hydPct <= tak) return 1 - 0.006 * (hydPct - 78);
+  return 1 - 0.006 * (tak - 78) - 0.020 * (hydPct - tak);
+}
+
+/* Forfermentens løftfaktor. `loftBase`/`refAndel`/`syre` kommer fra FF_TYPER.
+   Gevinsten skalerer med melandelen. To bakefaglige korreksjoner:
+   1) Biga bygger STYRKE. På allerede sterkt mel (W300+, styrkeVektet > 4,5)
+      mangler du ikke styrke men EKSTENSIBILITET, så bigas fortrinn krymper og
+      poolish kan gå forbi — nettopp ciabatta-tilfellet.
+   2) Surdeig (`syre`) har et tak under bigas optimum og et syreledd: går
+      byggingen for lenge, degraderer syren glutenet og løftet SYNKER.
+   `ekvTimer` = 24°-ekvivalente gjæringstimer for hele planen.                 */
+function ffLoftFaktor(ffType, andel, styrkeVektet = 4.0, ekvTimer = 0) {
+  const t = ffTypeFor(ffType);
+  if (!t || t.id === 'ingen' || andel <= 0 || !t.refAndel) return 1;
+  let base = t.loftBase * (andel / t.refAndel);
+  if (t.id === 'biga' && styrkeVektet > 4.5) {
+    base -= 2.0 * (styrkeVektet - 4.5) / 0.5;   // svinner mot ~+3 på rent W300+-mel
+  }
+  base = Math.max(0, base);
+  if (t.syre) {
+    base = Math.min(base, 3.0);                 // surdeig eier aldri toppen
+    if (ekvTimer > 20) base -= Math.min(5.0, 0.4 * (ekvTimer - 20)); // oversurt → degraderer
+  }
+  return 1 + base / 100;
+}
+
+/* Samler leddene til den endelige indeksen. Returnerer også hvert ledd separat,
+   slik at UI-et kan vise «hva dette koster / gir» i poeng uten å regne på nytt.
+   Klemt til 20–100: 100 er referansemaks (loff, sterkt siktet mel, optimal plan,
+   biga), og under 20 er tallet uansett ikke informativt.                       */
+function loftIndeks(o) {
+  const {
+    plan, grovPct = 0, froPct = 0, tortFrak = 0, hydPct = 75, tak = 82,
+    ffType = 'ingen', ffAndel = 0, styrkeVektet = 4.0, ekvTimer = 0
+  } = o;
+  const basis = (plan && (plan.ovnslosBasis ?? plan.ovnslos)) || 82;
+  const fGrov = grovLoftFaktor(grovPct);
+  const fFro  = froLoftFaktor(froPct, tortFrak);
+  const fHyd  = hydLoftFaktor(hydPct, tak);
+  const fFf   = ffLoftFaktor(ffType, ffAndel, styrkeVektet, ekvTimer);
+  const raa = basis * fGrov * fFro * fHyd * fFf;
+  const loft = Math.round(Math.max(20, Math.min(100, raa)));
+  return {
+    loft, basis, raa,
+    faktor: { grov: fGrov, fro: fFro, hyd: fHyd, ff: fFf },
+    // Poeng tapt/vunnet mot basis, til «hva dette koster»-visningen.
+    tap: {
+      grov: basis * (1 - fGrov),
+      fro:  basis * fGrov * (1 - fFro),
+      hyd:  basis * fGrov * fFro * (1 - fHyd),
+      ff:   basis * fGrov * fFro * fHyd * (fFf - 1)   // positivt = gevinst
+    }
+  };
+}
+
 /* Lineær interpolasjon i en ankerpunkttabell. Utenfor endepunktene klippes det
    til nærmeste verdi framfor å ekstrapolere — tabellene bygger på måledata i et
    bestemt spenn, og utenfor det spennet vet vi ikke. */
