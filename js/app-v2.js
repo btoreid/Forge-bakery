@@ -632,6 +632,77 @@ function barRad(lab, v, maks) {
     h('span', { style: 'flex:0 0 42px;text-align:right;font-size:.74rem;font-weight:700;font-variant-numeric:tabular-nums' }, fmt(v, v < 20 ? 1 : 0)));
 }
 
+/* ---------- Redigerbar heveplan + «løs for» ---------- */
+function basePlan() {
+  const tp = TIDSPLANER.find(t => t.id === S.tid) || TIDSPLANER[0];
+  return (Array.isArray(S.heveplan) && S.heveplan.length ? S.heveplan : tp.plan).map(s => ({ ...s }));
+}
+function redigerTrinn(i, felt, val) {
+  const p = basePlan();
+  if (felt !== 'navn') { val = parseFloat(String(val).replace(',', '.')); if (isNaN(val)) return; }
+  if (p[i]) p[i][felt] = felt === 'miljo' ? val : (felt === 'timer' ? Math.max(0, val) : val);
+  if (p[i] && felt === 'miljo') p[i].utbakt = val <= KALDGRENSE_APP ? p[i].utbakt : p[i].utbakt;
+  S.heveplan = p; oppdater();
+}
+const KALDGRENSE_APP = 12;
+function fjernTrinn(i) { const p = basePlan(); p.splice(i, 1); S.heveplan = p; oppdater(); }
+function leggTilTrinn() { const p = basePlan(); const sis = p[p.length - 1] || { timer: 2, miljo: 24 }; p.push({ navn: 'Nytt trinn', timer: 2, miljo: sis.miljo, utbakt: !!sis.utbakt }); S.heveplan = p; oppdater(); }
+function losBulkForDose(r) {
+  const p = basePlan(); if (!p.length) return;
+  if (typeof timerForTrinn !== 'function') return;
+  const t = timerForTrinn(r.maalDose, p, 0, r.gjaerTorr, r.masseKg, { antall: S.antall, lokk: S.lokk, fulltKjol: S.fulltKjol });
+  p[0].timer = Math.round(t * 4) / 4; S.heveplan = p; oppdater();
+}
+function tegnHeveplan(r) {
+  const boks = kort('Heveplan', null);
+  const trinn = basePlan();
+  trinn.forEach((tr, i) => {
+    const kaldt = tr.miljo <= KALDGRENSE_APP;
+    boks.appendChild(h('div', { style: 'border-top:1px solid var(--color-neutral-200);padding:9px 0' },
+      h('div', { style: 'display:flex;align-items:center;gap:8px' },
+        h('span', { class: 'pille', style: kaldt ? 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)' : 'background:var(--color-accent-100);color:var(--color-accent-700)' }, kaldt ? 'kaldt' : 'varmt'),
+        h('input', { type: 'text', value: tr.navn, 'aria-label': 'Trinnnavn', style: 'flex:1;border:none;background:none;font:inherit;font-weight:700;font-size:.86rem;min-width:0', onblur: e => redigerTrinn(i, 'navn', e.target.value) }),
+        trinn.length > 1 ? h('button', { class: 'info-knapp', 'aria-label': 'Fjern trinn', onClick: () => fjernTrinn(i) }, '×') : null),
+      h('div', { style: 'display:flex;gap:8px;margin-top:6px' },
+        trinnFelt('Timer', tr.timer, 't', v => redigerTrinn(i, 'timer', v)),
+        trinnFelt('Miljø', tr.miljo, '°C', v => redigerTrinn(i, 'miljo', v)))));
+  });
+  boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
+    h('button', { class: 'btn', style: 'flex:1', onClick: () => leggTilTrinn() }, '+ Trinn'),
+    S.heveplan ? h('button', { class: 'btn', style: 'flex:1', onClick: () => { S.heveplan = null; oppdater(); } }, 'Tilbakestill') : null,
+    h('button', { class: 'btn btn-sage', style: 'flex:1', onClick: () => losBulkForDose(r) }, 'Løs bulk')));
+  boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
+    'Gjærmengden løses alltid mot måldosen (', h('b', null, fmt(r.maalDose, 2)), '). «Løs bulk» skalerer første trinn så dosen treffer med gjæren du har. Endrer du trinnene, regnes varm/kald-fordelingen om.'));
+  return boks;
+}
+function trinnFelt(lab, val, enhet, onSet) {
+  return h('div', { style: 'flex:1' },
+    h('div', { class: 'felt-label' }, lab),
+    h('div', { style: 'display:flex;align-items:center;gap:4px;margin-top:2px' },
+      h('input', { type: 'text', inputmode: 'decimal', 'aria-label': lab, value: fmt(val, 1),
+        style: 'width:100%;min-height:40px;text-align:center;font:inherit;font-weight:700;font-variant-numeric:tabular-nums;background:var(--color-neutral-100);border:1px solid var(--color-neutral-300);border-radius:10px', onblur: e => onSet(e.target.value) }),
+      h('span', { style: 'font-size:.75rem;color:var(--color-neutral-600)' }, enhet)));
+}
+
+/* ---------- Rate-tabell: gjæringsfart mot temperatur ---------- */
+function tegnRateTabell() {
+  if (typeof rateFactor !== 'function') return null;
+  const boks = kort('Gjæringsfart mot temperatur', null);
+  const temps = [4, 8, 12, 16, 20, 24, 28, 32, 36];
+  boks.appendChild(h('div', { style: 'margin-top:4px' }, ...temps.map(T => {
+    const rel = rateFactor(T);
+    return h('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:3px' },
+      h('span', { style: 'flex:0 0 46px;font-size:.76rem;font-variant-numeric:tabular-nums' }, grader(T, 0)),
+      h('span', { style: 'flex:1;height:7px;border-radius:4px;background:var(--color-neutral-200);overflow:hidden' },
+        h('span', { style: 'display:block;height:100%;width:' + Math.min(100, rel / rateFactor(36) * 100).toFixed(0) + '%;background:var(--color-accent-500)' })),
+      h('span', { style: 'flex:0 0 52px;text-align:right;font-size:.76rem;font-weight:700;font-variant-numeric:tabular-nums' }, '×' + fmt(rel, 2)));
+  })));
+  const dbl = (typeof doublingInterval === 'function') ? doublingInterval(S.startTemp || 24) : null;
+  boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
+    'Relativt til 24 °C (×1,00). ' + (dbl ? 'Fra ' + grader(S.startTemp || 24, 0) + ' må du ' + fmt(dbl, 1) + ' °C opp for å doble farten.' : 'Du er nær eller over optimum — mer varme dobler ikke lenger.')));
+  return boks;
+}
+
 /* ---------- Konsekvenstekster ---------- */
 function klasseStil(kort) {
   const m = { 'Fint': 'background:var(--color-accent-100);color:var(--color-accent-700)',
@@ -693,13 +764,16 @@ function tegnTid(r, K) {
     // planens statiske forferment-spec (teknisk #5).
     const sub = (prov.ffPaa ? prov.ffT.navn.toLowerCase() + ' ' + prov.ffInn.pctMel + ' %' : 'ingen forferment') +
       ' · gjær ' + fmt(prov.gjaerTorr, 3) + ' % = ' + fmt(prov.gjaerTotal, 2) + ' g';
-    wrap.appendChild(h('button', { class: 'valgkort' + (paa ? ' paa' : ''), onClick: () => { S.tid = tp.id; oppdater(); } },
+    wrap.appendChild(h('button', { class: 'valgkort' + (paa ? ' paa' : ''), onClick: () => { S.tid = tp.id; S.heveplan = null; oppdater(); } },
       h('div', { class: 'plankort' },
         h('div', { style: 'flex:1;min-width:0' },
           h('div', null, h('span', { class: 'p-navn' }, tp.navn), h('span', { class: 'p-tid' }, fmt(pK.totalT, 1) + ' t')),
           h('div', { class: 'p-sub' }, sub)),
         h('div', { class: 'p-loft' }, h('div', { class: 'v' }, String(prov.loft.loft)), h('div', { class: 'l' }, 'LØFT')))));
   });
+
+  // Redigerbar heveplan + «løs for»
+  wrap.appendChild(tegnHeveplan(r));
 
   // Varmebalanse — vanntemperaturen fra mel- og romtemperatur (README: Tid har
   // varmebalanse). Alle tallene kommer fra regn(); her er bare kontrollene.
@@ -712,6 +786,7 @@ function tegnTid(r, K) {
       'For å treffe ', h('b', null, grader(S.startTemp || 24, 0)), ' deigtemp med mel på ', h('b', null, grader(S.melTemp || 21, 0)),
       ' og ', h('b', null, (S.eltMin || 13) + ' min'), ' elting: bruk vann på ', h('b', null, grader(r.vannTemp, 1)), '.',
       r.wh < 3 ? ' Arbeidet er under målsonen (3–5 Wh/kg) — elt lengre for åpnere krumme.' : r.wh > 8.3 ? ' Over metning (8,3 Wh/kg) — mer elting gir ikke mer nettverk.' : ' Arbeidet er i målsonen 3–5 Wh/kg.'),
+    isRad(r),
     h('div', { style: 'margin-top:10px' },
       miniStepper('Ønsket deigtemp', S.startTemp || 24, 'startTemp', 18, 30, 0.5, ' °C'),
       miniStepper('Meltemperatur', S.melTemp || 21, 'melTemp', 4, 30, 1, ' °C'),
@@ -733,7 +808,22 @@ function tegnTid(r, K) {
         legendePrikk('var(--color-accent-2-500)', 'Akkumulert dose'),
         legendePrikk('var(--color-neutral-400)', 'Deigtemp'))));
   }
+
+  // Rate-tabell: gjæringsfart mot temperatur
+  const rt = tegnRateTabell(); if (rt) wrap.appendChild(rt);
   return wrap;
+}
+/* Ismengde når ønsket vanntemperatur er lavere enn springvannet (~12 °C). */
+function isRad(r) {
+  if (typeof isAndel !== 'function') return null;
+  const spring = 12;
+  if (r.vannTemp >= spring - 0.2) return null;
+  const andel = isAndel(spring, r.vannTemp);
+  const vannGram = r.melTotal * (r.hyd);   // omtrentlig hovedvann
+  const is = vannGram * andel;
+  return h('div', { class: 'varsel', style: 'margin-top:8px' },
+    'Vannet skal være kaldere enn springen (', grader(spring, 0), '). Bytt ut ', h('b', null, pst(andel * 100, 0)),
+    ' av vannet med is — ca. ', h('b', null, g0(is)), ' isbiter, resten kaldt vann.');
 }
 function miniStepper(label, verdi, felt, min, max, steg, enhet) {
   return h('div', { style: 'display:flex;align-items:center;gap:10px;margin-top:6px' },
@@ -802,7 +892,32 @@ function tegnProsess(r, K) {
     h('span', { style: 'flex:0 0 24px;height:24px;border-radius:999px;display:grid;place-items:center;font-size:.72rem;font-weight:800;' + (j < i ? 'background:var(--color-accent-2-500);color:#fff' : 'background:var(--color-neutral-200)') }, j < i ? '✓' : String(j + 1)),
     h('span', { style: 'flex:1;font-size:.86rem;font-weight:600' }, s.navn),
     h('span', { style: 'font-size:.74rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums' }, klokke(s.tid)))));
+
+  // Handleliste — dette må være i huset
+  wrap.appendChild(tegnHandleliste(r));
   return wrap;
+}
+function tegnHandleliste(r) {
+  const d = h('details', { class: 'kort', style: 'padding:0' });
+  d.appendChild(h('summary', { style: 'padding:14px 16px;cursor:pointer;font-weight:800;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--color-neutral-600);list-style:none' }, 'Dette må være i huset ▾'));
+  const kropp = h('div', { style: 'padding:0 16px 14px' });
+  const seksjon = (tittel, rader) => {
+    if (!rader.length) return;
+    kropp.appendChild(h('div', { class: 'felt-label', style: 'margin-top:10px;font-weight:800' }, tittel));
+    rader.forEach(([k, v]) => kropp.appendChild(h('div', { class: 'tallrad' }, h('span', null, k), h('b', null, v))));
+  };
+  seksjon('Mel', r.mel.map(m => [m.navn, veiG(m.gram)]));
+  seksjon('Væske og gjær', [['Vann', veiG(r.vannTotal)], ['Salt', veiG(r.salt)], ['Tørrgjær', veiG(r.gjaerTotal)]]);
+  seksjon('Frø og korn', r.fro.filter(f => f.gram > 0).map(f => [f.navn, veiG(f.gram)]));
+  const smakRader = [];
+  if (r.honning > 0.1) smakRader.push(['Honning', veiG(r.honning)]);
+  if (r.olje > 0.1) smakRader.push(['Olje', veiG(r.olje)]);
+  if (r.malt > 0.01) smakRader.push(['Malt', veiG(r.malt)]);
+  seksjon('Smak', smakRader);
+  const u = (typeof UTSTYR !== 'undefined') && UTSTYR.find(x => x.id === S.utstyr);
+  seksjon('Utstyr', [['Stekeutstyr', u ? u.navn : '—'], ['Hevekurv', (FORMER.find(f => f.id === S.form) || {}).navn || '—'], ['Vekt', 'som viser ' + (S.vektTrinn >= 1 ? 'hele gram' : S.vektTrinn + ' g')]]);
+  d.appendChild(kropp);
+  return d;
 }
 function stegKort(steg, status) {
   const kropp = h('div', { class: 'kropp' });
