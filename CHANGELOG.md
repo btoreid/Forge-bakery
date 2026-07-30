@@ -7,6 +7,110 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 30.07.2026 — V2: appen bygget om til en mobil-app
+
+Stor omlegging over én økt, etter Bjørns oppdrag: bygg Forge Bakery om til en **mobil-app**
+ut fra designhandoffen i `design_handoff_bakeprosess/`. **V1 skulle ikke røres** — den lever
+videre som `index.html` + `js/app.js`. V2 er en ny, parallell app: `index-v2.html` laster
+`js/data.js` → `js/engine.js` → `js/app-v2.js` (globale script-tagger, ingen rammeverk).
+
+Underveis presiserte Bjørn to ting som styrer resten: **«designfilene var et designprinsipp,
+ikke fasit på endelig app»** (alt V1 kunne, skal V2 også kunne) og **«du skal si fra når du
+mener du er FERDIG»** (ikke meld ferdig for tidlig).
+
+### A · Modellkjernen først — L-01 til L-14
+
+Før én skjerm ble tegnet gikk vi gjennom `logikk-tilbakemeldinger.md` (L-01–L-14, kjente
+modellfeil) og ble enige om regnemodellen. Kjernen er to **rene** funksjoner i `engine.js`
+— all utregning der, ingen i render (`app-v2.js` bare tegner det `regn()`/`kjede()` gir):
+
+- **`regn(state)`** — dosen, hydreringen, løftindeksen, varmebalansen. Ett kall, alt utledet.
+- **`kjede(state, r)`** — stegkjeden (bulk → forming → utbakt → steking) som ren funksjon.
+
+**L-14 var viktigst: forferment skal ikke flytte løftindeksen.** En poolish/biga/surdeig
+omfordeler *når* gjæringen skjer, ikke *hvor mye* emnet reiser seg i ovnen. Løftet regnes
+derfor multiplikativt av det som faktisk styrer volum —
+`loft = ovnslosBasis(plan) × grovFaktor × froFaktor × hydFaktor × ffFaktor`, klemt til 20–100
+(`loftIndeks()` med `grovLoftFaktor`/`froLoftFaktor`/`hydLoftFaktor`/`ffLoftFaktor`).
+`ffFaktor` er nær 1 med vilje: forfermenten nudger, styrer ikke.
+
+Andre avklaringer fra samme runde: **pâte fermentée fjernet** (Bjørn brukte den ikke),
+**surdeig lagt til** som forferment-type, og **grovheten følger Brødskala'n** (samme norske
+standard som V1 fikk 29.07 — frø utenfor, korn/kli teller fullt).
+
+`kjede()` løser samtidig L-07/L-09/L-10/L-12/L-13 (bløtlegging rist/bloet/skald, kald snitting,
+forming før første utbakt-trinn — se baker-review under).
+
+### B · Seks skjermer
+
+Skjermrekkefølgen er Bjørns: **Brød · Deig · Tid · Prosess · Logg · Oppslag**
+(`bunnmeny` i `app-v2.js`). Han beskrev overgangen selv: «brød, deig, tid, prosess, logg,
+oppslag som blir riktig rekkefølge». Render er `render()` → `renderInner()` med
+try/catch-feilgrense, så en enkelt tegnefeil ikke svartlegger hele appen. Tilstanden ligger i
+`localStorage` under `forgebakery.v2`, normalisert i `last()`/`nyStandard()`.
+
+### C · Designet gjenskapt, så V1-paritet lagt oppå
+
+Første tilbakemelding var **«dette ser mindre pent ut enn hva Claude Design laget»**. Årsaken
+var at Google Fonts var blokkert; fontene er nå **vendoret lokalt** (Caprasimo/Figtree woff2 i
+`css/fonts/`, `css/fonts.css`) så appen ser lik ut offline og fra `file://`. Grovhet ble
+piller i stedet for slider, med sirkelbadges, steg-teller og glutenbidrag per mel.
+
+Deretter, på **«jeg vil ha inn alt det gamle også»**, ble hele V1-funksjonaliteten hentet inn
+(commitene `V1-paritet A/B/C`): form/kurv og stekeutstyr med vektoppløsning, dose–respons-panelet,
+korntegningene, meltall-info og mel-advarsel, redigerbar heveplan, rate-tabell, is-utregning,
+handleliste og deigtemp-kalibratoren.
+
+### D · Vekt-fikspunktet (teknisk-review, kritisk)
+
+Melvekten løses av en affin fikspunktligning (mel binder vann som binder mel …). Naiv
+Picard-iterasjon **divergerte** på tunge frølaster → `melTotal = 0` → NaN i hele arket. Rettet
+med lukket form: `m* = a / (1 + b)`. Ingen iterasjon, ingen divergens.
+
+### E · Dobbeltforming (baker-review, kritisk)
+
+Kjeden bakte ut og hvilte 45 min **etter** den kalde utbakt-hevingen, uten forming før. Rettet:
+formingssteg før første utbakt-trinn, «Temperer og snitt» (kald snitting) etter. Nå former du
+før heving, ikke etter.
+
+### F · Hosting
+
+Publisert på **GitHub Pages** (gratis, offentlig repo er greit ifølge Bjørn) med
+`noindex, nofollow` i `index-v2.html`, `robots.txt` og `.nojekyll`. Auto-deploy ved push til
+`claude/forge-bakery-mobile-v2-l4ean3`. Hemmelighetsskann kjørt — rent.
+
+### G · App-layout og siste UX-runde (fra rask brukertesting)
+
+- **Fast bunnlinje, ikke scrollende side.** `#telefon` er `height:100dvh; overflow:hidden`;
+  deigregnskapet spretter opp som et `.regnskap-ark` (absolutt, over bunnlinjen) med en
+  `#bakteppe`-bakgrunn som lukker ved trykk.
+- **Hydrerings- og saltskyverne** oppdaterer tall/merkelapp/guide **live under draget**
+  (`oninput`, kun DOM) og regner ferdig **på slipp** (`onchange`). Ny `vannGuide()` forklarer
+  hva lavt/høyt vann gjør. (Rettet en regresjon der `onchange`-alene gjorde at slideren ikke
+  fulgte fingeren.)
+- **Tillegg (frø/korn/smak)** kan igjen aktiveres med ett trykk, markeres grønt når på, og
+  fjernes lett via toggle (`togglTillegg()`, `.tillegg-rad.paa`).
+- **Stekeutstyr:** deig rett på stålet er nå det anbefalte valget (★), Pyrexen er avlang og
+  uten unødig advarsel.
+
+### Arkitekturregler for V2 (ikke bryt)
+
+    All utregning i regn()/kjede() i engine.js. app-v2.js tegner, regner aldri.
+    Globale script-tagger, ingen import/bundler — virker fra file://.
+    State i localStorage 'forgebakery.v2', normaliseres i last()/nyStandard().
+    V1 (index.html / js/app.js) er frosset — rør den ikke.
+
+### Åpne V2-punkter (jobbes med)
+
+- **Tid: dato + ukedag** for både start og ferdig (baker går over døgnskiller; nå vises bare
+  HH:MM via `klHM`).
+- **Gjæringsgrafen** skal bli rikere (akser, klokkeslett, temp-skala, trinngrenser, «nå»-markør —
+  V1 hadde en fyldigere `tegnTempChart`).
+- **Eltemaskin-info:** mye mer om hva hand/planet/spiralHjemme/spiralProff/egen er, og hvordan
+  friksjon/Wh regnes.
+
+---
+
 ## 29.07.2026 — Sammenhengen: startside, kontekstpanel, navigasjon
 
 Tre sammenhengende leveranser samme dag, etter tre tilbakemeldinger fra Bjørn:

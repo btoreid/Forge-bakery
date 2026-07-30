@@ -1,6 +1,48 @@
-# Status og neste steg — 29.07.2026
+# Status og neste steg — 30.07.2026
 
-Notat ved øktskifte. Appen er i en konsistent, verifisert tilstand.
+Notat ved øktskifte. Appen er i en konsistent tilstand og live på GitHub Pages.
+
+**Full historikk med begrunnelser: `CHANGELOG.md`** — les den øverste posten (30.07, V2) før
+du rører kode. Den har arkitekturreglene, modellavklaringene (L-01–L-14) og arbeidsmåten Bjørn
+har bedt om. Delen under 30.07-streken beskriver **V1** (desktop-appen), som nå er frosset.
+
+## V2 er den aktive appen — 30.07.2026
+
+Forge Bakery er bygget om til en **mobil-app**. To parallelle apper i repoet nå:
+
+| app | filer | status |
+|---|---|---|
+| **V2 (aktiv)** | `index-v2.html` + `js/data.js` · `js/engine.js` · `js/app-v2.js` | under utvikling, live |
+| V1 (frosset) | `index.html` + `js/app.js` | rør den ikke |
+
+**Kjernen er to rene funksjoner i `engine.js`:** `regn(state)` (dose/hydrering/løft/varme) og
+`kjede(state, r)` (stegkjeden). All utregning der — `app-v2.js` tegner, regner aldri. Global
+script-tag, ingen bundler (virker fra `file://`). State i `localStorage` under `forgebakery.v2`.
+
+**Seks skjermer** i Bjørns rekkefølge: Brød · Deig · Tid · Prosess · Logg · Oppslag.
+
+**Løftmodellen (L-14):** forferment flytter *ikke* løftindeksen — den omfordeler når gjæringen
+skjer, ikke hvor mye emnet reiser seg. `loft = ovnslosBasis × grovFaktor × froFaktor ×
+hydFaktor × ffFaktor`, klemt 20–100. Melvekten løses i lukket form `m* = a/(1+b)` (ikke
+iterasjon — den divergerte).
+
+**Live på GitHub Pages** med `noindex`. Auto-deploy ved push til
+`claude/forge-bakery-mobile-v2-l4ean3`.
+
+### Åpne V2-punkter (rekkefølge fra siste brukertest)
+
+1. **Tid: dato + ukedag** for start og ferdig — baken går over døgnskiller, og nå vises bare
+   HH:MM (`klHM` i `app-v2.js` → `tegnTid`).
+2. **Gjæringsgrafen** (`gjaeringsGraf()`) er for enkel — trenger akser, klokkeslett, temp-skala,
+   trinngrenser og «nå»-markør, slik V1s `tegnTempChart` hadde.
+3. **Eltemaskin-info** — piller for hand/planet/spiralHjemme/spiralProff/egen finnes, men mangler
+   forklaring på hva de er og hvordan friksjon/Wh regnes.
+
+---
+
+## Arkivert: V1-status (desktop) — 29.07.2026
+
+Alt under gjelder **V1** (`js/app.js`), som er frosset. Beholdt for sporbarhet.
 
 **Full historikk med begrunnelser: `CHANGELOG.md`.** Den har også arkitekturreglene,
 testoppskriften (forhåndsvisningen bufrer både JS og CSS) og arbeidsmåten Bjørn har bedt om.
