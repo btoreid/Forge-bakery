@@ -797,16 +797,38 @@ function tegnTid(r, K) {
   // Ferdig/Start-veksler + tidsstepper
   const kort1 = h('div', { class: 'kort' });
   kort1.appendChild(h('div', { class: 'toggle2' },
-    h('button', { class: S.tidModus !== 'start' ? 'paa' : '', onClick: () => { S.tidModus = 'ferdig'; oppdater(); } }, 'Ferdig ' + klHM(ferdigMs)),
+    h('button', { class: S.tidModus !== 'start' ? 'paa' : '', onClick: () => { S.tidModus = 'ferdig'; oppdater(); } }, 'Ferdig ' + ukedagKort(ferdigMs) + ' ' + klHM(ferdigMs)),
     h('button', { class: S.tidModus === 'start' ? 'paa' : '', onClick: () => { S.tidModus = 'start'; oppdater(); } }, 'Start nå')));
   const erStart = S.tidModus === 'start';
-  const visMs = erStart ? K.start.getTime() : ferdigMs;
+  const startMs = K.start.getTime();
+  const visMs = erStart ? startMs : ferdigMs;
   kort1.appendChild(h('div', { class: 'tidstepper' },
     h('button', { onClick: () => flyttFerdig(-60) }, '−'),
     h('div', { class: 'midt' },
       h('div', { class: 'kl' }, klHM(visMs)),
-      h('div', { class: 'note' }, erStart ? 'du starter — ut av ovnen ' + klHM(ferdigMs) : 'ut av ovnen — første steg blir ' + klHM(K.start.getTime()))),
+      h('div', { class: 'note' }, erStart ? 'her setter du deigen i gang' : 'ut av ovnen')),
     h('button', { onClick: () => flyttFerdig(60) }, '+')));
+
+  // Start → ferdig, alltid begge ender med ukedag og dato, så det er tydelig
+  // hvilket døgn du starter og hvilket du er ferdig (baken går over døgnskiller).
+  const forsteNavn = (K[0] && K[0].navn) ? K[0].navn.toLowerCase() : 'første steg';
+  const spenn = dagSpenn(startMs, ferdigMs);
+  const oppsum = h('div', { class: 'tid-oppsum' },
+    h('div', { class: 'tid-rad' },
+      h('span', { class: 'tid-merke start' }, 'STARTER'),
+      h('div', { class: 'tid-tekst' },
+        h('div', { class: 'd' }, klDato(startMs)),
+        h('div', { class: 's' }, 'du begynner: ' + forsteNavn))),
+    h('div', { class: 'tid-strek' }, h('span', null, '↓ ' + fmt(K.totalT, 1) + ' t fra start til avkjølt brød')),
+    h('div', { class: 'tid-rad' },
+      h('span', { class: 'tid-merke ferdig' }, 'UT AV OVNEN'),
+      h('div', { class: 'tid-tekst' },
+        h('div', { class: 'd' }, klDato(ferdigMs)),
+        h('div', { class: 's' }, 'brødet er stekt og skal kjøle'))));
+  if (spenn >= 1) oppsum.appendChild(h('div', { class: 'tid-doegn' },
+    spenn === 1 ? 'Baken går over natta — du starter ' + ukedagKort(startMs) + ' og er ferdig ' + ukedagKort(ferdigMs) + '.'
+      : 'Baken går over ' + spenn + ' døgn — du starter ' + ukedagKort(startMs) + ' og er ferdig ' + ukedagKort(ferdigMs) + '.'));
+  kort1.appendChild(oppsum);
   wrap.appendChild(kort1);
 
   // Plan-kort
@@ -937,6 +959,19 @@ function planForhaandsvis(tpId, ferdigMs) {
   return _planMemo.data[tpId];
 }
 function klHM(ms) { return new Date(ms).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' }); }
+/* Full dato med ukedag — baken går over døgnskiller, så «17:00» alene sier ikke
+   hvilken dag. «fredag 31. juli, 17:00». */
+function klDato(ms) {
+  const dag = new Date(ms).toLocaleDateString('nb-NO', { weekday: 'long', day: 'numeric', month: 'long' });
+  return dag.charAt(0).toUpperCase() + dag.slice(1) + ', kl. ' + klHM(ms);
+}
+function ukedagKort(ms) { return new Date(ms).toLocaleDateString('nb-NO', { weekday: 'short' }).replace(/\.$/, ''); }
+/* Antall døgnskiller mellom to tidspunkt (0 = samme dag). */
+function dagSpenn(startMs, sluttMs) {
+  const a = new Date(startMs); a.setHours(0, 0, 0, 0);
+  const b = new Date(sluttMs); b.setHours(0, 0, 0, 0);
+  return Math.round((b.getTime() - a.getTime()) / 86400000);
+}
 function flyttFerdig(min) {
   const base = S.ferdigMs != null ? S.ferdigMs : standardFerdig();
   S.ferdigMs = base + min * 60000; oppdater();
