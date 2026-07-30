@@ -74,7 +74,14 @@ function norsk(feil) {
   if (m.includes('password should be at least')) return 'Passordet må ha minst 6 tegn.';
   if (m.includes('rate limit') || m.includes('too many')) return 'For mange forsøk — vent litt og prøv igjen.';
   if (m.includes('failed to fetch') || m.includes('networkerror')) return 'Får ikke kontakt med skyen. Er du på nett? Appen virker fint videre lokalt.';
-  if (m.includes('relation') && m.includes('does not exist')) return 'Databasetabellen mangler — kjør SQL-en i SUPABASE.md i Supabase-prosjektet.';
+  // To ulike ordlyder for samme sak: Postgres sier «relation … does not exist»,
+  // mens PostgREST svarer «Could not find the table 'public.bakerstate' in the
+  // schema cache» (PGRST205). Bare den første var dekket, så den vanligste
+  // varianten slapp gjennom som rå engelsk tekst uten å si hva man skal gjøre.
+  if ((m.includes('relation') && m.includes('does not exist')) ||
+      m.includes('could not find the table') || m.includes('schema cache')) {
+    return 'Databasetabellen «bakerstate» finnes ikke ennå. Kjør SQL-en fra SUPABASE.md i Supabase → SQL Editor, så virker synken. Alt du gjør lagres lokalt i mellomtiden.';
+  }
   return (feil && feil.message) ? feil.message : 'Ukjent feil.';
 }
 
