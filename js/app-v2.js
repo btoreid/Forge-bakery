@@ -17,7 +17,7 @@ const STANDARD = {
   antall: 4, vekt: 900,
   startTemp: 24, melTemp: 21, maskin: 'spiralHjemme', eltMin: 13, romTemp: 22,
   stekeProfil: 'brod_kloke', stekeProfilManuell: false, lokk: true, fulltKjol: false,
-  form: 'rund', utstyr: 'stal15', vektTrinn: 1, egenFriksjon: 0.4,
+  form: 'rund', utstyr: 'stal15', vektTrinn: 1, egenFriksjon: 0.4, pyrexIOvn: false,
   saltPct: null, ferdigMs: null, tidModus: 'ferdig',
   heveplan: null,                 // null = planens standard; array = redigert
   paramInfo: null, tilleggInfo: null, melInfo: null, meltallInfo: null,
@@ -397,6 +397,24 @@ function tegnUtstyrValg(r) {
     h('span', null, 'Kontakt ', h('b', null, u.kontakt + ' °C')), h('span', null, 'Forvarm ', h('b', null, u.forvarm)), h('span', null, 'Damp: ', h('b', null, u.damp))));
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:6px' }, u.om));
   boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' }, 'Gir stekeprofilen ', h('b', null, r.prof.navn), '. Best til: ' + u.best + '.'));
+  // Pyrex i ovnen — vises bare når den valgte profilen faktisk har et varmt
+  // alternativ, altså kloke-oppsettet. Se kommentaren ved `varm` i data.js for
+  // hvorfor deig-i-gryta ikke får det samme.
+  const grunn = BAKE_PROFILES.find(p => p.id === r.prof.id);
+  if (grunn && grunn.varm) {
+    const paa = !!S.pyrexIOvn;
+    boks.appendChild(h('label', { class: 'pyrex-valg' + (paa ? ' paa' : '') },
+      h('input', { type: 'checkbox', checked: paa ? 'checked' : null,
+        onchange: e => { S.pyrexIOvn = e.target.checked; oppdater(); } }),
+      h('span', null,
+        h('b', null, 'Pyrexen står i ovnen'),
+        h('span', { class: 'pv-under' }, 'Den varmes opp sammen med ovnen og blir stående mellom bakerundene — tas aldri kald inn i en varm ovn.'))));
+    boks.appendChild(h('div', { class: 'konsekvens' }, paa
+      ? [h('b', null, 'Steker på ' + grunn.varm.inn + ' °C'), ' i stedet for ' + grunn.inn + ' °C, ned til ' + grunn.varm.ned + ' °C. Uten oppvarmingssjokket er det ikke 220-gradersgrensen som setter taket lenger, så oppsettet kan kjøres som en støpejernsgryte — mer bunnvarme og bedre ovnsløft. Deigen ligger på stålet og rører aldri glasset.']
+      : [h('b', null, 'Steker på ' + grunn.inn + ' °C.'), ' Taket er glassets termiske sprang på 220 °C: et romtemperert glass inn i en 260-graders ovn er 240 og kan sprekke. Lar du glasset stå i ovnen fra kald start, forsvinner den grensen — kryss av over.']));
+    if (paa) boks.appendChild(h('div', { class: 'varsel' },
+      h('b', null, 'To ting glasset ikke tåler: '), 'å settes tilbake i en varm ovn etter at det er blitt kaldt, og å kjøles raskt — legg det aldri i vann eller på en våt benk når du tar det av etter 20 minutter. La det kjøle i luft, eller sett det rett inn igjen mens det er varmt.'));
+  }
   return boks;
 }
 function velgForm(id) { S.form = id; if (!S.stekeProfilManuell) S.stekeProfil = profilForUtstyr(S.utstyr, id); oppdater(); }

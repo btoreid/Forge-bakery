@@ -45,6 +45,59 @@ fungerer ellers uendret — inkludert lokal lagring uten konto.
 
 ---
 
+## 30.07.2026 (natt, senere) — Loggen, og Pyrexen som står i ovnen
+
+### Bakeloggen: bilder i stort format, rediger og slett
+
+- **Trykk på et bilde åpner det i fullskjerm** (`tegnBildeVis()`, `.bildevis`) over hele
+  telefonrammen — z-index 60, altså over bunnmenyen. Piler og piltaster blar når posten har
+  flere bilder, Esc eller ✕ lukker, og trykk på selve bildet lukker *ikke* (bare utenfor) —
+  ellers ville hvert forsøk på å se nærmere lukket visningen.
+- **Hver post kan redigeres:** navn, karakter, et nytt **notatfelt** («hva lærte du?») og
+  bilder (legg til / fjern, fortsatt maks 3). `loggRediger()`; endringene lagres mens du
+  skriver. **Måletallene er bevisst ikke redigerbare** — dose, hydrering, grovhet og løft er
+  hentet fra baket slik det faktisk var, og en logg man kan pynte på slutter å være et
+  ærlig referansepunkt.
+- **Slett med bekreftelse** som sier hvor mange bilder som ryker med (`loggSlettBekreft()`).
+- **Postene har fått stabil `id`.** Uten den pekte rediger/slett på *posisjon* — og
+  posisjonen flytter seg når noe slettes, når skyen synker inn en annen liste, og lista
+  vises dessuten nyeste-først. Eldre poster får en id i `last()`. Iterasjonen går nå bakover
+  med den ekte indeksen i stedet for `slice().reverse()`, som ga feil rad.
+
+### «Pyrexen står i ovnen» — 260 °C i stedet for 230
+
+Bjørn påpekte at Pyrexen kan bli stående i ovnen mellom bakerundene, og at man da bør kunne
+kjøre stål-temperaturer. Det stemmer, men bare for det ene av de to Pyrex-oppsettene, og
+det er verdt å skille:
+
+230-taket kommer av glassets **termiske sprang på 220 °C** — men det dekker to ulike sjokk:
+
+1. **Romtemperert glass inn i varm ovn** (260 − 20 = 240 > 220). Dette er det Bjørns
+   arbeidsmåte fjerner: står glasset i ovnen fra kald start, varmes det opp sammen med den.
+2. **Kald deig mot varm glassflate** (~254 °C ved 260). Dette gjelder bare `brod_glass_stal`,
+   der deigen ligger *inni* glassbunnen.
+
+I **kloke-oppsettet** (`brod_kloke`) ligger deigen på stålet og rører aldri glasset, så bare
+sjokk 1 er i spill — og det er nettopp det som forsvinner. Derfor har den profilen fått et
+`varm`-alternativ på **260 → 230 °C** (støpejernsgrytas tall; den er appens egen referanse
+for lukket kammer). `brod_glass_stal` har med vilje *ingen* `varm`.
+
+Slått på med avkrysningen **«Pyrexen står i ovnen»** under Stekeutstyr (`S.pyrexIOvn`), som
+bare vises når den valgte profilen faktisk har et varmt alternativ. Byttet skjer i
+**`regn()`**, ikke i render, så kjeden, Prosess-stegene og oppslaget alle leser samme
+temperatur. Med valget på står det en advarsel om de to tingene glasset fortsatt ikke tåler:
+å settes tilbake i en varm ovn etter å ha blitt kaldt, og rask nedkjøling (vann, våt benk).
+
+### «Rundbrød» ute av utstyrsteksten
+
+`UTSTYR.stal15.om` åpnet med «Det beste oppsettet du har for rundbrød». Bjørn har aldri
+sagt at han baker rundbrød — samme feil som ★-merkene i stekeprofilene, som ble rettet
+tidligere samme dag. Stekeutstyr handler om bunnvarme og damp, ikke om emnets form.
+(«Rundbrød» står fortsatt i fagstoffet, der det brukes faglig som sammenligningsgrunnlag —
+bunnflate mot volum, avkjølingstid — og det er riktig bruk.)
+
+---
+
 ## 30.07.2026 (natt) — V2: seks punkter fra tredje brukertest
 
 Verifisert i Chromium (23 automatiske sjekker + skjermbilder).

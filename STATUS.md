@@ -77,6 +77,19 @@ fokusert felt ble fjernet under `replaceChildren` (blur midt i render). Rettet m
 2. ✅ **Gjæringsgrafen** har fasebånd, temp- og gjæringsakser, klokkeslett, halvveismerke og «nå»-markør.
 3. ✅ **Eltemaskinene** forklares med `MASKIN_INFO` + live utregning (friksjon × min → Wh/kg) og sammenligning.
 
+### Sist levert (30.07 natt, senere)
+
+**Bakeloggen:** bilder åpnes i fullskjerm (piler, piltaster, Esc), og poster kan redigeres
+(navn, karakter, nytt notatfelt, bilder) og slettes med bekreftelse. Postene har fått
+stabil `id` — rediger/slett pekte før på posisjon, som flytter seg. **Måletallene er med
+vilje ikke redigerbare.**
+
+**«Pyrexen står i ovnen»** (`S.pyrexIOvn`) under Stekeutstyr hever kloke-oppsettet fra
+230 til **260 → 230 °C**. Begrunnelsen står i CHANGELOG: 230-taket er glassets termiske
+sprang, og det gjelder oppvarmingssjokket — som forsvinner når glasset varmes med ovnen.
+**Kun `brod_kloke` har `varm`;** `brod_glass_stal` har det ikke, fordi der møter kald deig
+glassbunnen direkte (~254 °C differanse). Ikke gi den profilen et `varm`-felt.
+
 ### Sky-oppsettet er i drift — 30.07.2026
 
 **Verifisert ende-til-ende av Bjørn:** innlogging og synk virker i produksjon på

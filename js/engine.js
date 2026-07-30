@@ -870,9 +870,14 @@ function regn(state) {
   const doseProfil = planDose(planTrinn, torr, r.masseKg, opt);
 
   // Stekeprofil: brukerens valg, ellers presetets, ellers første profil.
-  const prof = BAKE_PROFILES.find(p => p.id === state.stekeProfil)
-            || (preset && BAKE_PROFILES.find(p => p.id === preset.steking))
-            || BAKE_PROFILES[0];
+  let prof = BAKE_PROFILES.find(p => p.id === state.stekeProfil)
+          || (preset && BAKE_PROFILES.find(p => p.id === preset.steking))
+          || BAKE_PROFILES[0];
+  // Står Pyrexen i ovnen fra kald start, forsvinner oppvarmingssjokket som er
+  // grunnen til 230-taket, og profilen kan kjøres varmt. Byttet skjer HER, i
+  // regn(), så kjeden, Prosess og oppslaget alle leser samme temperatur — en
+  // justering gjort i render ville drevet fra det steget faktisk sier.
+  if (state.pyrexIOvn && prof.varm) prof = Object.assign({}, prof, prof.varm, { varmPaa: true });
 
   // Deigtemp: ekte varmebalanse (samme motor som Deigtemp-skjermen). Vannet i
   // hoveddeigen, melet utenom forfermenten, forfermenten og frøene veies hver

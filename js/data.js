@@ -182,8 +182,20 @@ const BAKE_PROFILES = [
   // forvarming — det var en reell bruddrisiko, ikke bare et avvik.
   // 700–800 g av samme grunn som glassgryte-profilen: innvendig 21,5 cm blir
   // trangt for et 900 g emne etter ovnsløftet — kloken er samme gryte.
+  /* `varm` gjelder bare når glasset ALDRI går kaldt inn i en varm ovn — altså når
+     det står i ovnen og varmes opp sammen med den, og blir stående mellom
+     bakerundene. Da forsvinner oppvarmingssjokket som er grunnen til 230-taket,
+     og oppsettet kan kjøres som en støpejernsgryte (260 → 230).
+
+     Merk at dette KUN gjelder kloke-oppsettet, der deigen ligger på stålet og
+     aldri rører glasset. I `brod_glass_stal` ligger deigen inni glassbunnen, og
+     da er det andre sjokket — kald deig mot varm glassflate, ~254 °C differanse
+     ved 260 °C — fortsatt over de 220 glasset tåler. Derfor har den profilen
+     ingen `varm`, med vilje. */
   { id:'brod_kloke', navn:'På stålet, glasset som kloke over', anbefaltTil:'frittstående brød med Pyrex + stål', vekt:'700–800 g', hydrering:'72–78 %',
     inn:230, ned:230, nedNaar:'hold den der', damp:'brødets eget, fanget under glasset', dampTid:'glasset av etter 20 min',
+    varm:{ inn:260, ned:230, nedNaar:'straks døra lukkes',
+      forutsetning:'Forutsetter at Pyrexen står i ovnen og varmes opp sammen med den. Går glasset kaldt inn i en varm ovn, gjelder 230 °C.' },
     rist:'direkte på stålet, nederste tredel', tid:'45–50 min', kjerne:'96–99 °C', luft:'glasset av etter 20 min',
     notat:'Teoretisk det sterkeste oppsettet: full stålkontakt mot deigen OG et lukket dampkammer. Krever at gryta er dyp nok til å dekke brødet uten å røre det. King Arthurs egen sammenligning kåret nettopp «støpejern + kokende vann + opp-ned bolle over brødet» til vinner. MAKS 230 °C med Pyrex som kloke — glasset tåler 220 °C termisk sprang, så det skal aldri inn i en varmere ovn enn det. LES ADVARSELEN om termisk sjokk under Utstyr før du forvarmer glasset.' },
   { id:'ciabatta', navn:'Midt i ovnen på stål, kort og varmt', anbefaltTil:'ciabatta og andre flate, våte emner', vekt:'200–300 g biter', hydrering:'80–85 %',
@@ -1239,7 +1251,7 @@ const PARAM_INFO = {
 const UTSTYR = [
   { id:'stal15', navn:'★ Deig rett på stålet + glass som klokke', effusivitet:13625, kontakt:232, forvarm:'90–120 min',
     damp:'glasset som klokke fanger dampen', best:'Best bunnvarme — deigen ligger RETT på stålet, Pyrexen snus over som klokke',
-    om:'Det beste oppsettet du har for rundbrød: deigen på det forvarmede stålet gir full stålkontakt mot bunnen (toppklasse — identisk med støpejern, 15 mm lagrer 55 700 J/m²K), og Pyrexen snudd opp-ned over emnet fanger brødets egen damp. Du får altså både maksimal bunnvarme OG damp. Stålet må forvarmes lenge: de fleste gir det 30–45 min, og da ligger det fortsatt 40–60 °C for lavt. Regn 90 min, gjerne 2 timer. Legg glasset over først etter at emnet er satt inn og snittet.' },
+    om:'Det beste oppsettet du har: deigen på det forvarmede stålet gir full stålkontakt mot bunnen (toppklasse — identisk med støpejern, 15 mm lagrer 55 700 J/m²K), og Pyrexen snudd opp-ned over emnet fanger brødets egen damp. Du får altså både maksimal bunnvarme OG damp. Stålet må forvarmes lenge: de fleste gir det 30–45 min, og da ligger det fortsatt 40–60 °C for lavt. Regn 90 min, gjerne 2 timer. Legg glasset over først etter at emnet er satt inn og snittet.' },
   { id:'glass', navn:'Pyrex Slow Cook 4,4 L med lokk (din)', effusivitet:1453, kontakt:147, forvarm:'sammen med stålet, maks 230 °C',
     damp:'utmerket — lukket kammer', best:'Damp og fuktighetskontroll, ikke bunnvarme',
     om:'Produsentspesifikasjon: tåler −40 til +300 °C, og termisk sjokk opptil 220 °C differanse. Det er borosilikat-tall — herdet kalknatronglass ligger på 60–80 °C — så den tåler langt mer enn typisk glassbakeutstyr. Som dampkammer er den fullverdig: en lukket gryte trenger bare ~2 g damp, og brødet inneholder selv 350–400 g vann. Som helle er den svak: effusivitet 1 453 mot støpejernets 13 123. Glasset måtte holdt 397 °C for å matche støpejern på 250. Løsningen er å la stålet levere bunnvarmen og glasset dampen. Innvendig 21,5 cm bred og 13,5 cm høy med lokket på — komfortabelt til 700–800 g emner, trangt over 900 g.' },

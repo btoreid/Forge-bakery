@@ -452,6 +452,17 @@ svg.kornsvg .s2 { fill: none; stroke: var(--kk); stroke-width: 1; stroke-linecap
 }
 .kort.fav { border: 2px solid var(--color-accent-500); box-shadow: 0 0 0 3px var(--color-accent-100); }
 
+/* ---------- «Pyrexen står i ovnen» (Stekeutstyr) ---------- */
+.pyrex-valg {
+  display: flex; align-items: flex-start; gap: 10px; margin-top: 10px;
+  padding: 10px 12px; border-radius: var(--radius-md); cursor: pointer;
+  border: 1px solid var(--color-neutral-300); background: #fff;
+}
+.pyrex-valg.paa { background: var(--color-accent-2-100); border-color: var(--color-accent-2-300); }
+.pyrex-valg input { width: 22px; height: 22px; flex: 0 0 22px; margin: 1px 0 0; accent-color: var(--color-accent-2-500); }
+.pyrex-valg b { font-size: .86rem; display: block; }
+.pyrex-valg .pv-under { display: block; font-size: .74rem; color: var(--color-neutral-600); line-height: 1.4; margin-top: 2px; }
+
 /* ---------- Bilder i bakeloggen ---------- */
 .logg-bilder { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .logg-bilde {
