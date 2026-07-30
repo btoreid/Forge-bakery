@@ -16,10 +16,12 @@ const STANDARD = {
   tillegg: { solsikke: 6, linfro: 3 },
   antall: 4, vekt: 900,
   startTemp: 24, melTemp: 21, maskin: 'spiralHjemme', eltMin: 13,
-  stekeProfil: null, lokk: true, fulltKjol: false,
+  stekeProfil: null, stekeProfilManuell: false, lokk: true, fulltKjol: false,
+  form: 'rund', utstyr: 'glass_stal', vektTrinn: 1,
   saltPct: null, ferdigMs: null, tidModus: 'ferdig',
-  paramInfo: null, tilleggInfo: null, melInfo: null,
-  aktivSteg: 0, regnskapAapen: false,
+  heveplan: null,                 // null = planens standard; array = redigert
+  paramInfo: null, tilleggInfo: null, melInfo: null, meltallInfo: null,
+  aktivSteg: 0, regnskapAapen: false, doseRespons: false,
   loggListe: [], lgNavn: '', lgKar: 8,
   favoritter: [], oppslag: 'meny', oppslagSok: ''
 };
@@ -73,6 +75,16 @@ const byId = id => document.getElementById(id);
 
 /* ---------- Formattering (motorens hjelpere er globale) ---------- */
 const g0 = v => gram(v, 0);
+/* Vektoppløsning: rund til det vekta faktisk kan vise (hele gram / 0,1 / 0,01),
+   med færre desimaler når mengden vokser — det andre sifferet er støy over 100 g. */
+function vektDesimaler() { const t = S.vektTrinn || 0.01; return t >= 1 ? 0 : t >= 0.1 ? 1 : 2; }
+function veiG(v) {
+  const t = S.vektTrinn || 0.01;
+  const tak = v >= 100 ? 0 : v >= 10 ? 1 : 2;
+  return gram(Math.round(v / t) * t, Math.min(vektDesimaler(), tak));
+}
+/* Er mengden så liten at vekta ikke treffer den pålitelig (under 20× minste trinn)? */
+function underVekt(v) { return v > 0 && v < 20 * (S.vektTrinn || 0.01); }
 
 /* ============================================================
    RENDER
@@ -234,13 +246,61 @@ function tegnBrodet(r) {
   })));
 
   // Størrelse
+  const emneMasse = r.totalVekt / Math.max(S.antall, 1);
   wrap.appendChild(h('div', { class: 'kort', style: 'margin-top:14px' },
     h('div', { class: 'kort-num' }, 'Størrelse'),
     stepperRad('Antall brød', S.antall, 'antall', 1, 40, 1),
     stepperRad('Gram per brød', S.vekt, 'vekt', 100, 2000, 50),
     h('div', { style: 'margin-top:10px;font-size:.8rem;color:var(--color-neutral-700);font-variant-numeric:tabular-nums' },
-      'Deigvekt ', h('b', null, g0(r.totalVekt)), ' · hver ca. ', h('b', null, g0(r.totalVekt / Math.max(S.antall, 1))))));
+      'Deigvekt ', h('b', null, g0(r.totalVekt)), ' · hver ca. ', h('b', null, g0(emneMasse)),
+      ' · Pyrex-gryta er 21,5 cm innvendig'),
+    h('div', { style: 'margin-top:12px' },
+      h('div', { class: 'felt-label' }, 'Kjøkkenvekta di viser'),
+      h('div', { class: 'piller' }, ...[[1, 'hele gram'], [0.1, '0,1 g'], [0.01, '0,01 g']].map(([v, navn]) =>
+        h('button', { class: (S.vektTrinn || 1) === v ? 'paa' : '', onClick: () => { S.vektTrinn = v; oppdater(); } }, navn))))));
+
+  // Form og kurv (styrer stekeutstyret, ikke bare utseendet)
+  if (r.bt.rute !== 'preset') wrap.appendChild(tegnFormKurv(r, emneMasse));
+
+  // Utstyr
+  wrap.appendChild(tegnUtstyrValg(r));
   return wrap;
+}
+function tegnFormKurv(r, emneMasse) {
+  const boks = kort('Form og kurv', null);
+  boks.appendChild(h('div', { class: 'valg', style: 'margin-top:6px' }, ...FORMER.map(f => {
+    const paa = f.id === S.form;
+    let maal = '';
+    if (f.maal === 'lengde') maal = 'ca. ' + fmt(Math.cbrt(emneMasse / 1000) * f.kFaktor * 10, 0) + ' cm lang';
+    else if (f.maal === 'tverrmål') maal = 'ca. ' + fmt(Math.cbrt(emneMasse / 1000) * f.kFaktor * 10, 0) + ' cm tvers';
+    return h('button', { class: 'valgkort' + (paa ? ' paa' : ''), onClick: () => velgForm(f.id) },
+      h('span', { style: 'flex:1;min-width:0' },
+        h('span', { class: 'tittel', style: 'font-size:.98rem' }, f.navn),
+        h('span', { class: 'undertittel' }, f.kort + (maal ? ' · ' + maal : ''))),
+      paa ? h('span', { class: 'valgt-merke' }, '✓' ) : null);
+  })));
+  const f = FORMER.find(x => x.id === S.form);
+  if (f && f.advarsel) boks.appendChild(h('div', { class: 'varsel' }, f.advarsel));
+  if (f) boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' }, f.om, f.snitt ? h('div', { style: 'margin-top:6px' }, h('b', null, 'Snitt: '), f.snitt) : null));
+  return boks;
+}
+function tegnUtstyrValg(r) {
+  const boks = kort('Stekeutstyr', null);
+  const u = UTSTYR.find(x => x.id === S.utstyr) || UTSTYR[0];
+  boks.appendChild(h('select', { class: 'sok', style: 'margin-top:6px', 'aria-label': 'Stekeutstyr',
+    onchange: e => { S.utstyr = e.target.value; if (!S.stekeProfilManuell) S.stekeProfil = profilForUtstyr(S.utstyr, S.form); oppdater(); } },
+    ...UTSTYR.map(x => h('option', { value: x.id, selected: x.id === S.utstyr ? 'selected' : null }, x.navn))));
+  boks.appendChild(h('div', { style: 'display:flex;gap:12px;font-size:.76rem;color:var(--color-neutral-600);margin-top:8px;flex-wrap:wrap;font-variant-numeric:tabular-nums' },
+    h('span', null, 'Kontakt ', h('b', null, u.kontakt + ' °C')), h('span', null, 'Forvarm ', h('b', null, u.forvarm)), h('span', null, 'Damp: ', h('b', null, u.damp))));
+  boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:6px' }, u.om));
+  boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' }, 'Gir stekeprofilen ', h('b', null, r.prof.navn), '. Best til: ' + u.best + '.'));
+  return boks;
+}
+function velgForm(id) { S.form = id; if (!S.stekeProfilManuell) S.stekeProfil = profilForUtstyr(S.utstyr, id); oppdater(); }
+const UTSTYR_PROFIL = { stal15: 'brod_kloke', glass: 'brod_glass_stal', glass_stal: 'brod_glass_stal', stopejern: 'brod_gryte', apen: 'brod_apen' };
+function profilForUtstyr(utstyrId, formId) {
+  if (utstyrId === 'stal15' && formId === 'avlang') return 'brod_apen';
+  return UTSTYR_PROFIL[utstyrId] || 'brod_apen';
 }
 function startForvalg() { S.brotype = 'grovbrod'; S.grov = 40; S.tid = 'lang'; S.skjerm = 'deigen'; oppdater(); }
 function velgBrotype(id) {
@@ -478,8 +538,10 @@ function tegnForferment(r) {
       'Tar ', h('b', null, fmt(f.pctMel, 0) + ' %'), ' av melet (', g0(f.mel), ') og modner ', h('b', null, fmtTimer(f.timer)),
       ' ved ', h('b', null, grader(f.temp, 0)), '. Gjærdosen i hoveddeigen faller, og løftet ', h('b', null, (r.loft.tap.ff >= 0 ? '+' : '') + fmt(r.loft.tap.ff, 1)), ' poeng.'));
     boks.appendChild(h('div', { style: 'margin-top:10px' },
-      tallrad('Mel', g0(f.mel)), tallrad('Vann', g0(f.vann)), tallrad('Gjær (tørr)', fmt(f.gjaer, 2) + ' g'),
-      tallrad('Modning', fmtTimer(f.timer) + ' ved ' + grader(f.temp, 0)), f.salt > 0.05 ? tallrad('Salt', fmt(f.salt, 2) + ' g') : null));
+      tallrad('Mel', veiG(f.mel)), tallrad('Vann', veiG(f.vann)), tallrad('Gjær (tørr)', veiG(f.gjaer)),
+      tallrad('Modning', fmtTimer(f.timer) + ' ved ' + grader(f.temp, 0)), f.salt > 0.05 ? tallrad('Salt', veiG(f.salt)) : null));
+    if (underVekt(f.gjaer)) boks.appendChild(h('div', { class: 'varsel' },
+      'Gjærmengden (' + veiG(f.gjaer) + ') er for liten til å veies pålitelig på kjøkkenvekta di. Løs opp en større mengde i vann og bruk en andel — eller sett vekta til 0,01 g under Størrelse.'));
   } else if (ff.id === 'ingen') {
     boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' }, ff.hvorfor));
   }

@@ -853,7 +853,8 @@ function regn(state) {
   let r = oppskrift(0.3, losMel(0.3));
 
   // Gjæren løses numerisk mot måldosen (L-02), med tak og underskudd-flagg.
-  const planTrinn = plan.plan.map(s => ({ ...s }));
+  // Heveplanen kan være redigert av brukeren (state.heveplan); ellers planens standard.
+  const planTrinn = (Array.isArray(state.heveplan) && state.heveplan.length ? state.heveplan : plan.plan).map(s => ({ ...s }));
   if (planTrinn.length) planTrinn[0].temp = state.startTemp ?? 24;
   const pff = ffPaa ? forferment.pctMel / 100 : 0;
   const maalDose = maalDoseFor(r.grovMelAndel, pff);
