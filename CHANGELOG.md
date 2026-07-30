@@ -45,6 +45,52 @@ fungerer ellers uendret — inkludert lokal lagring uten konto.
 
 ---
 
+## 30.07.2026 (natt, sist av alt) — Slutt på å tømme cachen
+
+Bjørn: «gjør det slik at jeg slipper å slette cache hele tiden, og at det går
+automatisk med refresh av siden.» Det tok tre forsøk, og de to første er verdt å
+skrive ned fordi de så riktige ut.
+
+**Forsøk 1 — `fetch()` i service workeren.** Antok at nett-først holdt. Feil: et
+vanlig `fetch()` inne i en SW går fortsatt gjennom nettleserens HTTP-cache.
+
+**Forsøk 2 — `cache: 'no-cache'` på den fetchen.** Riktig verktøy, feil sted.
+Testen var fortsatt rød, og en måling av hvilke forespørsler som faktisk traff
+serveren under en refresh viste hvorfor:
+
+    ved refresh får service workeren KUN navigasjonsforespørselen.
+    <script src="js/data.js"> og CSS-en når den aldri.
+
+Chrome serverer subressurser rett fra HTTP-cachen så lenge `max-age` ikke er
+utløpt — uten å spørre service workeren i det hele tatt. GitHub Pages sender
+`max-age=600`. **Ingen fetch-strategi kan fikse dette, fordi `fetch` aldri kalles.**
+Det var derfor cache-tømming var eneste utvei.
+
+**Forsøk 3, som virker — URL-ene må endre seg når innholdet endrer seg.**
+Service workeren fanger navigasjonen (den får den alltid), henter `index.html`
+ferskt, leser **ETag-en** til hver appfil og skriver om HTML-en så hver URL får
+`?v=<etag>`:
+
+- innhold endret → ny ETag → ny URL → HTTP-cachen bommer → hentes på nytt
+- innhold uendret → samme ETag → samme URL → HTTP-cachen treffer → ingen nedlasting
+
+ETag-oppslagene er betingede, så uendrede filer svarer **304**. Versjonerte URL-er
+er innholdsadresserte og hentes cache-først — de kan per definisjon ikke være
+foreldet.
+
+**Målt** mot en testserver som hermer GitHub Pages (`max-age=600` + ETag + 304):
+en vanlig refresh etter at en fil er endret gir **ny kode**, og en refresh der
+ingenting er endret gir **9 stk 304 og 0 byte nedlastet** — mot 385 KB hvis alt
+hadde blitt hentet ukondisjonelt. Offline virker fortsatt.
+
+Dessuten: `controllerchange` laster fanen om én gang når en ny worker tar over
+(med vakt mot at førstegangsinstallasjon utløser en unødig omlasting), og
+`visibilitychange` ser etter ny versjon hver gang en installert app hentes fram.
+Nederst i **Oppslag** står nå «Denne appversjonen» med tidsstempel og en
+«Se etter oppdatering nå»-knapp — en ærlig kvittering på at oppdateringen kom.
+
+---
+
 ## 30.07.2026 (natt, sist) — Installerbar app på Android (PWA)
 
 Bjørn ba om å kunne installere appen fra Chrome på Android. Chrome krever tre ting:

@@ -1652,7 +1652,36 @@ function tegnOppslag(r) {
     h('span', { style: 'color:var(--color-neutral-400)' }, '›'))));
   wrap.appendChild(h('div', { class: 'varsel', style: 'margin-top:12px' },
     'Fagstoffet ligger her, ikke i veien for bakingen. Der et valg har en konsekvens, står forklaringen som ⓘ rett ved valget — ikke som en lenke hit.'));
+  wrap.appendChild(tegnAppVersjon());
   return wrap;
+}
+/* Hvilken versjon kjører jeg? `document.lastModified` er tidsstempelet serveren
+   ga index.html, så den flytter seg når en ny versjon faktisk er hentet — en
+   ærlig kvittering på at oppdateringen kom fram. */
+function tegnAppVersjon() {
+  const d = new Date(document.lastModified);
+  const naar = isFinite(d.getTime()) ? klDato(d.getTime()) : 'ukjent tidspunkt';
+  const boks = h('div', { style: 'margin-top:14px;padding:12px 14px;border-radius:var(--radius-md);background:var(--color-neutral-100)' },
+    h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);font-weight:700' }, 'Denne appversjonen'),
+    h('div', { style: 'font-size:.8rem;margin-top:2px;font-variant-numeric:tabular-nums' }, naar),
+    h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:6px;line-height:1.45' },
+      'Appen henter siste versjon selv hver gang du åpner den med nett — du skal aldri måtte tømme cachen.'));
+  boks.appendChild(h('button', { class: 'btn', style: 'margin-top:10px;width:100%;font-size:.8rem', onClick: seEtterOppdatering },
+    'Se etter oppdatering nå'));
+  return boks;
+}
+async function seEtterOppdatering(e) {
+  const knapp = e && e.currentTarget;
+  if (knapp) { knapp.textContent = 'Sjekker …'; knapp.disabled = true; }
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.update();
+    }
+  } catch (err) {}
+  // Omlastingen henter gjennom service workeren, som revaliderer mot serveren —
+  // så dette gir siste versjon uten at noe må tømmes for hånd.
+  location.reload();
 }
 function tilbakeknapp() { return h('button', { class: 'btn-ghost', onClick: () => { S.oppslag = 'meny'; oppdater(); } }, '‹ Oppslag'); }
 

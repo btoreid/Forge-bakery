@@ -82,9 +82,16 @@ fokusert felt ble fjernet under `replaceChildren` (blur midt i render). Rettet m
 `manifest.webmanifest` + `sw.js` + `icons/` gjør V2 til en installerbar PWA. Chrome på
 Android tilbyr «Installer app»; den åpner i standalone uten adressefelt og virker offline.
 
-**Service workeren er nett-først, ikke cache-først** — med cache-først kunne en installert
-app blitt hengende på gammel kode uten at noe tydet på det, og appen pushes flere ganger
-daglig. Den rører kun same-origin GET, så Supabase-kall går alltid rett på nettet.
+**Service workeren stempler appfilene med ETag — ikke rør det uten å lese hvorfor.**
+Ved refresh får en service worker KUN navigasjonsforespørselen; `<script src="…">` og CSS
+når den aldri, fordi Chrome serverer subressurser rett fra HTTP-cachen så lenge `max-age`
+ikke er utløpt (GitHub Pages sender 600 s). **Ingen fetch-strategi fikser det — `fetch`
+blir aldri kalt.** Derfor skriver SW-en om HTML-en og gir hver appfil `?v=<etag>`: endret
+innhold gir ny URL (hentes), uendret gir samme URL (HTTP-cachen treffer). Målt: refresh
+etter en endring gir ny kode; refresh uten endring gir 9 stk 304 og 0 byte. Hele
+resonnementet står i CHANGELOG og i toppkommentaren i `sw.js`.
+
+SW-en rører kun same-origin GET, så Supabase-kall går alltid rett på nettet.
 
 Stier i manifestet er **relative** (`./`). Absolutte ville brutt både lokal testing og
 undermappa `/Forge-bakery/`.

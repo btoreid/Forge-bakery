@@ -38,7 +38,27 @@
     // Relativ sti er nødvendig: appen ligger under /Forge-bakery/, og '/sw.js'
     // ville pekt på domenerota og gitt 404 + feil scope.
     if ('serviceWorker' in navigator) {
-      addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+      var byttet = false;
+      // Byttes worker mens siden står åpen, kjører fanen kanskje halvgammel kode.
+      // Last om ÉN gang. Vakten på `controller` er nødvendig: ved aller første
+      // installasjon går den fra ingen til én worker, og uten vakten ville hver
+      // førstegangsbruker fått en unødig omlasting.
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (!navigator.serviceWorker.controller || byttet) return;
+        byttet = true;
+        location.reload();
+      });
+      addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').then(function (reg) {
+          reg.update();
+          // Installert app byttes bare til, den lastes sjelden på nytt. Se etter
+          // ny versjon hver gang den hentes fram, ellers kunne den blitt stående
+          // på gammel kode til brukeren tilfeldigvis refresher.
+          document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') reg.update();
+          });
+        }).catch(function () {});
+      });
     }
   </script>
 </body>
