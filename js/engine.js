@@ -786,7 +786,9 @@ function tilleggOppdelt(tillegg, melTotal) {
     const t = TILLEGG.find(x => x.id === id); if (!t) return;
     if (t.type === 'smak' && t.felt) { smak[t.felt] = pct; return; }
     const sk = SOAKERS.find(s => s.id === id);
-    const varmt = !!t.varmt || (sk && sk.type === 'varmt');
+    // Skålding (behandling 'skald') bruker varm absorpsjon; rist og kaldbløt
+    // bruker kald. `behandling` er kilden — `varmt`-flagget avledes av den.
+    const varmt = !!t.varmt || (sk && (sk.behandling === 'skald' || sk.type === 'varmt'));
     froListe.push({ id, gram: melTotal * pct / 100, varmt });
   });
   return { froListe, smak };
@@ -859,6 +861,28 @@ function regn(state) {
   r = kall(torr);
   const doseProfil = planDose(planTrinn, torr, r.masseKg, opt);
 
+  // Stekeprofil: brukerens valg, ellers presetets, ellers første profil.
+  const prof = BAKE_PROFILES.find(p => p.id === state.stekeProfil)
+            || (preset && BAKE_PROFILES.find(p => p.id === preset.steking))
+            || BAKE_PROFILES[0];
+
+  // Deigtemp: ekte varmebalanse (samme motor som Deigtemp-skjermen). Vannet i
+  // hoveddeigen, melet utenom forfermenten, forfermenten og frøene veies hver
+  // for seg — det er nettopp derfor 3-faktorformelen bommer på våte deiger.
+  const eltMin = state.eltMin || 13;
+  const melIHoved = r.melTotal - (r.forferment ? r.forferment.mel : 0);
+  const froGramTot = r.froAbsorbert + r.fro.reduce((s, f) => s + (f.gram || 0), 0);
+  const dt = vanntemperatur({
+    onsketDeigTemp: state.startTemp ?? 24,
+    melGram: melIHoved, melTemp: state.melTemp ?? 21,
+    vannGram: Math.max(r.vannHoved, 1),
+    forfermentGram: r.forferment ? r.forferment.total : 0,
+    forfermentTemp: r.forferment ? r.forferment.temp : 20,
+    forfermentHydrering: r.forferment ? r.forferment.hydrering / 100 : 1,
+    froGram: froGramTot, froTemp: state.melTemp ?? 21,
+    mikser: state.maskin || 'spiralHjemme', minutter: eltMin
+  });
+
   // Løftindeks. Frø-leddet teller BARE ekte frø (ikke korn) — korn ligger
   // allerede i grovheten (brodskala), så å telle dem her ville vært dobbelt.
   const froPctEkte = deler.froListe.reduce((s, f) => {
@@ -882,8 +906,197 @@ function regn(state) {
     hyd, saltPct,
     gjaerTorr: torr, maalDose, gjaerUnderskudd,
     doseProfil, loft,
+    prof, eltMin, vannTemp: dt.vannTemp, friksjon: dt.friksjonsOkning, wh: dt.friksjonsOkning / ELTING.GRAD_PER_WH,
     melListe
   };
+}
+
+/* ---------- kjede(state, r): STEGKJEDEN som ren funksjon ----------
+   Bygger hele bakekjeden av regn()-resultatet, regnet BAKOVER fra ferdig stekt
+   (stekingen er det faste punktet). Løser flere logikksaker samtidig:
+   - L-10: total tid er ALLTID siste stegs slutt minus første stegs start, lest
+     ut av kjeden — aldri en parallell sum.
+   - L-13: stegene bærer sin egen regnede varighet; ingen fast «26–34 t»-etikett.
+   - L-09: gjæringsandelen per trinn leses av doseProfil.trinn[i].dose / total,
+     aldri en konstant — så en plan med kaldt trinn får riktig varm/kald-fordeling.
+   - L-07: ett steg per BEHANDLING (rist / kaldbløt / skåld), ikke ett felles
+     frøsteg — prosessene motarbeider hverandre.
+   - L-12: hvert tall vises ÉN gang per steg; konstanter står i parentes.
+
+   `ferdigMs` er ønsket ferdig-tidspunkt i ms (Date). Utelatt: en fast referanse,
+   så tidene finnes for testing — totaltiden er uansett uavhengig av den.        */
+const KALDGRENSE = 12;        // °C — skillet kaldt/varmt miljø (L-04: var hardkodet)
+const KJEDE = { UTBAK: 45, ELT: 75, PREP: 30, RIST: 15 };  // faste stegvarigheter (min)
+const REF_FERDIG = Date.UTC(2026, 6, 30, 15, 0, 0);        // deterministisk testreferanse
+
+function forstTall(s) { const m = String(s).match(/\d+/); return m ? +m[0] : null; }
+
+function kjede(state, r, ferdigMs) {
+  const prof = r.prof;
+  const antall = state.antall || 1;
+  const stekeMin = forstTall(prof.tid) || 45;
+  const forvarmMin = FORVARM_MIN[prof.id] || 60;
+
+  const ferdig = new Date(ferdigMs != null ? ferdigMs : REF_FERDIG);
+  const minus = (d, min) => new Date(d.getTime() - min * 60000);
+  const kl = d => klokke(d);
+
+  // Ankerpunkter bakover fra ferdig.
+  const innsetting = minus(ferdig, stekeMin);
+  const utbakStart = minus(innsetting, KJEDE.UTBAK);
+  const forvarmStart = minus(innsetting, forvarmMin);
+
+  // Gjæringstrinnene (bulk, kaldheving, …) regnes bakover fra utbaking. Vi
+  // ITERERER planens trinn i stedet for å anta «bulk + kald», så L-09 blir
+  // riktig uansett hvor mange trinn planen har.
+  const trinn = r.planTrinn;
+  const doseTr = r.doseProfil.trinn || [];
+  const doseSum = r.doseProfil.dose || 1;
+  const trinnTider = [];
+  let peker = new Date(utbakStart);
+  for (let i = trinn.length - 1; i >= 0; i--) {
+    const start = minus(peker, (trinn[i].timer || 0) * 60);
+    trinnTider[i] = { start, slutt: new Date(peker) };
+    peker = start;
+  }
+  const eltStart = minus(peker, KJEDE.ELT);
+  const prepStart = minus(eltStart, KJEDE.PREP);
+
+  const steg = [];
+
+  // 1 · Forferment (bare hvis på)
+  if (r.ffPaa && r.forferment) {
+    const ff = r.forferment;
+    const ffStart = minus(eltStart, ff.timer * 60);
+    steg.push({
+      id: 'ff', navn: 'Sett ' + r.ffT.navn.toLowerCase() + 'en', tid: ffStart, varighet: ff.timer * 60, tone: 'noytral',
+      hoved: gram(ff.mel), hovedNote: 'mel i forfermenten', sideK: 'Modning', sideV: fmtTimer(ff.timer),
+      tall: [['Mel', gram(ff.mel)], ['Vann', gram(ff.vann)], ['Tørrgjær', fmt(ff.gjaer, 2) + ' g'],
+             ['Temperatur', grader(ff.temp, 0)], ...(ff.salt > 0.05 ? [['Salt', fmt(ff.salt, 2) + ' g']] : [])],
+      gjor: 'Visp ut gjæren i vannet FØR melet — noen tiendedels gram fordeler seg ikke i tørt mel. ' +
+            (ff.hydrering <= 60 ? 'Bland bare til den er lurvete; rå melklumper er riktig i en stiv forferment. ' : 'Rør til jevn røre. ') + 'Lokk på.',
+      sjekk: r.ffT.id === 'surdeig'
+        ? 'Klar når levainet er nylig toppet og lukter mildt syrlig — ikke skarpt. Flyter en klype i vann, er det klart. Overmodent (sunket, skarp eddiklukt) degraderer glutenet og senker løftet.'
+        : 'Klar når den har kuppel og akkurat begynner å synke i midten, med vannmerke på beholderveggen.'
+    });
+  }
+
+  // 2 · Frøbehandling — ett steg per behandling (L-07)
+  const froAktive = r.fro.filter(f => (f.gram || 0) > 0).map(f => {
+    const sk = SOAKERS.find(s => s.id === f.id) || {};
+    const behandling = sk.behandling || (f.varmt ? 'skald' : 'bloet');
+    return { f, sk, pct: (f.gram || 0) / Math.max(r.melTotal, 1) * 100, bundet: f.bloetleggVann || 0, behandling };
+  });
+  const BEH = [
+    { id: 'rist', navn: 'Rist', varighet: KJEDE.RIST,
+      gjor: 'Tørr panne, 125–150 °C til lys gyllen — ristingen gir målt 28–51× mer pyrazin, altså dobbelt så mye smak per gram. Ikke bløtlegg dem varmt eller lenge etterpå: pyrazinene er vannløselige og flyktige.',
+      sjekk: 'De skal dufte nøtteaktig, ikke brent. Avkjøl før de går i deigen.' },
+    { id: 'bloet', navn: 'Bløtlegg kaldt', varighet: KJEDE.PREP,
+      gjor: 'Kaldt vann, ca. 1,85× det de binder, og hell av overskuddet før de går i deigen. Minst 30 minutter.',
+      sjekk: 'Ingen tørre kjerner igjen. Bløtlegger du ikke, trekker de vann ut av glutenet gjennom hele bulken.' },
+    { id: 'skald', navn: 'Skåld', varighet: KJEDE.PREP,
+      gjor: 'Hell nøyaktig det som bindes, med KOKENDE vann. Alt skåldevannet skal med i deigen — det bærer sukkerartene og stivelsen skåldingen frigjør.',
+      sjekk: 'Grynene skal være helt mettede og kladde seg sammen. Kaldbløtlagt rugknekk blir grus i brødet.' }
+  ];
+  BEH.forEach(b => {
+    const med = froAktive.filter(x => x.behandling === b.id);
+    if (!med.length) return;
+    const gramSum = med.reduce((a, x) => a + (x.f.gram || 0), 0);
+    const bundet = med.reduce((a, x) => a + x.bundet, 0);
+    // L-12: hvert tall én gang. Gramfeltet står i hovedtallet; tabellen viser
+    // per frø, og konstanten (vann bundet) i parentes — ikke som egen rad.
+    steg.push({
+      id: 'prep-' + b.id, navn: b.navn + ' ' + med.map(x => x.f.navn.toLowerCase().split(' (')[0]).join(' og '),
+      tid: prepStart, varighet: b.varighet, tone: 'noytral',
+      hoved: gram(gramSum), hovedNote: med.map(x => pst(x.pct, 1) + ' ' + x.f.navn.toLowerCase().split(' (')[0]).join(' · '),
+      sideK: 'Binder vann', sideV: gram(bundet),
+      tall: med.map(x => [x.f.navn, gram(x.f.gram) + (b.id === 'rist' ? '' : ' (+ ' + gram(x.bundet * (b.id === 'bloet' ? 1.85 : 1)) + ' vann)')])
+             .concat(b.id === 'bloet' ? [['Hell av overskuddet', gram(bundet * 0.85)]] : [])
+             .concat([['Stjeler av hydreringen', pst(bundet / Math.max(r.melTotal, 1) * 100, 1) + '-poeng']]),
+      gjor: b.gjor, sjekk: b.sjekk
+    });
+  });
+
+  // 3 · Elting
+  steg.push({
+    id: 'elt', navn: 'Elt deigen', tid: eltStart, varighet: KJEDE.ELT, tone: 'accent',
+    hoved: grader(state.startTemp ?? 24, 1), hovedNote: 'deigtemp ut av maskinen', sideK: 'Vann inn', sideV: grader(r.vannTemp, 1),
+    tall: [['Friksjon, ' + r.eltMin + ' min', '+' + grader(r.friksjon, 1)], ['Arbeid', fmt(r.wh, 1) + ' Wh/kg'],
+           ['Meltemperatur', grader(state.melTemp ?? 21, 0)], ['Deigvekt', gram(r.totalVekt)]],
+    gjor: 'Salt de siste 2–3 minuttene. Stopp ved 60–75 % glutenutvikling — IKKE full vindusrute.',
+    sjekk: 'Deigen slipper bollen, men er fortsatt litt klissete. Dømm på deigen, ikke på klokka.', veie: true
+  });
+
+  // 4..n · Gjæringstrinnene fra planen (L-09: andel av doseProfil)
+  trinn.forEach((tr, i) => {
+    const kaldt = tr.miljo <= KALDGRENSE;
+    const dose = doseTr[i] ? doseTr[i].dose : 0;
+    const andel = dose / doseSum * 100;
+    const tt = trinnTider[i];
+    steg.push({
+      id: 'trinn-' + i, navn: tr.navn, tid: tt.start, varighet: (tr.timer || 0) * 60,
+      tone: kaldt ? 'sage' : 'accent',
+      hoved: fmtTimer(tr.timer), hovedNote: 'ved ' + grader(tr.miljo, 1), sideK: 'Andel av gjæringen', sideV: pst(andel, 0),
+      tall: [['Varighet', fmtTimer(tr.timer)], ['Ferdig', kl(tt.slutt)], ['Miljø', grader(tr.miljo, 1)],
+             ['Andel av gjæringen', pst(andel, 0)], ...(tr.utbakt ? [['Emnestørrelse', gram(r.totalVekt / antall) + ' × ' + antall]] : [['Mål stigning', '60–72 %']])],
+      gjor: kaldt
+        ? 'Emnene står ' + (tr.utbakt ? 'utbakt i hevekurv, ' : '') + 'tett tildekket på kjøl. Mesteparten av gjæringen skjer de første 6 timene, mens deigen ennå kjøles ned.'
+        : (i === 0 ? 'Brett i første halvdel, så ikke rør deigen etterpå. Bretting bygger struktur bare mens glutenet er tøyelig.'
+                   : 'Følg emnene tett — hevevinduet er smalt når det er varmt.'),
+      sjekk: kaldt ? 'Se på emnet før du steker: det skal ha vokst tydelig og kjennes luftig, ikke stinnt.'
+                   : (tr.utbakt ? 'Trykktest før ovnen: gropen skal fylle seg langsomt igjen over 5–10 sekunder.'
+                                : 'Sikt mot 60–72 % stigning i målekrukka.'),
+      krukke: !tr.utbakt || !kaldt
+    });
+  });
+
+  // Forvarm (overlapper hevingen)
+  steg.push({
+    id: 'ovn', navn: 'Sett på ovnen', tid: forvarmStart, varighet: forvarmMin, tone: 'accent',
+    hoved: prof.inn + ' °C', hovedNote: (prof.navn || '').toLowerCase(), sideK: 'Forvarm', sideV: fmtTimer(forvarmMin / 60),
+    tall: [['Sett ovnen på', prof.inn + ' °C'], ['Forvarmingstid', fmtTimer(forvarmMin / 60)], ['Rist', prof.rist], ['Damp', prof.damp]],
+    gjor: 'Ovnens pipelyd betyr ingenting — den måler lufta, ikke stålet. Sett dampkaret inn nå.',
+    sjekk: 'Dette steget overlapper med hevingen. Det er derfor det ligger her og ikke rett før innsetting.'
+  });
+
+  // Bak ut og hvile
+  steg.push({
+    id: 'utbak', navn: 'Bak ut og la hvile', tid: utbakStart, varighet: KJEDE.UTBAK, tone: 'noytral',
+    hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Benkehvile', sideV: KJEDE.UTBAK + ' min',
+    tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)], ['Benkehvile', KJEDE.UTBAK + ' min']],
+    gjor: 'Håndter bare de ytterste 1 cm. Ta av håndkleet 10 minutter før ovnen så skorpa tørker.',
+    sjekk: 'Trykktest: gropen skal fylle seg langsomt igjen over 5–10 sekunder og etterlate et synlig merke.'
+  });
+
+  // Stek
+  steg.push({
+    id: 'stek', navn: 'Stek', tid: innsetting, varighet: stekeMin, tone: 'accent',
+    hoved: forstTall(prof.tid) + ' min', hovedNote: prof.inn + ' → ' + prof.ned + ' °C', sideK: 'Kjerne', sideV: prof.kjerne,
+    tall: [['Inn på', prof.inn + ' °C'], ['Ned til', prof.ned + ' °C ' + (prof.nedNaar || '')], ['Damp', prof.damp], ['Rist', prof.rist]],
+    gjor: (prof.damp === 'ingen' || String(prof.damp).startsWith('ingen'))
+      ? 'Ingen damp å tilsette — lokket/gryta gjør jobben. Ett bestemt drag med buet blad før lokket på.'
+      : 'Kokende vann fra kjelen i det du setter inn. Ett bestemt drag med buet blad.',
+    sjekk: 'Ovnsløftet varer 15–20 minutter, med 80 % levert i de første 10–12. Ikke åpne døra i den perioden.'
+  });
+
+  // Avkjøl
+  steg.push({
+    id: 'kjol', navn: 'Avkjøl', tid: ferdig, varighet: 180, tone: 'noytral',
+    hoved: '3 t', hovedNote: 'til kjerne 35–38 °C', sideK: 'Total prosess', sideV: '',
+    tall: [['Til kjernetemperatur', '35–38 °C'], ['Tid', '3–4 timer'], ['På rist', 'luft under'], ['Antall brød', String(antall)]],
+    gjor: 'Ikke skjær varmt. Stivelsen setter seg under nedkjølingen, ikke under stekingen.',
+    sjekk: 'Skorpa knitrer mens den kjøles. Logg baket mens du husker det — løft ' + r.loft.loft + ', ' + fmt(r.hyd * 100, 0) + ' % vann.'
+  });
+
+  steg.sort((a, b) => a.tid - b.tid);
+  steg.forEach((x, i) => x.nr = i + 1);
+  // L-10: ÉN kilde til totaltiden — kjeden selv, første steg til avkjølt brød.
+  const siste = steg[steg.length - 1];
+  steg.totalT = (siste.tid.getTime() + siste.varighet * 60000 - steg[0].tid.getTime()) / 3600000;
+  steg.filter(x => x.id === 'kjol').forEach(x => { x.sideV = fmt(steg.totalT, 1) + ' t'; });
+  steg.start = steg[0].tid;
+  steg.ferdig = ferdig;
+  return steg;
 }
 
 /* Lineær interpolasjon i en ankerpunkttabell. Utenfor endepunktene klippes det

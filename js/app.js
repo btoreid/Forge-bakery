@@ -1830,10 +1830,7 @@ function tegnDoseForklaring() {
 
 /* Forvarmingstid i minutter per stekeprofil. Tallene er utstyrets, ikke ovnens:
    et 15 mm stål er ikke ladet før etter halvannen time, uansett hva ovnen piper. */
-const FORVARM_MIN = {
-  brod_kloke: 105, brod_glass_stal: 105, brod_gryte: 55,
-  brod_apen: 75, brod_600: 75, ciabatta: 105, baguette: 75, focaccia: 45
-};
+/* FORVARM_MIN er flyttet til js/data.js (delt kilde for V1 og motorens kjede). */
 
 /* Ett oppsett for varmebalansen, brukt av både Deigtemp-fanen og bakekjeden.
    Ønsket deigtemperatur er S.startTemp — den samme verdien gjæringsmodellen

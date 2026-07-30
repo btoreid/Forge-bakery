@@ -128,18 +128,25 @@ const FLOURS = [
    måledata. De er konsistente med hverandre og med bakepraksis, men ingen
    av dem kan slås opp i en kilde. Behandle dem som kalibrerbare: avviker
    ditt bløt fra tallet, er det tallet som skal justeres.                  */
+/* `behandling` (L-07): rist / bloet / skald er tre ULIKE prosesser, ikke bare
+   «frø». Repoet hadde bare `type` (kaldt/varmt = kaldbløt vs skålding) og skilte
+   dermed ikke risting fra bløtlegging — så kjede() ga solsikke feil instruks
+   (den skal ristes for pyrazinsmaken, ikke bløtlegges). Feltet driver nå både
+   hvilket forbehandlingssteg frøet havner i OG hvilken absorpsjon som brukes
+   (skald ⇒ varm binding). rist = tørrist for smak, bloet = kaldbløt for
+   slimstoff/saftighet, skald = kokende vann for sødme og mettede gryn.         */
 const SOAKERS = [
-  { id:'solsikke',  navn:'Solsikkekjerner', kaldt:80,  varmt:80,  type:'kaldt', korn:false, kr:88.0, notat:'Temperaturuavhengig — varm bløtlegging gir ingenting. ⚠ Solsikke er blant de MINST tørste frøene (80 g/100 g mot linfrøets 130 og chiaens 237), har skall og ~50 % fett. Under ca. 8 % av melet er bløtlegging valgfritt — vannet de stjeler er da under 3 prosentpoeng hydrering, som du enkelt kompenserer med litt mer vann. Over 10 % begynner det å bety noe. Rist dem uansett: det er ristingen som gir smaken, ikke bløtleggingen. Rister du OG bløtlegger, bruk kaldt vann og kort tid — pyrazinene er vannløselige og flyktige, så en lang eller varm bløt vasker ut nettopp det du ristet fram.' },
-  { id:'linfro',    navn:'Linfrø hele',     kaldt:130, varmt:136, type:'kaldt', korn:false, kr:56.0, notat:'Slimstoffdrevet — binder mest vann av frøene her. Bløtlegges kaldt, hele; slimstoffene trekker ut i kaldvann og gir saftighet og bedre holdbarhet.' },
-  { id:'linfro_malt',navn:'Linfrø malt',    kaldt:300, varmt:320, type:'kaldt', korn:false, kr:56.0, notat:'(est) Geléer aggressivt. Kalibrer selv — spennet er 250–350.' },
-  { id:'sesam',     navn:'Sesamfrø',        kaldt:58,  varmt:68,  type:'kaldt', korn:false, kr:70.0, notat:'Ristes oftere enn den bløtlegges.' },
-  { id:'gresskar',  navn:'Gresskarkjerner', kaldt:38,  varmt:48,  type:'kaldt', korn:false, kr:95.0, notat:'Lavest absorpsjon av alle vanlige frø.' },
-  { id:'havregryn', navn:'Havregryn',       kaldt:90,  varmt:206, type:'begge', korn:true,  kr:22.0, notat:'Størst forskjell kaldt/varmt av alt (+116 g). Slipper fuktighet som damp under steking.' },
-  { id:'ruggryn',   navn:'Ruggryn / rugknekk', kaldt:65, varmt:154, type:'varmt', korn:true, kr:26.0, notat:'MÅ skåldes. Kaldbløtlagt rugknekk blir grus i brødet.' },
-  { id:'knekt_hvete',navn:'Knekt hvete',    kaldt:178, varmt:225, type:'varmt', korn:true,  kr:20.0, notat:'' },
-  { id:'hvetekli',  navn:'Hvetekli',        kaldt:96,  varmt:168, type:'begge', korn:true,  kr:25.0, notat:'Gråsone: oppfører seg nesten som mel. Vurder å telle den i melmengden.' },
-  { id:'byggflak',  navn:'Byggflak',        kaldt:125, varmt:200, type:'varmt', korn:true,  kr:30.0, notat:'' },
-  { id:'chia',      navn:'Chiafrø',         kaldt:237, varmt:276, type:'kaldt', korn:false, kr:120.0, notat:'Ignorer «10–12× egen vekt» — det er svellevolum, ikke det deigen faktisk mister.' }
+  { id:'solsikke',  navn:'Solsikkekjerner', kaldt:80,  varmt:80,  type:'kaldt', behandling:'rist',  korn:false, kr:88.0, notat:'Temperaturuavhengig — varm bløtlegging gir ingenting. ⚠ Solsikke er blant de MINST tørste frøene (80 g/100 g mot linfrøets 130 og chiaens 237), har skall og ~50 % fett. Under ca. 8 % av melet er bløtlegging valgfritt — vannet de stjeler er da under 3 prosentpoeng hydrering, som du enkelt kompenserer med litt mer vann. Over 10 % begynner det å bety noe. Rist dem uansett: det er ristingen som gir smaken, ikke bløtleggingen. Rister du OG bløtlegger, bruk kaldt vann og kort tid — pyrazinene er vannløselige og flyktige, så en lang eller varm bløt vasker ut nettopp det du ristet fram.' },
+  { id:'linfro',    navn:'Linfrø hele',     kaldt:130, varmt:136, type:'kaldt', behandling:'bloet', korn:false, kr:56.0, notat:'Slimstoffdrevet — binder mest vann av frøene her. Bløtlegges kaldt, hele; slimstoffene trekker ut i kaldvann og gir saftighet og bedre holdbarhet.' },
+  { id:'linfro_malt',navn:'Linfrø malt',    kaldt:300, varmt:320, type:'kaldt', behandling:'bloet', korn:false, kr:56.0, notat:'(est) Geléer aggressivt. Kalibrer selv — spennet er 250–350.' },
+  { id:'sesam',     navn:'Sesamfrø',        kaldt:58,  varmt:68,  type:'kaldt', behandling:'rist',  korn:false, kr:70.0, notat:'Ristes oftere enn den bløtlegges.' },
+  { id:'gresskar',  navn:'Gresskarkjerner', kaldt:38,  varmt:48,  type:'kaldt', behandling:'rist',  korn:false, kr:95.0, notat:'Lavest absorpsjon av alle vanlige frø.' },
+  { id:'havregryn', navn:'Havregryn',       kaldt:90,  varmt:206, type:'begge', behandling:'skald', korn:true,  kr:22.0, notat:'Størst forskjell kaldt/varmt av alt (+116 g). Slipper fuktighet som damp under steking.' },
+  { id:'ruggryn',   navn:'Ruggryn / rugknekk', kaldt:65, varmt:154, type:'varmt', behandling:'skald', korn:true, kr:26.0, notat:'MÅ skåldes. Kaldbløtlagt rugknekk blir grus i brødet.' },
+  { id:'knekt_hvete',navn:'Knekt hvete',    kaldt:178, varmt:225, type:'varmt', behandling:'skald', korn:true,  kr:20.0, notat:'' },
+  { id:'hvetekli',  navn:'Hvetekli',        kaldt:96,  varmt:168, type:'begge', behandling:'bloet', korn:true,  kr:25.0, notat:'Gråsone: oppfører seg nesten som mel. Vurder å telle den i melmengden.' },
+  { id:'byggflak',  navn:'Byggflak',        kaldt:125, varmt:200, type:'varmt', behandling:'skald', korn:true,  kr:30.0, notat:'' },
+  { id:'chia',      navn:'Chiafrø',         kaldt:237, varmt:276, type:'kaldt', behandling:'bloet', korn:false, kr:120.0, notat:'Ignorer «10–12× egen vekt» — det er svellevolum, ikke det deigen faktisk mister.' }
 ];
 
 /* ---------- STEKEPROFILER ---------- */
@@ -187,6 +194,14 @@ const BAKE_PROFILES = [
     rist:'nederste tredel', tid:'25–30 min (snu etter 15)', kjerne:'94 °C', luft:'—',
     notat:'Bunnskorpa lages av ledningsvarme nedenfra pluss nok olje i formen til at den frityrsteker seg. Salamoia (like deler vann og olivenolje + 2 % salt, pisket) helles i søylepyttene rett før steking.' }
 ];
+
+/* Forvarmingstid i minutter per stekeprofil. Flyttet hit fra app.js (V1) så
+   både V1 og motorens kjede() leser samme kilde uten å redeklarere en const.
+   Tung termisk masse (stål, kloke) trenger lengst; en form kortest.           */
+const FORVARM_MIN = {
+  brod_kloke: 105, brod_glass_stal: 105, brod_gryte: 55,
+  brod_apen: 75, brod_600: 75, ciabatta: 105, baguette: 75, focaccia: 45
+};
 
 /* ---------- FORVALG (presets) ----------
    refPlan er DIN dokumenterte prosess. Appen regner ut gjæringsdosen
