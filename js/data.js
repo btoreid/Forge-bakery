@@ -130,7 +130,7 @@ const FLOURS = [
    ditt bløt fra tallet, er det tallet som skal justeres.                  */
 const SOAKERS = [
   { id:'solsikke',  navn:'Solsikkekjerner', kaldt:80,  varmt:80,  type:'kaldt', korn:false, kr:88.0, notat:'Temperaturuavhengig — varm bløtlegging gir ingenting. ⚠ Solsikke er blant de MINST tørste frøene (80 g/100 g mot linfrøets 130 og chiaens 237), har skall og ~50 % fett. Under ca. 8 % av melet er bløtlegging valgfritt — vannet de stjeler er da under 3 prosentpoeng hydrering, som du enkelt kompenserer med litt mer vann. Over 10 % begynner det å bety noe. Rist dem uansett: det er ristingen som gir smaken, ikke bløtleggingen. Rister du OG bløtlegger, bruk kaldt vann og kort tid — pyrazinene er vannløselige og flyktige, så en lang eller varm bløt vasker ut nettopp det du ristet fram.' },
-  { id:'linfro',    navn:'Linfrø hele',     kaldt:130, varmt:136, type:'kaldt', korn:false, kr:56.0, notat:'Slimstoffdrevet. Hele linfrø går rett gjennom deg om de ikke knuses.' },
+  { id:'linfro',    navn:'Linfrø hele',     kaldt:130, varmt:136, type:'kaldt', korn:false, kr:56.0, notat:'Slimstoffdrevet — binder mest vann av frøene her. Bløtlegges kaldt, hele; slimstoffene trekker ut i kaldvann og gir saftighet og bedre holdbarhet.' },
   { id:'linfro_malt',navn:'Linfrø malt',    kaldt:300, varmt:320, type:'kaldt', korn:false, kr:56.0, notat:'(est) Geléer aggressivt. Kalibrer selv — spennet er 250–350.' },
   { id:'sesam',     navn:'Sesamfrø',        kaldt:58,  varmt:68,  type:'kaldt', korn:false, kr:70.0, notat:'Ristes oftere enn den bløtlegges.' },
   { id:'gresskar',  navn:'Gresskarkjerner', kaldt:38,  varmt:48,  type:'kaldt', korn:false, kr:95.0, notat:'Lavest absorpsjon av alle vanlige frø.' },
@@ -527,7 +527,7 @@ const TILLEGG = [
     ned:'Mer ovnsløft og åpnere krumme. Under 5 % blir smaksbidraget beskjedent — men rister du frøene får du dobbelt så mye smak per gram, så 6 % ristede tilsvarer 12 % uristede.' },
   { id:'linfro',     type:'fro',   navn:'Linfrø',          pct:3,  min:1,  max:12,
     hvorfor:'Slimstoffene gir saftighet og lengre holdbarhet.',
-    obs:'Binder hele 130 g vann per 100 g — den tørsteste ingrediensen i lista. Hele linfrø må knuses for å gi næring.',
+    obs:'Binder hele 130 g vann per 100 g — den tørsteste ingrediensen i lista. Bløtlegges kaldt, hele.',
     opt:'2–3 %. Den dyreste frøtypen i struktur — bruk solsikke til smaken og lin bare til saftigheten.',
     opp:'Saftigere krumme og lengre holdbarhet. Men deigstabiliteten kollapser: målt fra 15,3 til 3,3 minutter ved 15 % linfrø. I frittstående brød gir lin målt større diameter og lavere høyde — altså flatere brød.',
     ned:'Merkbart bedre løft og en deig som er langt lettere å håndtere. Du taper lite smak, for lin smaker lite.' },
