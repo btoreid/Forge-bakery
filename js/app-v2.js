@@ -124,6 +124,21 @@ function ikonSvg(name) {
   return svg;
 }
 
+/* Korntegning fra KORN_SVG (via MEL_KORN). Klassene .f/.s/.s2 styles i CSS mot
+   fargevariablene satt inline. */
+function kornTegning(flourId) {
+  const tom = h('span', { style: 'flex:0 0 0;width:0' });
+  if (typeof MEL_KORN === 'undefined' || typeof KORN_SVG === 'undefined') return tom;
+  const k = KORN_SVG[MEL_KORN[flourId]];
+  if (!k) return tom;
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 40 60'); svg.setAttribute('width', '26'); svg.setAttribute('height', '39');
+  svg.setAttribute('class', 'kornsvg'); svg.setAttribute('style', 'flex:0 0 26px;--kf:' + k.farge + ';--kk:' + k.kant);
+  svg.innerHTML = k.svg;
+  return svg;
+}
+
 let _nullstillScroll = false;
 function render() {
   try { renderInner(); }
@@ -382,18 +397,26 @@ function tegnDeigen(r) {
   // 3 · Vann (preset låser)
   if (!erPreset) {
     const lab = vannMerke(S.hyd);
-    wrap.appendChild(kort('3 · Vann', 'hydrering',
+    const tak = Math.round(Math.max(72, Math.min(88, 74 + (r.styrkeVektet - 3) * 6)));
+    const vk = kort('3 · Vann', 'hydrering',
       h('div', { class: 'skyver-topp' },
         h('span', { class: 'skyver-verdi' }, S.hyd + ' %'),
         h('span', { class: 'skyver-klasse', style: 'background:' + lab.bg + ';color:' + lab.farge }, lab.merke)),
       h('input', { type: 'range', class: 'skyver', min: 62, max: 86, step: 1, value: S.hyd,
         onchange: e => { S.hyd = +e.target.value; oppdater(); } }),
       h('div', { class: 'konsekvens' }, vannKonsekvens(r)),
-      infoUtfelling('hydrering')));
+      infoUtfelling('hydrering'));
+    if (S.hyd > tak) vk.appendChild(h('div', { class: 'varsel' },
+      'Melblandingen din (vektet styrke ' + fmt(r.styrkeVektet, 1) + ') tåler anslagsvis ' + tak + ' % før deigen flyter ut i stedet for å reise seg. Du ligger ' + (S.hyd - tak) + ' pp over — bruk form, eller bytt inn sterkere mel.'));
+    wrap.appendChild(vk);
   }
 
   // 4–6 · Frø, korn, smak
   wrap.appendChild(tilleggSeksjon(r));
+
+  // Dose–respons: hva valgene koster (ovnsløft/smak/saftighet), interpolert fra
+  // de målte kurvene i TILLEGG_EFFEKT.
+  wrap.appendChild(tegnDoseRespons(r));
 
   // 7 · Salt (preset låser)
   if (!erPreset) {
@@ -564,6 +587,50 @@ function spalte(tittel, punkter, farge) {
     ...punkter.map(p => h('div', { style: 'font-size:.78rem;line-height:1.4;margin-top:6px;color:var(--color-neutral-800)' }, '• ' + p)));
 }
 function tallrad(k, v) { return v == null ? null : h('div', { class: 'tallrad' }, h('span', null, k), h('b', null, v)); }
+
+/* ---------- Dose–respons: «hva valgene koster» ---------- */
+function tegnDoseRespons(r) {
+  const boks = kort('Hva valgene koster', null);
+  if (typeof TILLEGG_EFFEKT === 'undefined') return boks;
+  const e = TILLEGG_EFFEKT, til = S.tillegg || {};
+  const froPct = TILLEGG.filter(t => t.type === 'fro' && !soakerKorn(t.id)).reduce((s, t) => s + (til[t.id] || 0), 0);
+  const honning = til.honning || 0, olje = til.olje || 0, malt = til.malt || 0;
+  const rader = [];
+  if (froPct > 0) rader.push(['Frø ' + fmt(froPct, 0) + ' %', [
+    ['Ovnsløft', interp(e.fro.pct, e.fro.loftBloet, froPct), 100],
+    ['Smak', interp(e.fro.pct, e.fro.smak, froPct), 10],
+    ['Saftighet', interp(e.fro.pct, e.fro.saftighet, froPct), 10]], e.fro.kilde]);
+  if (honning > 0) rader.push(['Honning ' + fmt(honning, 1) + ' %', [
+    ['Ovnsløft', interp(e.honning.pct, e.honning.loft, honning), 120],
+    ['Bruning', interp(e.honning.pct, e.honning.bruning, honning), 290],
+    ['Saftighet', interp(e.honning.pct, e.honning.saftighet, honning), 10]], e.honning.kilde]);
+  if (olje > 0) rader.push(['Olje ' + fmt(olje, 1) + ' %', [
+    ['Volum', interp(e.fett.pct, e.fett.olje, olje), 120],
+    ['Saftighet', interp(e.fett.pct, e.fett.saftighet, olje), 10]], e.fett.kilde]);
+  if (malt > 0) rader.push(['Malt ' + fmt(malt, 2) + ' %', [
+    ['Ovnsløft', interp(e.malt.pct, e.malt.loft, malt), 110],
+    ['Falltall', interp(e.malt.pct, e.malt.falltall, malt), 320],
+    ['Gummi', interp(e.malt.pct, e.malt.gummi, malt), 10]], e.malt.kilde]);
+  if (!rader.length) {
+    boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:4px' },
+      'Legg til frø, honning, olje eller malt over, så viser panelet hva de koster og gir i ovnsløft, smak og saftighet — interpolert fra måleserier, ikke gjettet.'));
+    return boks;
+  }
+  rader.forEach(([navn, verdier, kilde]) => boks.appendChild(h('div', { style: 'margin-top:10px' },
+    h('div', { style: 'font-weight:700;font-size:.86rem;margin-bottom:4px' }, navn),
+    ...verdier.map(([lab, v, maks]) => barRad(lab, v, maks)),
+    h('div', { style: 'font-size:.64rem;color:var(--color-neutral-500);margin-top:4px' }, 'Kilde: ' + kilde))));
+  return boks;
+}
+function barRad(lab, v, maks) {
+  const pct = Math.max(0, Math.min(100, v / maks * 100));
+  const farge = /Ovnsløft|Volum/.test(lab) ? 'var(--color-accent-500)' : /Gummi|Falltall/.test(lab) ? 'var(--color-danger)' : 'var(--color-accent-2-500)';
+  return h('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:3px' },
+    h('span', { style: 'flex:0 0 74px;font-size:.74rem;color:var(--color-neutral-600)' }, lab),
+    h('span', { style: 'flex:1;height:6px;border-radius:3px;background:var(--color-neutral-200);overflow:hidden' },
+      h('span', { style: 'display:block;height:100%;width:' + pct.toFixed(0) + '%;background:' + farge })),
+    h('span', { style: 'flex:0 0 42px;text-align:right;font-size:.74rem;font-weight:700;font-variant-numeric:tabular-nums' }, fmt(v, v < 20 ? 1 : 0)));
+}
 
 /* ---------- Konsekvenstekster ---------- */
 function klasseStil(kort) {
@@ -850,17 +917,42 @@ function oppslagMel() {
     wrap.appendChild(h('div', { class: 'seksjonstittel' }, gr));
     grupper[gr].forEach(f => {
       const fav = (S.favoritter || []).includes(f.id);
-      wrap.appendChild(h('div', { class: 'kort flat' },
-        h('div', { style: 'display:flex;align-items:baseline;gap:8px' },
-          h('span', { style: 'font-weight:700;font-size:.92rem;flex:1' }, f.navn),
-          h('button', { class: 'info-knapp', style: fav ? 'color:var(--color-accent-500);border-color:var(--color-accent-300)' : '', 'aria-label': (fav ? 'Fjern favoritt: ' : 'Merk som favoritt: ') + f.navn, onClick: () => { S.favoritter = fav ? S.favoritter.filter(x => x !== f.id) : (S.favoritter || []).concat([f.id]); oppdater(); } }, fav ? '★' : '☆')),
-        h('div', { style: 'display:flex;gap:12px;font-size:.74rem;color:var(--color-neutral-600);margin-top:4px;font-variant-numeric:tabular-nums;flex-wrap:wrap' },
-          h('span', null, 'Protein ', h('b', null, fmt(f.protein, 1) + ' %')),
-          h('span', null, 'Absorpsjon ', h('b', null, fmt(f.absorpsjon * 100, 0) + ' %')),
-          h('span', null, 'Styrke ', h('b', null, f.styrke)),
-          h('span', null, 'Tak ', h('b', null, f.maxPct + ' %')),
-          h('span', null, h('b', null, fmt(f.kr, 0) + ' kr/kg'))),
-        f.notat ? h('div', { class: 'hjelpetekst', style: 'margin-top:6px' }, f.notat) : null));
+      const info = (typeof MEL_INFO !== 'undefined') && MEL_INFO[f.id];
+      // Klikkbare tall → MELTALL_INFO-forklaring (ⓘ per tall).
+      const tallKnapp = (nokkel, lab, verdi) => h('button', {
+        style: 'background:none;border:none;padding:0;font:inherit;cursor:pointer;color:inherit;text-align:left',
+        'aria-label': lab + ' — forklaring', onClick: () => { S.meltallInfo = S.meltallInfo === (f.id + nokkel) ? null : (f.id + nokkel); oppdater(); } },
+        lab + ' ', h('b', null, verdi), h('span', { style: 'color:var(--color-neutral-400);font-size:.7em' }, ' ⓘ'));
+      const kortEl = h('div', { class: 'kort flat' },
+        h('div', { style: 'display:flex;align-items:flex-start;gap:10px' },
+          kornTegning(f.id),
+          h('div', { style: 'flex:1;min-width:0' },
+            h('div', { style: 'display:flex;align-items:baseline;gap:8px' },
+              h('span', { style: 'font-weight:700;font-size:.92rem;flex:1' }, f.navn),
+              info && GLUTENBIDRAG_TEKST[info.glutenbidrag] ? h('span', { class: 'pille', style: 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)' }, GLUTENBIDRAG_TEKST[info.glutenbidrag].navn) : null),
+            h('div', { style: 'display:flex;gap:12px;font-size:.74rem;color:var(--color-neutral-600);margin-top:4px;font-variant-numeric:tabular-nums;flex-wrap:wrap' },
+              tallKnapp('protein', 'Protein', fmt(f.protein, 1) + ' %'),
+              tallKnapp('absorpsjon', 'Absorpsjon', fmt(f.absorpsjon * 100, 0) + ' %'),
+              tallKnapp('styrke', 'Styrke', f.styrke),
+              tallKnapp('maxPct', 'Tak', f.maxPct + ' %'),
+              tallKnapp('pris', 'Pris', fmt(f.kr, 0) + ' kr/kg'))),
+          h('button', { class: 'info-knapp', style: fav ? 'color:var(--color-accent-500);border-color:var(--color-accent-300)' : '', 'aria-label': (fav ? 'Fjern favoritt: ' : 'Merk som favoritt: ') + f.navn, onClick: () => { S.favoritter = fav ? S.favoritter.filter(x => x !== f.id) : (S.favoritter || []).concat([f.id]); oppdater(); } }, fav ? '★' : '☆')));
+      // MELTALL_INFO-utfelling
+      const aapenNok = S.meltallInfo && S.meltallInfo.indexOf(f.id) === 0 ? S.meltallInfo.slice(f.id.length) : null;
+      if (aapenNok && typeof MELTALL_INFO !== 'undefined' && MELTALL_INFO[aapenNok]) {
+        kortEl.appendChild(h('div', { class: 'info-boks' },
+          h('div', { style: 'font-weight:800;font-size:.74rem;margin-bottom:4px' }, MELTALL_INFO[aapenNok].navn),
+          h('div', { class: 'hjelpetekst', html: MELTALL_INFO[aapenNok].tekst })));
+      }
+      // plus/minus fra MEL_INFO, ellers notat
+      if (info && (info.plus || info.minus)) {
+        kortEl.appendChild(h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px' },
+          info.plus ? spalte('FORDELER', info.plus, 'var(--color-accent-2-700)') : h('div'),
+          info.minus ? spalte('ULEMPER', info.minus, 'var(--color-danger)') : h('div')));
+      } else if (f.notat) {
+        kortEl.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:6px' }, f.notat));
+      }
+      wrap.appendChild(kortEl);
     });
   });
   return wrap;
