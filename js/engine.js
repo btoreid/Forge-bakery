@@ -888,7 +888,11 @@ function regn(state) {
     forfermentTemp: r.forferment ? r.forferment.temp : 20,
     forfermentHydrering: r.forferment ? r.forferment.hydrering / 100 : 1,
     froGram: froGramTot, froTemp: state.melTemp ?? 21,
-    mikser: state.maskin || 'spiralHjemme', minutter: eltMin
+    // «egen» maskin bruker brukerens kalibrerte friksjon (°C/min) i stedet for
+    // en av standardmaskinene.
+    mikser: state.maskin === 'egen' ? 'spiralHjemme' : (state.maskin || 'spiralHjemme'),
+    friksjonPerMin: state.maskin === 'egen' && isFinite(state.egenFriksjon) ? state.egenFriksjon : null,
+    minutter: eltMin
   });
 
   // Løftindeks. Frø-leddet teller BARE ekte frø (ikke korn) — korn ligger

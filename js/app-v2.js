@@ -17,7 +17,7 @@ const STANDARD = {
   antall: 4, vekt: 900,
   startTemp: 24, melTemp: 21, maskin: 'spiralHjemme', eltMin: 13,
   stekeProfil: null, stekeProfilManuell: false, lokk: true, fulltKjol: false,
-  form: 'rund', utstyr: 'glass_stal', vektTrinn: 1,
+  form: 'rund', utstyr: 'glass_stal', vektTrinn: 1, egenFriksjon: 0.4,
   saltPct: null, ferdigMs: null, tidModus: 'ferdig',
   heveplan: null,                 // null = planens standard; array = redigert
   paramInfo: null, tilleggInfo: null, melInfo: null, meltallInfo: null,
@@ -804,8 +804,11 @@ function tegnTid(r, K) {
       miniStepper('Eltetid', S.eltMin || 13, 'eltMin', 3, 25, 1, ' min')),
     h('div', { style: 'margin-top:10px' },
       h('div', { class: 'felt-label' }, 'Maskin'),
-      h('div', { class: 'piller', style: 'flex-wrap:wrap' }, ...[['hand', 'For hånd'], ['planet', 'Kjøkkenmaskin'], ['spiralHjemme', 'Spiral hjemme'], ['spiralProff', 'Spiral proff']].map(([id, navn]) =>
-        h('button', { class: (S.maskin || 'spiralHjemme') === id ? 'paa' : '', style: 'flex:1 1 45%;font-size:.78rem', onClick: () => { S.maskin = id; oppdater(); } }, navn)))));
+      h('div', { class: 'piller', style: 'flex-wrap:wrap' }, ...[['hand', 'For hånd'], ['planet', 'Kjøkkenmaskin'], ['spiralHjemme', 'Spiral hjemme'], ['spiralProff', 'Spiral proff'], ['egen', 'Egen (kalibrer)']].map(([id, navn]) =>
+        h('button', { class: (S.maskin || 'spiralHjemme') === id ? 'paa' : '', style: 'flex:1 1 45%;font-size:.78rem', onClick: () => { S.maskin = id; oppdater(); } }, navn))),
+      S.maskin === 'egen' ? h('div', { style: 'margin-top:8px' },
+        miniStepper('Din friksjon (°C per min)', S.egenFriksjon || 0.4, 'egenFriksjon', 0.05, 2, 0.05, ''),
+        h('div', { class: 'hjelpetekst', style: 'margin-top:4px' }, 'Mål deigtempen før og etter elting, del stigningen på antall minutter, og skriv tallet her. Da regner appen vanntemperaturen mot akkurat din maskin.')) : null));
   wrap.appendChild(vb);
 
   // Gjæringsgraf — den ekte fart- og akkumuleringskurven bak dosen.
@@ -1159,7 +1162,11 @@ function oppslagOrdliste() {
       wrap.appendChild(h('div', { class: 'kort flat' },
         h('div', { style: 'font-weight:700;font-size:.9rem' }, o.ord || o.navn),
         h('div', { class: 'hjelpetekst', style: 'margin-top:3px', html: o.def || o.definisjon || '' }),
-        (se && se.length) ? h('div', { style: 'margin-top:6px;font-size:.74rem;color:var(--color-accent-700)' }, 'Se også: ' + (Array.isArray(se) ? se.join(', ') : se)) : null));
+        (se && se.length) ? h('div', { style: 'margin-top:6px;font-size:.74rem;color:var(--color-neutral-600)' },
+          'Se også: ', ...(Array.isArray(se) ? se : [se]).map((ord, k) => h('span', null,
+            k ? ', ' : '',
+            h('button', { style: 'background:none;border:none;padding:0;font:inherit;font-size:inherit;color:var(--color-accent-700);font-weight:700;cursor:pointer;text-decoration:underline',
+              onClick: () => { S.oppslagSok = ord; oppdater(); } }, ord)))) : null));
     });
   });
   return wrap;
