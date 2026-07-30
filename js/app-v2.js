@@ -22,7 +22,7 @@ const STANDARD = {
   heveplan: null,                 // null = planens standard; array = redigert
   paramInfo: null, tilleggInfo: null, melInfo: null, meltallInfo: null,
   aktivSteg: 0, regnskapAapen: false, byttBekreft: null,
-  loggListe: [], lgNavn: '', lgKar: 8, lgBilder: [],
+  loggListe: [], lgNavn: '', lgKar: 8, lgBilder: [], oppdatert: 0,
   favoritter: [], oppslag: 'meny', oppslagSok: ''
 };
 let S = last();
@@ -59,7 +59,13 @@ function last() {
   return s;
 }
 function lagre() {
+  // Tidsstempel på hver lagring: det er dette synken sammenligner når samme
+  // konto brukes fra to enheter (nyeste vinner).
+  S.oppdatert = Date.now();
   try { localStorage.setItem(LAGER, JSON.stringify(S)); } catch (e) {}
+  // Lokalt først: localStorage er sannheten mens du bruker appen. Er du
+  // innlogget, speiles den opp til skyen (debouncet inne i Sky).
+  if (typeof Sky !== 'undefined' && Sky.klar() && Sky.bruker()) Sky.lagreOpp(S);
 }
 
 /* ---------- DOM-hjelper ---------- */
@@ -1396,6 +1402,8 @@ function tegnLogg(r) {
         ...b.bilder.map((src, i) => h('img', { src, alt: 'Bilde ' + (i + 1) + ' av ' + (b.navn || 'baket'),
           style: 'width:86px;height:86px;object-fit:cover;border-radius:12px;border:1px solid var(--color-neutral-300)' }))) : null)));
   }
+  const konto = tegnKonto();
+  if (konto) wrap.appendChild(konto);
   wrap.appendChild(tegnBackup());
   return wrap;
 }
@@ -1636,7 +1644,95 @@ function oppslagOrdliste() {
   return wrap;
 }
 
+/* ---------- Sky: innlogging og synk ---------- */
+/* Skjemaet er lokalt i modulen (ikke i S), så halvskrevne passord aldri havner
+   i localStorage eller i en sikkerhetskopi. */
+const skyForm = { epost: '', passord: '', modus: 'inn', melding: null, feil: null, jobber: false };
+let _harHentetNed = false;
+
+function tegnKonto() {
+  if (typeof Sky === 'undefined' || !Sky.klar()) return null;
+  const st = Sky.status();
+  const boks = kort('Konto og sky', null);
+  if (st.tilstand !== 'utlogget') {
+    const prikk = { synker: 'var(--color-accent-500)', lagret: 'var(--color-accent-2-500)', feil: 'var(--color-danger)' }[st.tilstand] || 'var(--color-accent-2-500)';
+    boks.appendChild(h('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:6px' },
+      h('span', { style: 'width:9px;height:9px;border-radius:999px;flex:0 0 9px;background:' + prikk }),
+      h('div', { style: 'flex:1;min-width:0' },
+        h('div', { style: 'font-weight:700;font-size:.9rem;overflow:hidden;text-overflow:ellipsis' }, st.epost || ''),
+        h('div', { style: 'font-size:.74rem;color:var(--color-neutral-600)' }, st.tekst))));
+    boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
+      'Bakeloggen, bildene og valgene dine lagres i skyen og følger deg til andre enheter. Appen virker som før uten nett — endringene sendes opp når du er tilkoblet igjen.'));
+    boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
+      h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: async () => { await Sky.skyvNaa(S); render(); } }, 'Synk nå'),
+      h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: async () => { await Sky.skyvNaa(S); await Sky.loggUt(); _harHentetNed = false; render(); } }, 'Logg ut')));
+    return boks;
+  }
+  // Utlogget: registrer / logg inn
+  const erNy = skyForm.modus === 'ny';
+  boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:6px' },
+    'Uten konto ligger alt kun i denne nettleseren. Logger du inn, lagres bakeloggen i skyen og følger deg til ny telefon eller PC.'));
+  boks.appendChild(h('div', { class: 'toggle2', style: 'margin-top:10px' },
+    h('button', { class: !erNy ? 'paa' : '', onClick: () => { skyForm.modus = 'inn'; skyForm.feil = skyForm.melding = null; render(); } }, 'Logg inn'),
+    h('button', { class: erNy ? 'paa' : '', onClick: () => { skyForm.modus = 'ny'; skyForm.feil = skyForm.melding = null; render(); } }, 'Ny konto')));
+  boks.appendChild(h('input', { class: 'sok', style: 'margin-top:10px', type: 'email', inputmode: 'email',
+    autocomplete: 'email', 'data-fokus': 'skyEpost', placeholder: 'E-post', value: skyForm.epost,
+    oninput: e => { skyForm.epost = e.target.value; } }));
+  boks.appendChild(h('input', { class: 'sok', type: 'password', 'data-fokus': 'skyPassord',
+    autocomplete: erNy ? 'new-password' : 'current-password', placeholder: 'Passord (minst 6 tegn)', value: skyForm.passord,
+    oninput: e => { skyForm.passord = e.target.value; } }));
+  boks.appendChild(h('button', { class: 'btn btn-primary btn-full', disabled: skyForm.jobber ? '' : null,
+    onClick: () => skySend(erNy) }, skyForm.jobber ? 'Vent …' : (erNy ? 'Opprett konto' : 'Logg inn')));
+  if (!erNy) boks.appendChild(h('button', { class: 'btn-ghost', style: 'font-size:.78rem', onClick: skyGlemt }, 'Glemt passord?'));
+  if (skyForm.feil) boks.appendChild(h('div', { class: 'varsel', style: 'border-color:var(--color-danger)' }, skyForm.feil));
+  if (skyForm.melding) boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' }, skyForm.melding));
+  return boks;
+}
+async function skySend(erNy) {
+  skyForm.feil = skyForm.melding = null;
+  if (!skyForm.epost || !skyForm.passord) { skyForm.feil = 'Fyll inn både e-post og passord.'; render(); return; }
+  skyForm.jobber = true; render();
+  const svar = erNy ? await Sky.registrer(skyForm.epost, skyForm.passord) : await Sky.loggInn(skyForm.epost, skyForm.passord);
+  skyForm.jobber = false;
+  skyForm.feil = svar.feil || null;
+  skyForm.melding = svar.melding || null;
+  if (!svar.feil) skyForm.passord = '';
+  render();
+  if (!svar.feil && Sky.bruker()) await synkVedInnlogging();
+}
+async function skyGlemt() {
+  skyForm.feil = skyForm.melding = null;
+  if (!skyForm.epost) { skyForm.feil = 'Skriv inn e-posten din først.'; render(); return; }
+  const svar = await Sky.glemtPassord(skyForm.epost);
+  skyForm.feil = svar.feil || null; skyForm.melding = svar.melding || null;
+  render();
+}
+/* Ved innlogging: hent ned skyens versjon og la den NYESTE vinne. Uten
+   tidsstempel-sammenligning ville en fersk logg på telefonen blitt overskrevet
+   av en gammel kopi fra PC-en, eller omvendt. */
+async function synkVedInnlogging() {
+  if (_harHentetNed) return;
+  _harHentetNed = true;
+  const sky = await Sky.hentNed();
+  if (!sky || !sky.state) { Sky.lagreOpp(S); render(); return; }   // ingenting oppe ennå — legg opp det lokale
+  const skyMs = sky.oppdatert ? new Date(sky.oppdatert).getTime() : 0;
+  const lokaltMs = S.oppdatert || 0;
+  if (skyMs > lokaltMs) {
+    try {
+      localStorage.setItem(LAGER, JSON.stringify(sky.state));
+      S = last();
+      if (window.__FB) window.__FB.S = S;
+    } catch (e) {}
+  } else {
+    Sky.lagreOpp(S);
+  }
+  render();
+}
+
 /* ---------- Start ---------- */
+if (typeof Sky !== 'undefined' && Sky.klar()) {
+  Sky.paaEndring(() => { render(); if (Sky.bruker()) synkVedInnlogging(); });
+}
 render();
 window.__FB = { S, render };
 })();

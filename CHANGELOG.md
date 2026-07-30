@@ -7,6 +7,44 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 30.07.2026 (natt, senere) — V2: innlogging og sky-lagring
+
+Bjørn ville ikke miste data, og opprettet et Supabase-prosjekt (`xoripdwbghqlzbgxkfps`).
+Appen forblir 100 % statisk på GitHub Pages — nettleseren snakker direkte med Supabase.
+
+- **`js/sky.js`** er hele sky-laget, med et bevisst smalt API mot resten av appen:
+  `Sky.klar/bruker/status/paaEndring/registrer/loggInn/loggUt/glemtPassord/hentNed/
+  lagreOpp/skyvNaa`. Feilmeldinger oversettes til norsk (`norsk()`), inkludert et
+  eget tilfelle for «tabellen finnes ikke» → «kjør SQL-en i SUPABASE.md».
+- **Lokalt først.** localStorage er fortsatt sannheten mens appen brukes, så alt virker
+  offline og helt uten konto. `lagre()` speiler opp til skyen KUN når noen er innlogget,
+  og opplastingen er debouncet 1,2 s — en skyver som dras skal ikke bli hundre
+  nettverkskall.
+- **Konfliktløsning på tidsstempel.** `S.oppdatert` settes ved hver lagring; ved
+  innlogging (`synkVedInnlogging()`) sammenlignes lokalt mot skyens `oppdatert`, og
+  **nyeste vinner**. Uten dette ville en gammel kopi på PC-en overskrevet en fersk logg
+  fra telefonen.
+- **Konto-UI i Logg** (`tegnKonto()`): logg inn / ny konto / glemt passord, statusprikk
+  med e-post og synkestatus, «Synk nå» og «Logg ut» (som tvinger en siste opplasting
+  før den logger ut, så siste endring ikke tapes). Passordfeltet lever i en modul-lokal
+  variabel, ikke i `S` — halvskrevne passord skal aldri havne i localStorage eller i en
+  nedlastet sikkerhetskopi.
+- **supabase-js er vendoret** til `js/vendor/supabase.js`, av samme grunn som fontene:
+  ingen CDN-avhengighet, virker fra `file://`.
+- **`SUPABASE.md`** har SQL-en som må kjøres én gang (tabell + Row Level Security med
+  fire regler på `auth.uid() = bruker_id`), URL-oppsettet for «glemt passord», og
+  hvordan lagene henger sammen.
+- **`.github/workflows/supabase-ping.yml`** kaller REST-API-et daglig, så gratis-tierens
+  pause etter sju døgn uten aktivitet aldri inntreffer. Godtar 200/401/403 som «lever».
+
+Sikkerhetskopi-knappene fra forrige runde beholdes med vilje: belte og bukser.
+
+Verifisert i Chromium med alle Supabase-kall blokkert (19 sjekker): UI-et tegner,
+innloggingsforsøk uten nett gir en norsk feilmelding i stedet for å krasje, og appen
+fungerer ellers uendret — inkludert lokal lagring uten konto.
+
+---
+
 ## 30.07.2026 (natt) — V2: seks punkter fra tredje brukertest
 
 Verifisert i Chromium (23 automatiske sjekker + skjermbilder).

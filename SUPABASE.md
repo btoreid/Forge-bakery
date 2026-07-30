@@ -1,0 +1,73 @@
+# Sky-oppsett — innlogging og synk
+
+Appen er statisk (GitHub Pages) og kan ikke lagre noe selv. Innlogging og lagring
+ligger derfor hos **Supabase**, som nettleseren snakker med direkte.
+
+Prosjektet er `xoripdwbghqlzbgxkfps` (Forge Bakery). Nøkkelen i `js/sky.js` er
+**publishable/anon** — den er laget for å ligge åpent i frontend-kode. Sikkerheten
+ligger i **Row Level Security** under: en rad kan bare leses og skrives av eieren.
+
+## 1 · Kjør denne SQL-en én gang
+
+Supabase → **SQL Editor** → ny spørring → lim inn → **Run**.
+
+```sql
+-- Én rad per bruker. Hele apptilstanden ligger som JSON i `state`.
+create table if not exists public.bakerstate (
+  bruker_id  uuid primary key references auth.users (id) on delete cascade,
+  state      jsonb not null,
+  oppdatert  timestamptz not null default now()
+);
+
+-- Låsen: uten denne kunne hvem som helst med anon-nøkkelen lese alle rader.
+alter table public.bakerstate enable row level security;
+
+-- Fire regler, alle med samme betingelse: du er raden din.
+drop policy if exists "egen rad lesing"    on public.bakerstate;
+drop policy if exists "egen rad innsetting" on public.bakerstate;
+drop policy if exists "egen rad oppdatering" on public.bakerstate;
+drop policy if exists "egen rad sletting"  on public.bakerstate;
+
+create policy "egen rad lesing"      on public.bakerstate
+  for select using (auth.uid() = bruker_id);
+create policy "egen rad innsetting"  on public.bakerstate
+  for insert with check (auth.uid() = bruker_id);
+create policy "egen rad oppdatering" on public.bakerstate
+  for update using (auth.uid() = bruker_id) with check (auth.uid() = bruker_id);
+create policy "egen rad sletting"    on public.bakerstate
+  for delete using (auth.uid() = bruker_id);
+```
+
+## 2 · Innloggingsinnstillinger
+
+**Authentication → Providers → Email**: e-post + passord skal være på (standard).
+
+**Authentication → URL Configuration**: legg inn appens adresse under *Site URL* og
+*Redirect URLs*, ellers virker ikke «glemt passord»-lenken:
+
+```
+https://btoreid.github.io/Forge-bakery/index-v2.html
+```
+
+**E-postbekreftelse** (*Confirm email*) er på som standard. Da må du bekrefte adressen
+før første innlogging. Vil du slippe det mens du tester, kan den slås av samme sted.
+
+## 3 · Gratis-tieren pauses etter en ukes inaktivitet
+
+Prosjektet fryses (data slettes ikke) hvis ingen snakker med det på sju dager. Bruker du
+appen ukentlig, skjer det aldri. `.github/workflows/supabase-ping.yml` holder det uansett
+i live med et lite kall hvert døgn.
+
+## Slik henger det sammen i koden
+
+| fil | rolle |
+|---|---|
+| `js/vendor/supabase.js` | supabase-js, vendoret lokalt (som fontene) — ingen CDN-avhengighet |
+| `js/sky.js` | hele sky-laget: `Sky.loggInn/registrer/loggUt/hentNed/lagreOpp` |
+| `js/app-v2.js` | `lagre()` speiler opp ved innlogget bruker; `tegnKonto()` er UI-et i Logg |
+
+**Lokalt først:** localStorage er fortsatt sannheten mens du bruker appen, så alt virker
+offline og uten konto. Opplasting er debouncet 1,2 s (en skyver som dras skal ikke bli
+hundre nettverkskall). Ved innlogging sammenlignes `oppdatert`-tidsstempelet, og **den
+nyeste versjonen vinner** — ellers ville en gammel kopi på PC-en overskrevet en fersk
+logg fra telefonen.

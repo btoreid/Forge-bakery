@@ -29,7 +29,21 @@ iterasjon — den divergerte).
 **Live på GitHub Pages** med `noindex`. Auto-deploy ved push til
 `claude/forge-bakery-mobile-v2-l4ean3`.
 
-### Nylig levert (30.07 natt, tredje brukertest — seks punkter)
+### Nylig levert: innlogging og sky-lagring (30.07 natt)
+
+Appen har nå **konto med e-post og passord, og synk til Supabase** — se `SUPABASE.md`
+for oppsett og `js/sky.js` for laget. Den er fortsatt 100 % statisk på GitHub Pages;
+nettleseren snakker direkte med Supabase-prosjektet `xoripdwbghqlzbgxkfps`.
+
+**Lokalt først:** localStorage er sannheten mens appen brukes, så alt virker offline og
+uten konto. Innlogget speiles tilstanden opp (debouncet 1,2 s), og ved innlogging vinner
+den **nyeste** versjonen på `S.oppdatert`. Rør ikke den sammenligningen — uten den
+overskriver en gammel enhet en fersk logg.
+
+**Gjenstår for Bjørn (én gang):** kjøre SQL-en i `SUPABASE.md` i Supabase → SQL Editor.
+Uten den svarer skyen «tabellen finnes ikke», og appen sier fra om nettopp det.
+
+### Levert samme kveld (30.07 natt, tredje brukertest — seks punkter)
 
 Se CHANGELOG-posten «30.07.2026 (natt)». Kort: brødtype-bytte = nytt bak med
 «er du sikker?»-bekreftelse (`nyBakst()`) · bilder i loggen (maks 3, nedskalert til
@@ -60,11 +74,12 @@ fokusert felt ble fjernet under `replaceChildren` (blur midt i render). Rettet m
 
 ### Åpne V2-punkter
 
-**Innlogging og sky-lagring.** Bjørn vil at appen skal bygges «med lagring og
-innlogging» så data ikke går tapt. Sikkerhetskopi (eksport/import av JSON) er levert
-som det som er mulig uten server; ekte konto krever en backend (f.eks. Supabase/
-Firebase gratis-tier, eller en liten egen tjeneste). Beslutning om leverandør og
-kostnad ligger hos Bjørn — appen er i dag 100 % statisk på GitHub Pages.
+**SQL-en i `SUPABASE.md` må kjøres én gang** før synken virker (tabell + RLS).
+Innloggingen og resten av laget er på plass og testet.
+
+**Ping-workflowen ligger på featuregrenen.** GitHub kjører planlagte jobber kun fra
+standardgrenen, så `.github/workflows/supabase-ping.yml` går ikke før den er på master.
+Inntil da holder ukentlig bruk av appen prosjektet i live på egen hånd.
 
 Ellers ingen kjente åpne punkter. Neste runde avventer Bjørns tilbakemelding.
 

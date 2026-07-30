@@ -1,0 +1,33 @@
+# Holder Supabase-prosjektet i live.
+#
+# Gratis-tieren pauser et prosjekt etter sju døgn uten aktivitet. Dette kallet
+# gjør prosjektet aktivt hvert døgn, så pausen aldri inntreffer. Nøkkelen er
+# publishable/anon — den er offentlig med vilje, og Row Level Security gjør at
+# kallet ikke får se noen data (det er heller ikke poenget: vi vil bare at
+# databasen skal ha blitt snakket med).
+#
+# MERK: GitHub kjører planlagte jobber kun fra standardgrenen. Denne fila må
+# altså ligge på master/main før pingen faktisk går.
+name: Supabase ping
+
+on:
+  schedule:
+    - cron: '17 6 * * *'      # hver dag 06:17 UTC
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kall Supabase REST
+        run: |
+          kode=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "apikey: sb_publishable_Ix7fTZ50hAco3SBAUAKeqA_TcgI5XIE" \
+            "https://xoripdwbghqlzbgxkfps.supabase.co/rest/v1/bakerstate?select=bruker_id&limit=1")
+          echo "HTTP $kode"
+          # 200 = svart, 401/403 = RLS stengte oss ute. Begge betyr at prosjektet
+          # lever og har hatt aktivitet. Alt annet er en ekte feil.
+          case "$kode" in
+            200|401|403) exit 0 ;;
+            *) echo "Uventet svar fra Supabase"; exit 1 ;;
+          esac
