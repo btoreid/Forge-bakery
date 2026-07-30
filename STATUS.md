@@ -79,6 +79,9 @@ fokusert felt ble fjernet under `replaceChildren` (blur midt i render). Rettet m
 
 ### Sky-oppsettet er i drift — 30.07.2026
 
+**Verifisert ende-til-ende av Bjørn:** innlogging og synk virker i produksjon på
+`https://btoreid.github.io/Forge-bakery/`. Site URL og redirect-URL-ene peker på rota.
+
 Begge punktene som stod åpne her er lukket:
 
 **Tabellen er opprettet.** `public.bakerstate` kjørt som migrasjon (`bakerstate_med_rls`)
