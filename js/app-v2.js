@@ -16,8 +16,8 @@ const STANDARD = {
   tillegg: { solsikke: 6, linfro: 3 },
   antall: 4, vekt: 900,
   startTemp: 24, melTemp: 21, maskin: 'spiralHjemme', eltMin: 13,
-  stekeProfil: null, stekeProfilManuell: false, lokk: true, fulltKjol: false,
-  form: 'rund', utstyr: 'glass_stal', vektTrinn: 1, egenFriksjon: 0.4,
+  stekeProfil: 'brod_kloke', stekeProfilManuell: false, lokk: true, fulltKjol: false,
+  form: 'rund', utstyr: 'stal15', vektTrinn: 1, egenFriksjon: 0.4,
   saltPct: null, ferdigMs: null, tidModus: 'ferdig',
   heveplan: null,                 // null = planens standard; array = redigert
   paramInfo: null, tilleggInfo: null, melInfo: null, meltallInfo: null,
@@ -332,7 +332,9 @@ function tegnUtstyrValg(r) {
 function velgForm(id) { S.form = id; if (!S.stekeProfilManuell) S.stekeProfil = profilForUtstyr(S.utstyr, id); oppdater(); }
 const UTSTYR_PROFIL = { stal15: 'brod_kloke', glass: 'brod_glass_stal', glass_stal: 'brod_glass_stal', stopejern: 'brod_gryte', apen: 'brod_apen' };
 function profilForUtstyr(utstyrId, formId) {
-  if (utstyrId === 'stal15' && formId === 'avlang') return 'brod_apen';
+  // Tidligere ble avlangt + stål tvunget til åpen steking (antatt at ingen gryte
+  // tok avlange emner). Med den avlange Pyrexen tar klokke-oppsettet avlange
+  // brød fint, så det spesialtilfellet er fjernet.
   return UTSTYR_PROFIL[utstyrId] || 'brod_apen';
 }
 function startForvalg() { S.brotype = 'grovbrod'; S.grov = 40; S.tid = 'lang'; S.skjerm = 'deigen'; oppdater(); }
@@ -417,15 +419,28 @@ function tegnDeigen(r) {
 
   // 3 · Vann (preset låser)
   if (!erPreset) {
-    const lab = vannMerke(S.hyd);
     const tak = Math.round(Math.max(72, Math.min(88, 74 + (r.styrkeVektet - 3) * 6)));
+    const lab0 = vannMerke(S.hyd);
+    const verdiEl = h('span', { class: 'skyver-verdi' }, S.hyd + ' %');
+    const merkeEl = h('span', { class: 'skyver-klasse', style: 'background:' + lab0.bg + ';color:' + lab0.farge }, lab0.merke);
+    const guideEl = h('div', { class: 'konsekvens' }, vannGuide(S.hyd));
+    // Live-oppdatering UNDER draget (oninput) uten full re-render — så tallet og
+    // merkelappen følger fingeren. Selve utregningen skjer på slipp (onchange).
+    const oppdaterLive = v => {
+      verdiEl.textContent = v + ' %';
+      const m = vannMerke(v);
+      merkeEl.textContent = m.merke;
+      merkeEl.setAttribute('style', 'background:' + m.bg + ';color:' + m.farge);
+      guideEl.textContent = vannGuide(v);
+    };
     const vk = kort('3 · Vann', 'hydrering',
-      h('div', { class: 'skyver-topp' },
-        h('span', { class: 'skyver-verdi' }, S.hyd + ' %'),
-        h('span', { class: 'skyver-klasse', style: 'background:' + lab.bg + ';color:' + lab.farge }, lab.merke)),
+      h('div', { class: 'skyver-topp' }, verdiEl, merkeEl),
       h('input', { type: 'range', class: 'skyver', min: 62, max: 86, step: 1, value: S.hyd,
+        oninput: e => oppdaterLive(+e.target.value),
         onchange: e => { S.hyd = +e.target.value; oppdater(); } }),
-      h('div', { class: 'konsekvens' }, vannKonsekvens(r)),
+      h('div', { style: 'font-size:.74rem;color:var(--color-neutral-600);margin-top:2px' }, 'Anbefalt 74 % for et frittstående brød på butikkmel.'),
+      guideEl,
+      h('div', { style: 'font-size:.78rem;color:var(--color-neutral-600);margin-top:6px;font-variant-numeric:tabular-nums' }, vannKonsekvens(r)),
       infoUtfelling('hydrering'));
     if (S.hyd > tak) vk.appendChild(h('div', { class: 'varsel' },
       'Melblandingen din (vektet styrke ' + fmt(r.styrkeVektet, 1) + ') tåler anslagsvis ' + tak + ' % før deigen flyter ut i stedet for å reise seg. Du ligger ' + (S.hyd - tak) + ' pp over — bruk form, eller bytt inn sterkere mel.'));
@@ -441,9 +456,12 @@ function tegnDeigen(r) {
 
   // 7 · Salt (preset låser)
   if (!erPreset) {
+    const saltN = S.saltPct != null ? S.saltPct : 1.8;
+    const saltVerdiEl = h('span', { class: 'skyver-verdi' }, fmt(saltN, 1) + ' %');
     wrap.appendChild(kort('7 · Salt', 'saltPct',
-      h('div', { class: 'skyver-topp' }, h('span', { class: 'skyver-verdi' }, fmt(S.saltPct != null ? S.saltPct : 1.8, 1) + ' %')),
-      h('input', { type: 'range', class: 'skyver', min: 1.4, max: 2.4, step: 0.1, value: S.saltPct != null ? S.saltPct : 1.8,
+      h('div', { class: 'skyver-topp' }, saltVerdiEl),
+      h('input', { type: 'range', class: 'skyver', min: 1.4, max: 2.4, step: 0.1, value: saltN,
+        oninput: e => { saltVerdiEl.textContent = fmt(+e.target.value, 1) + ' %'; },
         onchange: e => { S.saltPct = +e.target.value; oppdater(); } }),
       h('div', { class: 'konsekvens' }, g0(r.salt) + ' salt. Salt strammer glutenet og bremser gjæren; 1,8–2,0 % er sonen.'),
       infoUtfelling('saltPct')));
@@ -499,27 +517,31 @@ function tilleggRad(t, r) {
   const frr = r.fro.find(f => f.id === t.id);
   const gramV = frr ? frr.gram : 0;
   const erSmak = t.type === 'smak';
-  const rad = h('div', { style: 'padding:10px 0;border-top:1px solid var(--color-neutral-200)' },
-    h('div', { style: 'display:flex;align-items:center;gap:10px' },
-      h('div', { style: 'flex:1;min-width:0' },
-        h('div', { style: 'font-weight:600;font-size:.9rem' }, t.navn),
-        h('div', { style: 'font-size:.74rem;color:var(--color-neutral-600)' },
-          paa ? (erSmak ? 'i deigen' : behandlingOrd(t.id)) : 'av')),
-      h('button', { class: 'info-knapp', 'aria-label': 'Info om ' + t.navn, onClick: () => { S.tilleggInfo = S.tilleggInfo === t.id ? null : t.id; oppdater(); } }, 'ⓘ')),
-    // Prosent (stepper) OG redigerbart gramfelt — gramfeltet løser prosenten ved
-    // fikspunkt mot melmengden (designet: «prosent, et redigerbart gramfelt og ⓘ»).
-    h('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px' },
-      h('div', { class: 'stepper', style: 'flex:1' },
-        h('button', { 'aria-label': 'Mindre', onClick: () => endreTillegg(t, -(erSmak ? 0.5 : 1)) }, '−'),
-        h('input', { type: 'text', inputmode: 'decimal', 'aria-label': t.navn + ' prosent', value: paa ? fmt(pct, 1) : '0', style: 'font-size:1.05rem',
-          onblur: e => { const v = parseFloat(e.target.value.replace(',', '.')); settTillegg(t, isNaN(v) ? 0 : v); } }),
-        h('button', { 'aria-label': 'Mer', onClick: () => endreTillegg(t, (erSmak ? 0.5 : 1)) }, '+')),
-      h('span', { style: 'font-size:.8rem;color:var(--color-neutral-600);font-weight:800' }, '%'),
-      erSmak ? null : h('div', { style: 'display:flex;align-items:center;gap:4px;flex:0 0 auto' },
-        h('input', { type: 'text', inputmode: 'numeric', 'aria-label': t.navn + ' gram', value: paa ? fmt(gramV, 0) : '0',
-          style: 'width:64px;min-height:44px;text-align:center;font:inherit;font-weight:800;font-variant-numeric:tabular-nums;background:var(--color-neutral-100);border:1px solid var(--color-neutral-300);border-radius:12px',
-          onblur: e => { const v = parseFloat(e.target.value.replace(/\s/g, '').replace(',', '.')); settTilleggGram(t, isNaN(v) ? 0 : v); } }),
-        h('span', { style: 'font-size:.8rem;color:var(--color-neutral-600);font-weight:800' }, 'g'))));
+  const status = paa
+    ? fmt(pct, 1) + ' % · ' + g0(gramV) + (erSmak ? '' : ' · ' + behandlingOrd(t.id))
+    : 'trykk for å legge til (' + fmt(t.pct, 1) + ' %)';
+  const rad = h('div', { class: 'tillegg-rad' + (paa ? ' paa' : '') },
+    h('div', { style: 'display:flex;align-items:center;gap:8px' },
+      // Trykkbar toggle: av → legg til på anbefalt verdi, på → fjern.
+      h('button', { class: 'tillegg-toggle', 'aria-pressed': paa ? 'true' : 'false', onClick: () => togglTillegg(t) },
+        h('span', { class: 'tillegg-hake' + (paa ? ' paa' : '') }, paa ? '✓' : '+'),
+        h('span', { style: 'flex:1;min-width:0' },
+          h('span', { style: 'display:block;font-weight:700;font-size:.9rem' }, t.navn),
+          h('span', { style: 'display:block;font-size:.74rem;color:var(--color-neutral-600)' }, status))),
+      h('button', { class: 'info-knapp', 'aria-label': 'Info om ' + t.navn, onClick: () => { S.tilleggInfo = S.tilleggInfo === t.id ? null : t.id; oppdater(); } }, 'ⓘ')));
+  // Finjustering vises bare når tillegget er PÅ.
+  if (paa) rad.appendChild(h('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px' },
+    h('div', { class: 'stepper', style: 'flex:1' },
+      h('button', { 'aria-label': 'Mindre', onClick: () => endreTillegg(t, -(erSmak ? 0.5 : 1)) }, '−'),
+      h('input', { type: 'text', inputmode: 'decimal', 'aria-label': t.navn + ' prosent', value: fmt(pct, 1), style: 'font-size:1.05rem',
+        onblur: e => { const v = parseFloat(e.target.value.replace(',', '.')); settTillegg(t, isNaN(v) ? 0 : v); } }),
+      h('button', { 'aria-label': 'Mer', onClick: () => endreTillegg(t, (erSmak ? 0.5 : 1)) }, '+')),
+    h('span', { style: 'font-size:.8rem;color:var(--color-neutral-600);font-weight:800' }, '%'),
+    erSmak ? null : h('div', { style: 'display:flex;align-items:center;gap:4px;flex:0 0 auto' },
+      h('input', { type: 'text', inputmode: 'numeric', 'aria-label': t.navn + ' gram', value: fmt(gramV, 0),
+        style: 'width:60px;min-height:44px;text-align:center;font:inherit;font-weight:800;font-variant-numeric:tabular-nums;background:#fff;border:1px solid var(--color-neutral-300);border-radius:12px',
+        onblur: e => { const v = parseFloat(e.target.value.replace(/\s/g, '').replace(',', '.')); settTilleggGram(t, isNaN(v) ? 0 : v); } }),
+      h('span', { style: 'font-size:.8rem;color:var(--color-neutral-600);font-weight:800' }, 'g'))));
   if (S.tilleggInfo === t.id) {
     const linjer = [];
     if (t.hvorfor) linjer.push(['HVORFOR', t.hvorfor, 'var(--color-neutral-600)']);
@@ -537,6 +559,11 @@ function behandlingOrd(id) {
   return { rist: 'ristes', bloet: 'bløtlegges', skald: 'skåldes' }[s && s.behandling] || '';
 }
 function endreTillegg(t, d) { settTillegg(t, ((S.tillegg || {})[t.id] || 0) + d); }
+// Trykk på et tillegg: av → legg til på anbefalt verdi (t.pct); på → fjern helt.
+function togglTillegg(t) {
+  const paa = ((S.tillegg || {})[t.id] || 0) > 0;
+  settTillegg(t, paa ? 0 : (t.pct || 6));
+}
 /* Gram → prosent ved fikspunkt: melmengden faller når tilleggsprosenten stiger,
    så vi itererer pct = gram / melTotal (fire runder er nok — samme som README). */
 function settTilleggGram(t, gram) {
@@ -745,6 +772,13 @@ function vannMerke(hyd) {
   if (hyd <= 77) return { merke: 'I VINDUET', bg: 'var(--color-accent-2-200)', farge: 'var(--color-accent-2-900)' };
   if (hyd <= 82) return { merke: 'LØST', bg: 'var(--color-accent-200)', farge: 'var(--color-accent-900)' };
   return { merke: 'OVER TAKET', bg: 'var(--color-accent-300)', farge: 'var(--color-accent-900)' };
+}
+function vannGuide(hyd) {
+  if (hyd <= 68) return 'Stramt: fast deig som er lett å håndtere og forme, men tettere krumme med mindre uregelmessige hull. Trygt for nybegynnere og grovt mel.';
+  if (hyd <= 71) return 'Trygt: deigen holder formen godt, gir jevn krumme og reiser seg villig. Et godt utgangspunkt før du skrur oppover.';
+  if (hyd <= 77) return 'I vinduet: her ligger de fleste frittstående hveitebrød — åpen, saftig krumme uten at deigen flyter ut. Krever litt stø hånd i formingen.';
+  if (hyd <= 82) return 'Løst: våt, klissete deig som gir stor, hullete krumme og sprø skorpe — men den vil helst støttes av form eller kurv, og trenger sterkt mel.';
+  return 'Over taket: svært våt deig som flyter ut om ikke melet er sterkt nok. Bruk form, brett ofte under heving, og regn med tettere bunn.';
 }
 function vannKonsekvens(r) {
   const froPp = (r.oppgittHydrering - r.effektivHydrering) * 100;
