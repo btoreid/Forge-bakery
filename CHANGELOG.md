@@ -7,6 +7,38 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 30.07.2026 (natt) — V2: seks punkter fra tredje brukertest
+
+Verifisert i Chromium (23 automatiske sjekker + skjermbilder).
+
+- **Brødtype-bytte er nå et nytt bak, med bekreftelse.** Før tok byttet med seg alle
+  deigvalgene — en ciabatta arvet solsikkefrøene og vannet fra brødet. Nå spør et
+  varselkort «Bytte til X — starte på nytt?» (`S.byttBekreft`), og bekreftelsen
+  (`nyBakst()`) nullstiller oppskriftsvalgene (tillegg, vann, salt, grovhet, heveplan,
+  stekeprofil, form) til bakstens standard. Utstyr, maskin, logg, favoritter og
+  romtemp beholdes — de er brukerens, ikke bakstens.
+- **Bilder i loggen er tilbake** (designfasen hadde dem — `appgjennomgang.md` sier
+  «✔ + bilder (nytt)»). Inntil 3 bilder per bak: `tegnBildeVelger()`/`leggTilBilde()`
+  skalerer ned til maks 480 px JPEG (kvalitet 0,7) i canvas før lagring, så
+  localStorage (~5 MB) rommer mange bak; kvotevern nekter nye bilder over ~4,2 MB
+  total. Miniatyrer i skjemaet og på loggpostene.
+- **Sikkerhetskopi i Logg** (`tegnBackup()`): «Last ned kopi» (hele tilstanden som
+  JSON-fil) og «Hent inn kopi» (validert import som gjenbruker normaliseringen i
+  `last()`). Dette er svaret på «lagring og innlogging» som er mulig uten server —
+  ekte konto/sky-lagring krever en backend og står som åpent punkt i STATUS.
+- **Stekeprofilene beskriver nå metoden, ikke brødformen.** ★-merkene og
+  «Rundbrød»/«Ciabatta»-navnene er ute — formen har ingenting med stekeprosessen å
+  gjøre. Nye navn («Støpejernsgryte med lokk», «Glassgryte PÅ 15 mm stål», «Midt i
+  ovnen på stål, kort og varmt» …) + nytt felt `anbefaltTil` per profil, vist som
+  «anbefalt til»-merke i Oppslag → Stekeprofiler. Koblingen bakst→profil lever videre
+  som anbefaling i `PRESETS.steking`/`profilForUtstyr` — uendret logikk, bare riktig
+  merket som anbefaling.
+- **«Om dette baket — prosessen kort»** på Brød-skjermen: kollapskort med hva baksten
+  ER (nytt `om`-felt i `BTYPER`) og hele stegkjeden med varigheter og total tid,
+  GENERERT fra `kjede()` — samme kilde som Tid og Prosess, så den kan ikke drifte.
+
+---
+
 ## 30.07.2026 (kveld) — V2: ti punkter fra andre brukertest
 
 Bjørns andre testrunde ga ti punkter i én melding. Alle er levert, verifisert i ekte

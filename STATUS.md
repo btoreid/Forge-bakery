@@ -29,7 +29,15 @@ iterasjon — den divergerte).
 **Live på GitHub Pages** med `noindex`. Auto-deploy ved push til
 `claude/forge-bakery-mobile-v2-l4ean3`.
 
-### Nylig levert (30.07 kveld, andre brukertest — ti punkter)
+### Nylig levert (30.07 natt, tredje brukertest — seks punkter)
+
+Se CHANGELOG-posten «30.07.2026 (natt)». Kort: brødtype-bytte = nytt bak med
+«er du sikker?»-bekreftelse (`nyBakst()`) · bilder i loggen (maks 3, nedskalert til
+480 px JPEG) · sikkerhetskopi (last ned / hent inn JSON) · stekeprofiler omdøpt til
+metode-navn uten ★/brødform, med `anbefaltTil`-merke · «Om dette baket» på Brød med
+beskrivelse + stegkjede generert fra `kjede()`.
+
+### Levert tidligere samme dag (30.07 kveld, andre brukertest — ti punkter)
 
 Alle ti punktene fra Bjørns andre testrunde er levert og Chromium-verifisert — se
 CHANGELOG-posten «30.07.2026 (kveld)» for detaljene. Kort: dato/klokkeslett-velger for
@@ -52,7 +60,13 @@ fokusert felt ble fjernet under `replaceChildren` (blur midt i render). Rettet m
 
 ### Åpne V2-punkter
 
-Ingen kjente åpne punkter fra brukertestene nå. Neste runde avventer Bjørns tilbakemelding.
+**Innlogging og sky-lagring.** Bjørn vil at appen skal bygges «med lagring og
+innlogging» så data ikke går tapt. Sikkerhetskopi (eksport/import av JSON) er levert
+som det som er mulig uten server; ekte konto krever en backend (f.eks. Supabase/
+Firebase gratis-tier, eller en liten egen tjeneste). Beslutning om leverandør og
+kostnad ligger hos Bjørn — appen er i dag 100 % statisk på GitHub Pages.
+
+Ellers ingen kjente åpne punkter. Neste runde avventer Bjørns tilbakemelding.
 
 ---
 

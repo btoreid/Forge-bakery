@@ -21,8 +21,8 @@ const STANDARD = {
   saltPct: null, ferdigMs: null, tidModus: 'ferdig',
   heveplan: null,                 // null = planens standard; array = redigert
   paramInfo: null, tilleggInfo: null, melInfo: null, meltallInfo: null,
-  aktivSteg: 0, regnskapAapen: false,
-  loggListe: [], lgNavn: '', lgKar: 8,
+  aktivSteg: 0, regnskapAapen: false, byttBekreft: null,
+  loggListe: [], lgNavn: '', lgKar: 8, lgBilder: [],
   favoritter: [], oppslag: 'meny', oppslagSok: ''
 };
 let S = last();
@@ -30,7 +30,7 @@ let S = last();
 function nyStandard() {
   const s = Object.assign({}, STANDARD);
   s.tillegg = Object.assign({}, STANDARD.tillegg);   // bryt delt referanse med STANDARD
-  s.loggListe = []; s.favoritter = [];
+  s.loggListe = []; s.favoritter = []; s.lgBilder = [];
   return s;
 }
 function last() {
@@ -43,6 +43,7 @@ function last() {
   // Normaliser typer så korrupt lagret tilstand ikke velter appen (teknisk #4/#10)
   if (!Array.isArray(s.loggListe)) s.loggListe = [];
   if (!Array.isArray(s.favoritter)) s.favoritter = [];
+  if (!Array.isArray(s.lgBilder)) s.lgBilder = [];
   if (!s.tillegg || typeof s.tillegg !== 'object') s.tillegg = {};
   s.tillegg = Object.assign({}, s.tillegg);
   s.loggListe = s.loggListe.slice(); s.favoritter = s.favoritter.slice();
@@ -109,10 +110,14 @@ const SKJERMER = [
 /* Brødtypene som designet viser dem — «Brød» er én type der grovheten settes i
    deigen (loff = grov 0), de tre andre er kalibrerte forvalg. */
 const BTYPER = [
-  { id: 'grovbrod', navn: 'Brød', undertittel: 'Fra loff til ekstra grovt — du setter grovheten i deigen', rute: 'bygg', antall: 4, vekt: 900 },
-  { id: 'ciabatta', navn: 'Ciabatta', undertittel: 'Stiv biga, åpen krumme · kalibrert deig', rute: 'preset', antall: 8, vekt: 280 },
-  { id: 'baguette', navn: 'Baguetter', undertittel: 'Poolish og kort bulk · kalibrert deig', rute: 'preset', antall: 6, vekt: 330 },
-  { id: 'focaccia', navn: 'Focaccia', undertittel: 'Hever i formen, olje i deigen · kalibrert deig', rute: 'preset', antall: 1, vekt: 1000 }
+  { id: 'grovbrod', navn: 'Brød', undertittel: 'Fra loff til ekstra grovt — du setter grovheten i deigen', rute: 'bygg', antall: 4, vekt: 900,
+    om: 'Ett frittstående brød der du styrer alt selv: grovhet, vann, frø og tidsplan. Grunnformen er alltid den samme — elt, bulkhev varmt, form emnet stramt, kaldhev i kurv, stek varmt med damp.' },
+  { id: 'ciabatta', navn: 'Ciabatta', undertittel: 'Stiv biga, åpen krumme · kalibrert deig', rute: 'preset', antall: 8, vekt: 280,
+    om: 'Italiensk, svært vått brød på sterkt mel. En stiv biga modnes over natta og gir styrke og smak; deigen bulkheves, kjøles i boks og DELES i biter i stedet for å formes — luftigheten er hele poenget. Stekes kort og varmt midt i ovnen.' },
+  { id: 'baguette', navn: 'Baguetter', undertittel: 'Poolish og kort bulk · kalibrert deig', rute: 'preset', antall: 6, vekt: 330,
+    om: 'Poolishen står over natta og gjør smaksjobben; selve bakedagen er kort. Kort bulk, forform til løse rektangler, trekk ut til lengder, og stek raskt og varmt med kraftig damp. Skal ikke langtidsheve.' },
+  { id: 'focaccia', navn: 'Focaccia', undertittel: 'Hever i formen, olje i deigen · kalibrert deig', rute: 'preset', antall: 1, vekt: 1000,
+    om: 'Samme deigfamilie som brødet, men den hever og kaldhever i formen med olje — ingen forming, ingen kurv. Grop med alle ti fingre når deigen er avslappet, hell over salamoia, og stek i formen uten damp.' }
 ];
 /* Lucide-ikoner (stroke 2, rund) — ikke unicode-glyffer, som så billig ut. */
 function ikonSvg(name) {
@@ -270,7 +275,7 @@ const sep = () => h('span', { class: 'sep' }, ' · ');
 /* ============================================================
    1 · BRØDET
    ============================================================ */
-function tegnBrodet(r) {
+function tegnBrodet(r, K) {
   const wrap = h('div');
   if (!S.loggListe.length) {
     wrap.appendChild(h('div', { class: 'tomkort' },
@@ -296,6 +301,40 @@ function tegnBrodet(r) {
         h('span', { class: 'undertittel' }, bt.undertittel || '')),
       paa ? h('span', { class: 'valgt-merke' }, '✓ valgt') : null);
   })));
+
+  // «Er du sikker?» — å bytte bakst er å starte på nytt, og det skal bekreftes.
+  if (S.byttBekreft) {
+    const ny = BTYPER.find(b => b.id === S.byttBekreft);
+    wrap.appendChild(h('div', { class: 'varsel' },
+      h('div', { style: 'font-weight:800;margin-bottom:4px' }, 'Bytte til ' + ny.navn + ' — starte på nytt?'),
+      h('div', { style: 'font-size:.8rem;line-height:1.45' },
+        'Da nullstilles deigvalgene dine (tillegg, vann, salt, grovhet og heveplan) til ' +
+        ny.navn.toLowerCase() + 's egen oppskrift. Utstyr, maskin, logg og favoritter beholdes.'),
+      h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
+        h('button', { class: 'btn btn-primary', style: 'flex:1;font-size:.82rem', onClick: () => nyBakst(S.byttBekreft) }, 'Ja, start på nytt'),
+        h('button', { class: 'btn', style: 'flex:1;font-size:.82rem', onClick: () => { S.byttBekreft = null; oppdater(); } }, 'Avbryt'))));
+  }
+
+  // Om dette baket — hva det er, og prosessen du har foran deg. Stegene
+  // GENERERES fra kjede(), samme kilde som Tid og Prosess leser.
+  const btNaa = BTYPER.find(b => b.id === S.brotype) || (S.brotype === 'loff' ? BTYPER[0] : null);
+  if (btNaa && btNaa.om && K && K.length) {
+    const d = h('details', { class: 'kort', style: 'padding:0' });
+    d.appendChild(h('summary', { style: 'padding:14px 16px;cursor:pointer;font-weight:800;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--color-neutral-600);list-style:none' },
+      'Om dette baket — prosessen kort ▾'));
+    const kropp = h('div', { style: 'padding:0 16px 14px' });
+    kropp.appendChild(h('div', { class: 'hjelpetekst' }, btNaa.om));
+    kropp.appendChild(h('div', { class: 'felt-label', style: 'margin-top:10px;font-weight:800' },
+      'Prosessen · totalt ' + fmt(K.totalT, 1) + ' t'));
+    K.forEach((s, j) => kropp.appendChild(h('div', { style: 'display:flex;gap:8px;align-items:baseline;font-size:.78rem;padding:3px 0;border-bottom:1px dotted var(--color-neutral-200)' },
+      h('span', { style: 'flex:0 0 18px;color:var(--color-neutral-500);font-variant-numeric:tabular-nums' }, String(j + 1)),
+      h('span', { style: 'flex:1' }, s.navn),
+      h('span', { style: 'color:var(--color-neutral-600);font-variant-numeric:tabular-nums;white-space:nowrap' }, fmtTimer(s.varighet / 60)))));
+    kropp.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-500);margin-top:6px' },
+      'Tidene følger valgene dine — hele kjeden med klokkeslett ligger under Prosess.'));
+    d.appendChild(kropp);
+    wrap.appendChild(d);
+  }
 
   // Størrelse
   const emneMasse = r.totalVekt / Math.max(S.antall, 1);
@@ -357,18 +396,33 @@ function profilForUtstyr(utstyrId, formId) {
   return UTSTYR_PROFIL[utstyrId] || 'brod_apen';
 }
 function startForvalg() { S.brotype = 'grovbrod'; S.grov = 40; S.tid = 'lang'; S.skjerm = 'deigen'; oppdater(); }
+/* Å velge en annen brødtype er å starte et NYTT bak — før tok den med seg alle
+   deigvalgene (tillegg, vann, salt, heveplan) inn i den nye baksten, så en
+   ciabatta arvet f.eks. solsikkefrøene fra brødet. Nå spørres det først
+   («er du sikker?»), og bekreftelsen nullstiller oppskriftsvalgene til den nye
+   bakstens standard. Utstyr, maskin, logg og favoritter beholdes — de er dine,
+   ikke bakstens. */
 function velgBrotype(id) {
-  S.brotype = id;
-  const bt = BTYPER.find(b => b.id === id);
-  if (bt && bt.antall) S.antall = bt.antall;
-  if (bt && bt.vekt) S.vekt = bt.vekt;
-  // Nullstill det som er bundet til forrige brødtype, ellers lekker en redigert
-  // heveplan eller en avledet stekeprofil inn i et preset og overstyrer dets
-  // egen (teknisk review #1/#2).
-  S.heveplan = null; S.stekeProfil = null; S.stekeProfilManuell = false;
+  if (id === S.brotype || (id === 'grovbrod' && S.brotype === 'loff')) { S.byttBekreft = null; oppdater(); return; }
+  S.byttBekreft = id;
+  oppdater();
+}
+function nyBakst(id) {
+  const bt = BTYPER.find(b => b.id === id) || BTYPER[0];
+  Object.assign(S, {
+    brotype: id,
+    grov: STANDARD.grov, hyd: STANDARD.hyd, tid: STANDARD.tid,
+    ff: STANDARD.ff, ffType: STANDARD.ffType,
+    tillegg: bt.rute === 'preset' ? {} : Object.assign({}, STANDARD.tillegg),
+    saltPct: null, heveplan: null, stekeProfil: null, stekeProfilManuell: false,
+    form: STANDARD.form, aktivSteg: 0, byttBekreft: null,
+    paramInfo: null, tilleggInfo: null, melInfo: null
+  });
+  if (bt.antall) S.antall = bt.antall;
+  if (bt.vekt) S.vekt = bt.vekt;
   // Preset forutsetter sin egen forferment (ciabatta = biga). Synk den, ellers
   // ville motoren gitt presetet ingen forferment før brukeren slår den på manuelt.
-  if (bt && bt.rute === 'preset') {
+  if (bt.rute === 'preset') {
     const pr = PRESETS.find(p => p.id === id);
     if (pr && pr.forferment) { S.ff = !!pr.forferment.bruk; S.ffType = pr.forferment.type === 'pate' ? 'biga' : pr.forferment.type; }
   }
@@ -1311,6 +1365,7 @@ function tegnLogg(r) {
         h('button', { onClick: () => { S.lgKar = Math.max(1, S.lgKar - 1); oppdater(); } }, '−'),
         h('input', { type: 'text', inputmode: 'numeric', value: String(S.lgKar), onblur: e => { const v = parseInt(e.target.value); if (!isNaN(v)) S.lgKar = Math.min(10, Math.max(1, v)); oppdater(); } }),
         h('button', { onClick: () => { S.lgKar = Math.min(10, S.lgKar + 1); oppdater(); } }, '+'))));
+  form.appendChild(tegnBildeVelger());
   // Lagres automatisk med baket
   const auto = h('div', { class: 'info-boks', style: 'margin-top:12px' },
     h('div', { style: 'font-size:.66rem;font-weight:800;letter-spacing:.06em;color:var(--color-neutral-600);text-transform:uppercase;margin-bottom:6px' }, 'Lagres automatisk med baket'));
@@ -1336,18 +1391,106 @@ function tegnLogg(r) {
         h('span', { class: 'badge' }, b.kar + ' / 10'),
         h('span', { style: 'margin-left:auto;font-size:.74rem;color:var(--color-neutral-600)' }, b.dato)),
       h('div', { style: 'font-size:.8rem;color:var(--color-neutral-700);margin-top:4px;font-variant-numeric:tabular-nums' },
-        b.grov + ' % grovt · ' + b.hyd + ' % vann · løft ' + b.loft + ' · dose ' + b.dose))));
+        b.grov + ' % grovt · ' + b.hyd + ' % vann · løft ' + b.loft + ' · dose ' + b.dose),
+      (b.bilder && b.bilder.length) ? h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px' },
+        ...b.bilder.map((src, i) => h('img', { src, alt: 'Bilde ' + (i + 1) + ' av ' + (b.navn || 'baket'),
+          style: 'width:86px;height:86px;object-fit:cover;border-radius:12px;border:1px solid var(--color-neutral-300)' }))) : null)));
   }
+  wrap.appendChild(tegnBackup());
   return wrap;
 }
 function lagreBak(r) {
   S.loggListe = S.loggListe.concat([{
     navn: S.lgNavn || ('Bak #' + (S.loggListe.length + 1)),
     kar: S.lgKar, dato: new Date().toLocaleDateString('nb-NO'),
-    grov: fmt(r.brodskala.pct, 0), hyd: fmt(r.hyd * 100, 0), loft: r.loft.loft, dose: fmt(r.doseProfil.dose, 2)
+    grov: fmt(r.brodskala.pct, 0), hyd: fmt(r.hyd * 100, 0), loft: r.loft.loft, dose: fmt(r.doseProfil.dose, 2),
+    bilder: (S.lgBilder || []).slice()
   }]);
-  S.lgNavn = '';
+  S.lgNavn = ''; S.lgBilder = [];
   oppdater();
+}
+/* Bilder av baket — designfasen hadde dem i loggen; nå er de tilbake. Skaleres
+   ned til maks 480 px JPEG i canvas før lagring, så localStorage (~5 MB)
+   rommer mange bak. Maks 3 per bak. */
+function tegnBildeVelger() {
+  const boks = h('div', { style: 'margin-top:12px' });
+  boks.appendChild(h('div', { class: 'felt-label' }, 'Bilder av baket'));
+  const inp = h('input', { type: 'file', accept: 'image/*', style: 'display:none',
+    'aria-label': 'Velg bilde', onchange: e => leggTilBilde(e.target.files && e.target.files[0]) });
+  const rad = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:6px' });
+  (S.lgBilder || []).forEach((src, i) => rad.appendChild(h('div', { style: 'position:relative' },
+    h('img', { src, alt: 'Bilde ' + (i + 1), style: 'width:64px;height:64px;object-fit:cover;border-radius:12px;border:1px solid var(--color-neutral-300);display:block' }),
+    h('button', { 'aria-label': 'Fjern bilde ' + (i + 1),
+      style: 'position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:999px;border:1px solid var(--color-neutral-300);background:#fff;color:var(--color-danger);font-weight:800;line-height:1;cursor:pointer;padding:0',
+      onClick: () => { S.lgBilder = (S.lgBilder || []).filter((_, j) => j !== i); oppdater(); } }, '×'))));
+  if ((S.lgBilder || []).length < 3) rad.appendChild(h('button', {
+    style: 'width:64px;height:64px;border-radius:12px;border:1.5px dashed var(--color-neutral-400);background:none;color:var(--color-neutral-600);font-size:1.4rem;cursor:pointer',
+    'aria-label': 'Legg til bilde', onClick: () => inp.click() }, '+'));
+  boks.appendChild(rad);
+  boks.appendChild(inp);
+  return boks;
+}
+function leggTilBilde(fil) {
+  if (!fil) return;
+  const les = new FileReader();
+  les.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const sk = Math.min(1, 480 / Math.max(img.width, img.height, 1));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * sk));
+      c.height = Math.max(1, Math.round(img.height * sk));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const data = c.toDataURL('image/jpeg', 0.7);
+      // Vern mot full localStorage: nekt heller ett nytt bilde enn å miste alt.
+      if (JSON.stringify(S).length + data.length > 4200000) {
+        alert('Lagringen i nettleseren er nesten full — last ned en sikkerhetskopi og slett gamle bilder først.');
+        return;
+      }
+      S.lgBilder = (S.lgBilder || []).concat([data]);
+      oppdater();
+    };
+    img.src = les.result;
+  };
+  les.readAsDataURL(fil);
+}
+/* Sikkerhetskopi — alt ligger kun i nettleserens localStorage. Til ekte
+   innlogging/sky trengs en backend; inntil den beslutningen er tatt er dette
+   vernet mot tap: last ned alt som JSON, hent inn igjen hvor som helst. */
+function tegnBackup() {
+  const inpFil = h('input', { type: 'file', accept: '.json,application/json', style: 'display:none',
+    'aria-label': 'Velg sikkerhetskopi', onchange: e => hentInnKopi(e.target.files && e.target.files[0]) });
+  const boks = kort('Sikkerhetskopi', null);
+  boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:6px' },
+    'Alt du legger inn ligger kun i denne nettleseren — sletter du nettleserdata, er det borte. Last ned en kopi nå og da; fila kan hentes inn igjen på en ny telefon. Ekte innlogging med sky-lagring står på planen, men krever en server.'));
+  boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
+    h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: lastNedKopi }, 'Last ned kopi'),
+    h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: () => inpFil.click() }, 'Hent inn kopi')));
+  boks.appendChild(inpFil);
+  return boks;
+}
+function lastNedKopi() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' }));
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  a.download = 'forge-bakery-' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function hentInnKopi(fil) {
+  if (!fil) return;
+  const les = new FileReader();
+  les.onload = () => {
+    try {
+      const data = JSON.parse(les.result);
+      if (!data || typeof data !== 'object' || !('brotype' in data)) throw new Error('dette er ikke en Forge Bakery-kopi');
+      localStorage.setItem(LAGER, JSON.stringify(data));
+      S = last();                       // gjenbruker all normalisering i last()
+      if (window.__FB) window.__FB.S = S;
+      render();
+    } catch (e) { alert('Kunne ikke lese fila: ' + (e && e.message ? e.message : e)); }
+  };
+  les.readAsText(fil);
 }
 
 /* ============================================================
@@ -1458,6 +1601,8 @@ function oppslagSteking(r) {
         h('span', { style: 'font-family:var(--font-heading);font-size:1.02rem;flex:1' }, p.navn),
         aktiv ? h('span', { class: 'badge' }, 'planen din') : null),
       h('div', { style: 'font-size:.76rem;color:var(--color-neutral-600);margin-top:2px' }, (p.vekt || '') + ' · ' + (p.hydrering || '')),
+      p.anbefaltTil ? h('div', { style: 'font-size:.78rem;margin-top:6px' },
+        h('span', { class: 'pille', style: 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)' }, 'anbefalt til'), ' ' + p.anbefaltTil) : null,
       h('div', { style: 'margin-top:8px' },
         tallrad('Inn på', p.inn + ' °C'), tallrad('Ned til', p.ned + ' °C'), tallrad('Damp', p.damp), tallrad('Damptid', p.dampTid), tallrad('Kjerne', p.kjerne)),
       p.notat ? h('div', { class: 'hjelpetekst', style: 'margin-top:6px' }, p.notat) : null));
