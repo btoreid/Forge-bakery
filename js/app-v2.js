@@ -869,11 +869,11 @@ function tegnTid(r, K) {
       miniStepper('Eltetid', S.eltMin || 13, 'eltMin', 3, 25, 1, ' min')),
     h('div', { style: 'margin-top:10px' },
       h('div', { class: 'felt-label' }, 'Maskin'),
-      h('div', { class: 'piller', style: 'flex-wrap:wrap' }, ...[['hand', 'For hånd'], ['planet', 'Kjøkkenmaskin'], ['spiralHjemme', 'Spiral hjemme'], ['spiralProff', 'Spiral proff'], ['egen', 'Egen (kalibrer)']].map(([id, navn]) =>
-        h('button', { class: (S.maskin || 'spiralHjemme') === id ? 'paa' : '', style: 'flex:1 1 45%;font-size:.78rem', onClick: () => { S.maskin = id; oppdater(); } }, navn))),
+      h('div', { class: 'piller', style: 'flex-wrap:wrap' }, ...['hand', 'planet', 'spiralHjemme', 'spiralProff', 'egen'].map(id =>
+        h('button', { class: (S.maskin || 'spiralHjemme') === id ? 'paa' : '', style: 'flex:1 1 45%;font-size:.78rem', onClick: () => { S.maskin = id; oppdater(); } }, MASKIN_INFO[id].navn))),
       S.maskin === 'egen' ? h('div', { style: 'margin-top:8px' },
-        miniStepper('Din friksjon (°C per min)', S.egenFriksjon || 0.4, 'egenFriksjon', 0.05, 2, 0.05, ''),
-        h('div', { class: 'hjelpetekst', style: 'margin-top:4px' }, 'Mål deigtempen før og etter elting, del stigningen på antall minutter, og skriv tallet her. Da regner appen vanntemperaturen mot akkurat din maskin.')) : null));
+        miniStepper('Din friksjon (°C per min)', S.egenFriksjon || 0.4, 'egenFriksjon', 0.05, 2, 0.05, '')) : null,
+      maskinInfoPanel(r)));
   wrap.appendChild(vb);
 
   // Gjæringsgraf — den ekte fart- og akkumuleringskurven bak dosen.
@@ -920,6 +920,52 @@ function miniStepper(label, verdi, felt, min, max, steg, enhet) {
 function legendePrikk(farge, tekst) {
   return h('span', { style: 'display:inline-flex;align-items:center;gap:5px' },
     h('span', { style: 'width:10px;height:3px;border-radius:2px;background:' + farge }), tekst);
+}
+/* Forklarer den valgte eltemaskinen: hva den er, friksjonstallet, den levende
+   utregningen (friksjon × min → Wh/kg) og en sammenligning av alle maskinene. */
+function maskinInfoPanel(r) {
+  const mid = S.maskin || 'spiralHjemme';
+  const info = (typeof MASKIN_INFO !== 'undefined') && MASKIN_INFO[mid];
+  if (!info) return null;
+  const min = S.eltMin || 13;
+  const frik = mid === 'egen' ? (S.egenFriksjon || 0.4) : info.friksjon;
+  const sone = r.wh < 3 ? ['under målsonen', 'var(--color-accent-700)'] : r.wh > 8.3 ? ['over metning', 'var(--color-danger)'] : ['i målsonen', 'var(--color-accent-2-700)'];
+
+  const panel = h('div', { class: 'maskin-info' },
+    h('div', { class: 'mi-topp' },
+      h('b', null, info.navn),
+      h('span', { class: 'mi-frik' }, mid === 'egen' ? 'målt ' + fmt(frik, 2) + ' °C/min' : fmt(frik, 2) + ' °C/min')),
+    h('div', { class: 'mi-hva' }, info.hva),
+    h('div', { class: 'mi-hva', style: 'margin-top:4px' }, info.tid),
+    // Den levende utregningen — samme tall som varmebalansen bruker.
+    h('div', { class: 'mi-regn' },
+      h('span', null, fmt(frik, 2), ' °C/min × ', String(min), ' min = '),
+      h('b', null, '+' + fmt(r.friksjon, 1) + ' °C'),
+      h('span', null, ' → ÷ 1,29 = '),
+      h('b', { style: 'color:' + sone[1] }, fmt(r.wh, 1) + ' Wh/kg'),
+      h('span', { style: 'color:' + sone[1] }, ' (' + sone[0] + ')')),
+    h('div', { class: 'mi-note' }, info.note));
+
+  // Sammenlign alle maskinene ved gjeldende eltetid.
+  const vis = !!S.visMaskiner;
+  panel.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:8px;font-size:.76rem', onClick: () => { S.visMaskiner = !vis; oppdater(); } },
+    vis ? 'Skjul sammenligning' : 'Sammenlign maskinene ved ' + min + ' min ›'));
+  if (vis) {
+    const rader = ['hand', 'spiralHjemme', 'planet', 'spiralProff'].map(id => {
+      const m = MASKIN_INFO[id];
+      const stig = m.friksjon * min, wh = stig / 1.29;
+      return h('div', { class: 'mi-rad' + (id === mid ? ' paa' : '') },
+        h('span', { class: 'mi-navn' }, m.navn),
+        h('span', { class: 'mi-tall' }, fmt(m.friksjon, 2) + ' °C/min'),
+        h('span', { class: 'mi-tall' }, '+' + fmt(stig, 1) + ' °C'),
+        h('span', { class: 'mi-tall' }, fmt(wh, 1) + ' Wh/kg'));
+    });
+    panel.appendChild(h('div', { class: 'mi-tabell' },
+      h('div', { class: 'mi-rad hode' }, h('span', { class: 'mi-navn' }, 'Maskin'), h('span', { class: 'mi-tall' }, 'friksjon'), h('span', { class: 'mi-tall' }, 'ved ' + min + ' min'), h('span', { class: 'mi-tall' }, 'arbeid')),
+      ...rader,
+      h('div', { class: 'mi-note', style: 'margin-top:6px' }, 'Målsonen for åpen krumme er 3–5 Wh/kg; metning ved 8,3. Samme eltetid gir helt ulikt arbeid — derfor må vanntemperaturen følge maskinvalget.')));
+  }
+  return panel;
 }
 /* SVG-graf: fasebånd, temp- og gjæringsakser, gjæringsfart (areal), akkumulert
    dose (hovedkurve), deigtemp, halvveismerke, klokkeslett og «nå»-markør.

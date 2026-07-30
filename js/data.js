@@ -1252,6 +1252,35 @@ const UTSTYR = [
     om:'Cordieritstein leverer 157 °C kontakttemperatur mot støpejernets 232. Krever et skikkelig dampoppsett for å konkurrere.' }
 ];
 
+/* ---------- ELTEMASKINER ----------
+   friksjon = °C deigen varmes per minutts elting (FRIKSJON i engine.js). Det er
+   dette tallet appen bruker til å regne baklengs: for å treffe ønsket deigtemp
+   må vannet kompensere for friksjonsvarmen. Arbeidet leses som Wh/kg =
+   friksjonsstigning ÷ 1,29 (målt varmekapasitet), og målsonen for åpen krumme er
+   3–5 Wh/kg. Kilder og målesone står i ELTING-kommentaren i engine.js. */
+const MASKIN_INFO = {
+  hand: { navn:'For hånd', friksjon:0.15,
+    hva:'Elting på benk eller i bolle uten maskin. Tilfører minst varme av alt — benk og hender trekker nesten like mye varme ut som knaingen tilfører.',
+    tid:'Regn 15–25 min med strekk-og-brett, eller la autolyse og lange hviler gjøre jobben i stedet for muskelkraft.',
+    note:'Lav friksjon betyr at vannet kan være varmere uten at deigen løper varm.' },
+  planet: { navn:'Kjøkkenmaskin (planet)', friksjon:0.6,
+    hva:'Klassisk husholdningsmaskin med krok i planetbane (KitchenAid, Kenwood o.l.). Kroken drar deigen mot bollekanten og jobber hardt og lokalt.',
+    tid:'~5–8 min på middels fart mot målsonen. Varmer raskt.',
+    note:'Høy friksjon: bruk kaldere vann og følg med — det er lett å kna forbi metning på en varm planetmaskin.' },
+  spiralHjemme: { navn:'Spiral hjemme', friksjon:0.4,
+    hva:'Spiralmikser i husholdningsstørrelse. Spiralen står i ro mens bollen roterer, så deigen bearbeides jevnere og mer skånsomt enn i en planetmaskin.',
+    tid:'~8 min mot improved mix. Jevn, moderat oppvarming.',
+    note:'Appens standardvalg — balansert friksjon mellom hånd og proffmaskin.' },
+  spiralProff: { navn:'Spiral proff', friksjon:1.0,
+    hva:'Profesjonell spiralmikser som på et bakeri. Kraftig og effektiv — bygger glutennettverk fort.',
+    tid:'~4–6 min er nok. Varmer raskest av alle maskinene.',
+    note:'Høyeste friksjon: regn med kaldt vann eller is, ellers passerer deigen 26 °C før nettverket er ferdig.' },
+  egen: { navn:'Egen (kalibrer)', friksjon:null,
+    hva:'Din egen maskin, kalibrert med målt friksjon i stedet for et tabelltall.',
+    tid:'Mål deigtempen rett før og rett etter elting, og del stigningen på antall minutter.',
+    note:'Da regner appen vanntemperaturen mot akkurat din maskin — mest presist om du elter ofte.' }
+};
+
 /* ---------- FAGSTOFF ---------- */
 const TIPS = [
   {
