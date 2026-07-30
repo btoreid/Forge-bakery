@@ -737,6 +737,155 @@ function loftIndeks(o) {
   };
 }
 
+/* ---------- MÅLDOSE for gjæringsgrad ----------
+   Flyttet hit fra app.js (V1) så regn() kan være en ren motorfunksjon.
+   ⚠ L-04 / PARAMETERREVISJON: leddet `0,40 × grovAndel` er det ENESTE ukildede
+   tallet i en ellers grundig kildet formel, og det betyr mer etter at
+   grovhetstrappa går til 80 %. Står urørt til Bjørn kalibrerer det mot egne bak
+   — det skal ikke gjettes bort. Forfermenten senker måldosen (mindre gjær i
+   hoveddeigen) fordi en del av gjæringsarbeidet alt er gjort.                  */
+function maalDoseFor(grovAndel, pff = 0) {
+  return (2.30 - 0.40 * grovAndel) * (1 - 0.6 * pff);
+}
+
+/* ---------- GROVHET (kontinuerlig) → MELBLANDING (L-03) ----------
+   Mobil-V2 har en kontinuerlig grovhets-skyver 0–100, mens GROVHET-trinnene er
+   standardens dokumenterte ankre (0/10/25/40/60/80). Her interpoleres hver
+   melkomponent mellom de to nærmeste ankrene: union av mel-id-er, manglende id
+   teller 0 %, resultatet renormaliseres til 100. Lander skyveren på et anker,
+   får du NØYAKTIG det trinnets blanding — så en bruker som kommer fra et forvalg
+   ser sin egen blanding, og dialen eier verdien når den flyttes (Bjørns valg i
+   L-03). Utenfor endepunktene klippes det til ytterste trinn.                  */
+function melblandingForGrov(grov) {
+  const trinn = GROVHET.map(g => ({ grov: parseFloat(g.kort), mel: g.mel }))
+                       .sort((a, b) => a.grov - b.grov);
+  if (grov <= trinn[0].grov) return trinn[0].mel.map(m => ({ ...m }));
+  const siste = trinn[trinn.length - 1];
+  if (grov >= siste.grov) return siste.mel.map(m => ({ ...m }));
+  let lo = trinn[0], hi = siste;
+  for (let i = 0; i < trinn.length - 1; i++) {
+    if (grov >= trinn[i].grov && grov <= trinn[i + 1].grov) { lo = trinn[i]; hi = trinn[i + 1]; break; }
+  }
+  const f = (grov - lo.grov) / (hi.grov - lo.grov);
+  const ids = [...new Set([...lo.mel, ...hi.mel].map(m => m.id))];
+  const pctOf = (arr, id) => (arr.find(m => m.id === id) || {}).pct || 0;
+  const blad = ids.map(id => ({ id, pct: pctOf(lo.mel, id) * (1 - f) + pctOf(hi.mel, id) * f }))
+                  .filter(m => m.pct > 0.05);
+  const sum = blad.reduce((s, m) => s + m.pct, 0) || 100;
+  return blad.map(m => ({ id: m.id, pct: m.pct / sum * 100 }));
+}
+
+/* tillegg {id: pct} → froListe [{id, gram, varmt}] + smak-parametre.
+   `type:'fro'` blir frø med gram = melTotal · pct/100 (fikspunkt løses i regn()),
+   `type:'smak'` skrives til sitt `felt` (honningPct, maltPct, oljePct …).
+   `varmt` = skålding, fra TILLEGG-flagget eller SOAKERS.type === 'varmt'.       */
+function tilleggOppdelt(tillegg, melTotal) {
+  const froListe = [], smak = {};
+  Object.keys(tillegg || {}).forEach(id => {
+    const pct = tillegg[id]; if (!(pct > 0)) return;
+    const t = TILLEGG.find(x => x.id === id); if (!t) return;
+    if (t.type === 'smak' && t.felt) { smak[t.felt] = pct; return; }
+    const sk = SOAKERS.find(s => s.id === id);
+    const varmt = !!t.varmt || (sk && sk.type === 'varmt');
+    froListe.push({ id, gram: melTotal * pct / 100, varmt });
+  });
+  return { froListe, smak };
+}
+
+/* ---------- regn(state): DEN RENE MODELLFUNKSJONEN ----------
+   Tar den flate mobiltilstanden og returnerer alt avledet i ett objekt. Ingen
+   globaler, ingen DOM — så den kan testes og kalles fra hvilken som helst skjerm
+   uansett rekkefølge (viktig for skjermrekkefølgen brød → deig → tid: deigen
+   regnes mot gjeldende/standard plan, og alt regnes om når planen endres).
+
+   Porta fra V1s byggOppskrift(), gjort ren, med tre tillegg: kontinuerlig grov →
+   blanding (L-03), tillegg{id:pct} → froListe, og loftIndeks() (L-01/L-14).
+   Gjæren løses ALLTID numerisk mot måldosen (L-02) — aldri fra en tabell.       */
+const GJAER_TAK_TORR = 0.833;   // 2,5 % fersk; over dette: gjærsmak og dårlig løft
+
+function regn(state) {
+  const bt = BROTYPER.find(b => b.id === state.brotype) || BROTYPER[0];
+  const plan = TIDSPLANER.find(t => t.id === state.tid)
+            || TIDSPLANER.find(t => t.id === 'lang') || TIDSPLANER[0];
+  const preset = bt.rute === 'preset' ? PRESETS.find(p => p.id === bt.preset) : null;
+
+  // Melblanding: preset låser sin egen; bygg-ruta utleder av grov-skyveren.
+  const melListe = preset ? preset.mel.map(m => ({ ...m })) : melblandingForGrov(state.grov ?? 40);
+
+  // Hydrering og salt: preset eier sine, ellers brukerens valg.
+  const hyd = (preset ? preset.hydrering : (state.hyd ?? 75)) / 100;
+  const saltPct = preset ? preset.salt : (state.saltPct ?? 1.8);
+
+  // Forferment: TYPEN eies av valget, TIDSPLANEN (timer, andel) av planen.
+  const ffT = ffTypeFor(state.ffType);
+  const ffPaa = !!state.ff && ffT.id !== 'ingen';
+  const pf = plan.forferment || {};
+  const forferment = {
+    bruk: ffPaa, type: ffT.id,
+    pctMel: pf.pctMel || ffT.pctMel,
+    hydrering: ffT.hyd || pf.hydrering || 100,
+    timer: pf.timer || ffT.timer,
+    temp: pf.temp || ffT.temp || 21
+  };
+
+  // Fikspunkt: frøgram avhenger av melTotal, som avhenger av frøgram. 4 runder.
+  let melTotal = (state.antall || 1) * (state.vekt || 900) / 1.85;
+  let deler = tilleggOppdelt(state.tillegg, melTotal), r = null;
+  const kall = (gjaerPct) => beregnOppskrift({
+    melListe, froListe: deler.froListe, hydrering: hyd, saltPct, ...deler.smak,
+    gjaerPct, gjaerType: 'torr', forferment,
+    antall: state.antall || 1, vektPerBrod: state.vekt || 900,
+    froVannPaaToppen: state.froVannPaaToppen !== false
+  });
+  for (let i = 0; i < 4; i++) {
+    r = kall(0.3);
+    melTotal = r.melTotal;
+    deler = tilleggOppdelt(state.tillegg, melTotal);
+  }
+
+  // Gjæren løses numerisk mot måldosen (L-02), med tak og underskudd-flagg.
+  const planTrinn = plan.plan.map(s => ({ ...s }));
+  if (planTrinn.length) planTrinn[0].temp = state.startTemp ?? 24;
+  const pff = ffPaa ? forferment.pctMel / 100 : 0;
+  const maalDose = maalDoseFor(r.grovMelAndel, pff);
+  const opt = { lokk: !!state.lokk, fulltKjol: !!state.fulltKjol, antall: state.antall || 1 };
+  let torr = gjaerForDose(maalDose, planTrinn, r.masseKg, opt), gjaerUnderskudd = 0;
+  if (torr > GJAER_TAK_TORR) {
+    torr = GJAER_TAK_TORR;
+    gjaerUnderskudd = 1 - planDose(planTrinn, torr, r.masseKg, opt).dose / maalDose;
+  }
+
+  // Endelig oppskrift med riktig gjærmengde, og dose-profilen bak kjeden.
+  r = kall(torr);
+  const doseProfil = planDose(planTrinn, torr, r.masseKg, opt);
+
+  // Løftindeks. Frø-leddet teller BARE ekte frø (ikke korn) — korn ligger
+  // allerede i grovheten (brodskala), så å telle dem her ville vært dobbelt.
+  const froPctEkte = deler.froListe.reduce((s, f) => {
+    const sk = SOAKERS.find(x => x.id === f.id);
+    return s + (sk && sk.korn ? 0 : (f.gram || 0) / Math.max(r.melTotal, 1) * 100);
+  }, 0);
+  const loft = loftIndeks({
+    plan, grovPct: r.brodskala.pct, froPct: froPctEkte,
+    hydPct: hyd * 100, tak: 82,
+    ffType: ffT.id, ffAndel: pff,
+    styrkeVektet: r.styrkeVektet, ekvTimer: doseProfil.ekvTimer
+  });
+
+  return {
+    ...r,
+    // NB: `r.forferment` er beregnOppskrifts BEREGNEDE forferment (med mel/vann/
+    // gjær-mengder) — det må IKKE overskrives av input-spesifikasjonen `forferment`.
+    // Input-spec-en eksponeres separat som `ffInn` for plan-koblingsvisningen.
+    bt, plan, preset, planTrinn,
+    ffT, ffPaa, ffInn: forferment,
+    hyd, saltPct,
+    gjaerTorr: torr, maalDose, gjaerUnderskudd,
+    doseProfil, loft,
+    melListe
+  };
+}
+
 /* Lineær interpolasjon i en ankerpunkttabell. Utenfor endepunktene klippes det
    til nærmeste verdi framfor å ekstrapolere — tabellene bygger på måledata i et
    bestemt spenn, og utenfor det spennet vet vi ikke. */
