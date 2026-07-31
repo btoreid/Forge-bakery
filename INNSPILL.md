@@ -305,6 +305,102 @@ Riktig, og det fjerner hele eierskapsproblematikken fra 18/26/27: finnes det ing
 utlogget bruk, finnes det ingen logg uten eier. **Merk prisen:** appen kan ikke lenger
 brukes uten konto, og aller første gang kreves nett.
 
+### 41 · Splash i stedet for påloggingsblink ved oppstart — `levert` · bøtte: ui
+
+> «Når man åpner appen etter å ha vært logget inn, kommer et annet bilde opp enn Forge
+> Bakery.»
+
+`getSession()` er asynkron, så `Sky.bruker()` er null de første hundredelene — også for
+en innlogget. Appen rakk å tegne innloggingsporten før økten var gjenopprettet. Nå vises
+en nøytral splash til økten er avklart, med 4 sekunders sikkerhetsnett hvis nettet henger.
+
+### 42 · Dato på tidligere bakeøkter — `levert` · bøtte: ui
+
+> «det er fint å ha dato når man gjorde forrige bak, så man vet cirka når på året det var.»
+
+«14. februar 2026» med månedsnavn, på egen linje. Nylige bak sier «i dag» / «i går» /
+«for 3 dager siden». Poenget er årstiden: melet og kjøkkenet er ikke det samme i februar
+som i august.
+
+### 43 · Overskriften: stegtall inline, «forberedelse» ut — `levert` · bøtte: ui
+
+> «overskriften på brød med forberedelse, en av tre, har en annen formatering enn de og
+> ti. Jeg tenker også at prosessen er det fjerde steget … Slik sparer du plass på toppen,
+> og så kan man ta bort ordet "forberedelse."»
+
+Toppfeltet gikk fra 78 til 50 px. Prosess er nå steg 4 av 4.
+
+### 44 · Regnskapsarket flimret fortsatt — `levert` · bøtte: ui
+
+> «det regnskap "pop-upen" flimrer fortsatt.»
+
+Jeg hadde fikset bakteppet, ikke arket. `bl.replaceChildren` på bunnlinja tok arket med
+seg ved hver render, så `animation: arkOpp` spilte av på nytt. Både stripa og arket er nå
+stabile noder — bare innholdet byttes, og scrollposisjonen beholdes.
+
+### 45 · Autolysen påvirket ingenting — `levert` · bøtte: modell
+
+> «det må jo være en feil av at autolyset ikke påvirker løft og andre parametre.»
+
+Helt riktig — den var en tidsluke uten konsekvens. Nå: inntil 30 % kortere eltetid
+(hovedeffekten, og den forplanter seg til friksjon og vanntemperatur) og inntil +4 % løft
+(retningen er sikker, størrelsen ikke — derfor forsiktig og ført som anslag i
+`PARAMETERREVISJON.md`). Begge metter med tiden.
+
+### 46 · Sletting nådde ikke fram til den andre enheten — `levert` · bøtte: ui
+
+> «dersom jeg sletter en logg på en enhet, så blir den ikke borte på den andre, selv med
+> refresh.»
+
+Partisjoneringen i `synkVedInnlogging()` brukte fortsatt `!b.konto` i stedet for
+`erUtenKonto()`. Eldre poster falt da UTENFOR kontoens logg og INNENFOR enhetsbøtta
+samtidig — og kom tilbake fra bøtta i stedet for å bli filtrert av gravsteinen. I tillegg
+hentes skyen nå ned på nytt når appen hentes fram (`visibilitychange`).
+
+### 47 · «Tidligere bakeøkter» — `levert` · bøtte: ui
+
+### 48 · Runde grovhetstrinn — `levert` · bøtte: innhold
+
+> «er det ikke mer naturlig å ha femti prosent, syttifem prosent og hundre prosent grovt?»
+
+Jo — og de treffer Brødskala'ns klassegrenser eksakt: 0 · 25 (topp fint) · 50 (topp
+halvgrovt) · 75 (topp grovt) · 100 (ekstra grovt). Melprosentene summerer til 100 på hvert
+trinn, og de grove melene til nøyaktig trinnets tall.
+
+### 49 · Samme tekst på 10 % og 25 % — `levert` · bøtte: ui
+
+> «I teksten mellom ti prosent og tjuefem prosent er det ingen forskjell.»
+
+Konsekvensteksten bøttet på Brødskala-klasse, og begge er «fint brød». Nå eier hvert
+trinn sin egen beskrivelse.
+
+### 50 · «Legg til meltype» manglet — `levert` · bøtte: ui
+
+> «det mangler en "legg til" knapp på mel, så nå kan man ikke legge til andre meltyper.»
+
+Legg til og fjern, med favorittene merket i velgeren.
+
+### 51 · Hardkodet ★ på melnavn — `levert` · bøtte: innhold
+
+> «regal vetemail har en hardkodet favorittstjerne. Det skal du ikke ha.»
+
+Tre melnavn hadde ★ som «kvalitetsmerke». Samme feil som i stekeprofilene og utstyrslista.
+
+### 52 · Tilbakeknappen lukket appen — `levert` · bøtte: ui
+
+> «dersom man bruker back-knappen på Android … så må man gå tilbake til forrige side, ikke
+> lukke appen.»
+
+Historikk per skjermbytte. Overlegg (bilde, modal, regnskap, oppslagsside) lukkes først.
+
+### 53 · Androids kopier/lim-linje spratt opp overalt — `levert` · bøtte: ui
+
+> «driver appen og sender ting til copy-paste på Android? Jeg får opp masse sånne
+> copy-paste-ikoner hele tiden.»
+
+`select()` på fokus i gramfeltene markerer hele verdien, og en markering utløser Androids
+kopier/lim-verktøylinje. Nå bare når det finnes en presis peker (mus).
+
 ### 17 · Bedre appikon — `levert` · bøtte: infra
 
 > «ikonet til appen er litt dårlig. Brødbakeikonet. Prøv å lage et bedre ikon som er litt

@@ -159,7 +159,8 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     const FB = window.__FB, S = FB.S;
     S.melOverstyr = settMelGram(S, 0, 500); FB.render();
     await new Promise(r => setTimeout(r, 60));
-    const k = [...document.querySelectorAll('.piller button')].find(b => b.textContent.trim() === '60 %');
+    // Grovhetstrappa er 0/25/50/75/100 fra 31.07 (natt).
+    const k = [...document.querySelectorAll('.piller button')].find(b => b.textContent.trim() === '50 %');
     if (k) k.click();
     await new Promise(r => setTimeout(r, 120));
     return FB.S.melOverstyr;
@@ -234,7 +235,10 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   const brod = await page.evaluate(() => {
     const t = document.querySelector('.innhold').innerText;
     return {
-      overskrift: /hva skal du bake\?/i.test(t),
+      // Overskriften ligger i TOPPFELTET nå, ikke som en seksjonstittel i
+      // innholdet — stegtallet og tittelen deler én linje for å spare plass.
+      overskrift: /hva skal du bake\?/i.test(document.getElementById('topp').textContent),
+      stegTall: /1 av 4/i.test(document.getElementById('topp').textContent),
       ingenStart: !/Start fra forvalget/.test(t),
       tegninger: document.querySelectorAll('svg.brodsvg').length,
       infoknapper: document.querySelectorAll('.brodvalg .info-ring').length,
@@ -242,6 +246,7 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     };
   });
   ok('overskriften spør hva du skal bake', brod.overskrift);
+  ok('stegtallet står i overskriftslinja (1 av 4)', brod.stegTall);
   ok('startblokka er borte', brod.ingenStart);
   ok('alle fire brødtypene har tegning', brod.tegninger === 4, String(brod.tegninger));
   ok('alle fire har ⓘ', brod.infoknapper === 4, String(brod.infoknapper));
@@ -415,10 +420,13 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     await new Promise(r => setTimeout(r, 150));
     const boks = [...document.querySelectorAll('.varsel')].find(x => /hva vil du at det skal være/i.test(x.textContent));
     return { finnes: !!boks, valg: boks ? boks.querySelectorAll('.valgkort').length : 0,
+      antallMel: regn(S).mel.length,
       krymper: boks ? /la deigen krympe/i.test(boks.textContent) : false };
   });
   ok('spørsmålet reises av en gramendring', spm.finnes);
-  ok('ett valg per meltype + proporsjonalt + deigen', spm.valg === 4, String(spm.valg));
+  // ett valg per ANNEN meltype + «alle deler på det» + «la deigen endres»
+  ok('ett valg per meltype + proporsjonalt + deigen', spm.valg === spm.antallMel + 1,
+    spm.valg + ' valg for ' + spm.antallMel + ' meltyper');
   ok('retningen står riktig (reduksjon = krympe)', spm.krymper);
 
   /* ---------------------------------------------------------------

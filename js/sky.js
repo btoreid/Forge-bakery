@@ -36,6 +36,12 @@ const TABELL = 'bakerstate';
 
 let klient = null;
 let bruker = null;
+/* Er den lagrede økten sjekket ennå?
+   `getSession()` er ASYNKRON, så `bruker` er null i de første hundredelene etter
+   oppstart — også for en som er innlogget. Uten dette flagget rakk appen å tegne
+   innloggingsporten før økten var gjenopprettet, og hvert eneste åpne blinket
+   innom påloggingsskjermen. */
+let sesjonSjekket = false;
 let sisteFeil = null;
 let synkStatus = 'av';          // av | klar | synker | lagret | feil
 const lyttere = [];
@@ -49,14 +55,21 @@ function init() {
     klient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
-  } catch (e) { klient = null; return; }
+  } catch (e) { klient = null; sesjonSjekket = true; return; }
   // Gjenopprett en tidligere økt (persistSession) og følg innlogging/utlogging.
   klient.auth.getSession().then(({ data }) => {
     bruker = (data && data.session && data.session.user) || null;
     if (bruker) synkStatus = 'klar';
+    sesjonSjekket = true;
     varsle();
-  });
+  }).catch(() => { sesjonSjekket = true; varsle(); });
+  /* Sikkerhetsnett: henger nettet, løser `getSession()` seg aldri — og appen
+     ville stått på splash-skjermen i det uendelige. Etter 4 sekunder slipper vi
+     brukeren videre til innloggingsskjemaet, som i det minste er noe hen kan
+     gjøre noe med. Er økten gyldig og kommer inn etterpå, tegnes appen straks. */
+  setTimeout(() => { if (!sesjonSjekket) { sesjonSjekket = true; varsle(); } }, 4000);
   klient.auth.onAuthStateChange((_hendelse, sesjon) => {
+    sesjonSjekket = true;
     const foer = bruker && bruker.id;
     bruker = (sesjon && sesjon.user) || null;
     if (!bruker) synkStatus = 'av';
@@ -162,6 +175,7 @@ init();
 window.Sky = {
   klar: () => !!klient,
   bruker: () => bruker,
+  sesjonSjekket: () => sesjonSjekket,
   status, paaEndring: cb => lyttere.push(cb),
   registrer, loggInn, loggUt, glemtPassord,
   hentNed, lagreOpp, skyvNaa

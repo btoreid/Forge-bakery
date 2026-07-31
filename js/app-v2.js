@@ -198,14 +198,22 @@ function underVekt(v) { return v > 0 && v < 20 * (S.vektTrinn || 0.01); }
 /* ============================================================
    RENDER
    ============================================================ */
+/* Stegnummeret står INNE i overskriftslinja, ikke som en egen kicker over den.
+   Tre grunner: «FORBEREDELSE» sa ingenting brukeren ikke allerede visste, Brød
+   hadde ingen tittel og fikk derfor et helt annet toppfelt enn Deig og Tid, og
+   to linjer øverst spiste plass på en skjerm der plass er alt.
+
+   Prosess er det FJERDE steget, ikke en egen kategori — man går Brød → Deig →
+   Tid → Prosess. Logg og Oppslag er oppslagsverk og har ingen plass i rekka. */
 const SKJERMER = [
-  { id: 'brodet',  navn: 'Brød',    kicker: 'FORBEREDELSE · 1 AV 3', tittel: '' },
-  { id: 'deigen',  navn: 'Deig',    kicker: 'FORBEREDELSE · 2 AV 3', tittel: 'Mel, vann og frø' },
-  { id: 'tid',     navn: 'Tid',     kicker: 'FORBEREDELSE · 3 AV 3', tittel: 'Når vil du ha brød?' },
-  { id: 'prosess', navn: 'Prosess', kicker: 'BAKING', tittel: 'Følg prosessen' },
-  { id: 'logg',    navn: 'Logg',    kicker: 'LOGG', tittel: 'Bakeloggen' },
-  { id: 'oppslag', navn: 'Oppslag', kicker: 'OPPSLAG', tittel: 'Oppslag' }
+  { id: 'brodet',  navn: 'Brød',    steg: 1, tittel: 'Hva skal du bake?' },
+  { id: 'deigen',  navn: 'Deig',    steg: 2, tittel: 'Mel, vann og frø' },
+  { id: 'tid',     navn: 'Tid',     steg: 3, tittel: 'Når vil du ha brød?' },
+  { id: 'prosess', navn: 'Prosess', steg: 4, tittel: 'Følg prosessen' },
+  { id: 'logg',    navn: 'Logg',    tittel: 'Bakeloggen' },
+  { id: 'oppslag', navn: 'Oppslag', tittel: 'Oppslag' }
 ];
+const ANTALL_STEG = SKJERMER.filter(s => s.steg).length;
 /* Brødtypene som designet viser dem — «Brød» er én type der grovheten settes i
    deigen (loff = grov 0), de tre andre er kalibrerte forvalg. */
 const BTYPER = [
@@ -325,6 +333,23 @@ function skalKreveInnlogging() {
   if (window.__FB_TEST_INGEN_PORT) return false;
   return typeof Sky !== 'undefined' && Sky.klar() && !Sky.bruker();
 }
+/* Venter vi fortsatt på at den lagrede økten skal gjenopprettes?
+   `getSession()` er asynkron. Uten dette blinket appen innom påloggingsskjermen
+   ved hvert eneste åpne, også når man var innlogget hele tiden. */
+function venterPaaSesjon() {
+  if (window.__FB_TEST_INGEN_PORT) return false;
+  return typeof Sky !== 'undefined' && Sky.klar() &&
+         typeof Sky.sesjonSjekket === 'function' && !Sky.sesjonSjekket();
+}
+/* Nøytral splash mens økten sjekkes: merkevaren, ingen skjema.
+   Den skal ikke si noe om innlogging i det hele tatt — brukeren vet ennå ikke
+   om hen må logge inn, og appen vet det heller ikke. */
+function tegnSplash() {
+  return h('div', { class: 'port' },
+    h('div', { class: 'port-logo' }, h('img', { src: 'icons/icon-192.png', alt: '', width: 88, height: 88 })),
+    h('h1', { class: 'port-tittel' }, 'Forge Bakery'),
+    h('div', { class: 'port-under' }, 'Henter kontoen din …'));
+}
 function tegnPort() {
   const wrap = h('div', { class: 'port' });
   wrap.appendChild(h('div', { class: 'port-logo' }, h('img', { src: 'icons/icon-192.png', alt: '', width: 88, height: 88 })));
@@ -341,9 +366,9 @@ function tegnPort() {
 function renderInner() {
   // Porten tegnes i stedet for appen, ikke oppå den: da finnes det ingen vei
   // rundt, og ingen halvferdig tilstand bak et overlegg.
-  if (skalKreveInnlogging()) {
+  if (venterPaaSesjon() || skalKreveInnlogging()) {
     byId('topp').replaceChildren();
-    byId('innhold').replaceChildren(tegnPort());
+    byId('innhold').replaceChildren(venterPaaSesjon() ? tegnSplash() : tegnPort());
     byId('bunnlinje').replaceChildren();
     byId('bunnlinje').className = 'bunnlinje';
     byId('bunnmeny').replaceChildren();
@@ -355,9 +380,9 @@ function renderInner() {
   const K = kjede(S, r, S.ferdigMs != null ? S.ferdigMs : standardFerdig());
   const sk = SKJERMER.find(s => s.id === S.skjerm) || SKJERMER[0];
 
-  byId('topp').replaceChildren(
-    ...[h('div', { class: 'kicker' }, sk.kicker), sk.tittel ? h('h1', null, sk.tittel) : null].filter(Boolean)
-  );
+  byId('topp').replaceChildren(h('h1', null,
+    sk.steg ? h('span', { class: 'steg-tall' }, sk.steg + ' av ' + ANTALL_STEG) : null,
+    sk.tittel));
 
   // Bevar scroll (teknisk #1) og fokus/markør (teknisk #2) over re-render.
   const innhold = byId('innhold');
@@ -385,11 +410,38 @@ function renderInner() {
       h('span', { class: 'ikon', 'aria-hidden': 'true' }, ikonSvg(s.id)), s.navn)));
 }
 
+/* ---------- Tilbakeknappen ----------
+   På Android lukket den appen, fordi appen aldri la noe i historikken: den er
+   én side som bytter innhold. Nå skyves en tilstand per skjermbytte, og
+   `popstate` tar deg ETT steg tilbake i appen i stedet for ut av den.
+
+   Er en modal, en bildevisning eller regnskapet åpent, lukker tilbake DET
+   først — det er den innerste tingen brukeren ser, og det er den man mener. */
+let _hopperTilbake = false;
 function bytt(id) {
   _nullstillScroll = true;
   if (id === 'prosess') S.aktivSteg = 0;
   S.skjerm = id; lagre(); render();
+  if (!_hopperTilbake) {
+    try { history.pushState({ skjerm: id }, ''); } catch (e) {}
+  }
 }
+window.addEventListener('popstate', e => {
+  // Innerste lag først: overlegg lukkes før man forlater skjermen.
+  if (S.bildeVis) { S.bildeVis = null; oppdater(); nyHistorikk(); return; }
+  if (S.kompSporsmal) { S.kompSporsmal = false; oppdater(); nyHistorikk(); return; }
+  if (S.melEndring) { S.melEndring = null; oppdater(); nyHistorikk(); return; }
+  if (S.regnskapAapen) { S.regnskapAapen = false; oppdater(); nyHistorikk(); return; }
+  if (S.oppslag && S.oppslag !== 'meny' && S.skjerm === 'oppslag') { S.oppslag = 'meny'; oppdater(); nyHistorikk(); return; }
+  const maal = (e.state && e.state.skjerm) || 'brodet';
+  if (maal === S.skjerm) return;      // ingenting igjen i appen — la nettleseren gjøre sitt
+  _hopperTilbake = true;
+  bytt(maal);
+  _hopperTilbake = false;
+});
+/* Et overlegg ble lukket i stedet for at vi forlot skjermen — legg tilbake en
+   tilstand, ellers ville neste tilbaketrykk hoppet to hakk. */
+function nyHistorikk() { try { history.pushState({ skjerm: S.skjerm }, ''); } catch (e) {} }
 function oppdater() { lagre(); render(); }
 
 function standardFerdig() {
@@ -409,7 +461,19 @@ function tegnBunnlinje(r, K) {
   if (!S.regnskapAapen) fjernBakteppe();
   if (['logg', 'oppslag'].includes(S.skjerm)) { bl.replaceChildren(); bl.className = 'bunnlinje'; S.regnskapAapen = false; fjernBakteppe(); return; }
   bl.className = 'bunnlinje' + (S.regnskapAapen ? ' open' : '');
-  const stripe = h('button', { class: 'stripe', 'aria-expanded': S.regnskapAapen ? 'true' : 'false', onClick: () => { S.regnskapAapen = !S.regnskapAapen; oppdater(); } },
+  /* Stripa er ETT element som gjenbrukes — bare innholdet byttes.
+     Før ble hele bunnlinja tømt med `replaceChildren`, og da forsvant ARKET med
+     i dragsuget: neste render bygget det opp på nytt, og `animation: arkOpp`
+     spilte av igjen. Det var spretten Bjørn så ved hvert trykk mens regnskapet
+     stod åpent. Stabile noder er hele løsningen. */
+  let stripe = byId('bunnStripe');
+  if (!stripe) {
+    stripe = h('button', { class: 'stripe', id: 'bunnStripe',
+      onClick: () => { S.regnskapAapen = !S.regnskapAapen; oppdater(); } });
+    bl.insertBefore(stripe, bl.firstChild);
+  }
+  stripe.setAttribute('aria-expanded', S.regnskapAapen ? 'true' : 'false');
+  stripe.replaceChildren(
     h('b', null, g0(r.totalVekt)), ' deig', sep(),
     h('b', null, fmt(r.doseProfil.dose, 2)), ' GD', sep(),
     h('b', null, fmt(r.gjaerTotal, 2) + ' g'), ' gjær', sep(),
@@ -419,46 +483,52 @@ function tegnBunnlinje(r, K) {
     // det er den som forteller at linja er noe man kan dra opp. Nedover leste
     // som «her lukkes noe», altså motsatt av hva knappen gjør.
     h('span', { class: 'pil', 'aria-hidden': 'true' }, '⌃'));
-  const barn = [stripe];
-  if (S.regnskapAapen) {
-    const rader = [
-      ['Mel totalt', g0(r.melTotal)],
-      ['Vann i deigen', g0(r.vannHoved)],
-      r.ffPaa ? ['Forferment', g0(r.forferment.total)] : null,
-      ['Salt', fmt(r.salt, 1) + ' g'],
-      ['Gjær (tørr)', fmt(r.gjaerTotal, 2) + ' g'],
-      ['Effektiv hydrering', pst(r.effektivHydrering * 100, 1)],
-      ['Brødskala', fmt(r.brodskala.pct, 0) + ' % · ' + r.brodskala.kort],
-      ['Løftindeks', r.loft.loft + ' / 100'],
-      ['Total tid', fmt(K.totalT, 1) + ' t'],
-      ['Kostnad', fmt(r.kost.total, 0) + ' kr']
-    ].filter(Boolean);
-    // «Hva valgene koster» hører hjemme her: totalen over, avvikene mot
-    // brødet uten tillegget som referanse — samme tall som dose–respons-panelet.
-    const avvik = doseResponsRader();
-    // Arket popper opp OVER bunnlinja (position:absolute; bottom:100%).
-    // Trykk hvor som helst på arket lukker det — ikke bare på bakteppet.
-    barn.push(h('div', { class: 'regnskap-ark', onClick: () => { S.regnskapAapen = false; oppdater(); } },
-      h('div', { class: 'ark-hank' }),
-      h('div', { class: 'ark-tittel' }, 'Deigregnskap'),
-      h('div', { class: 'regnskap' }, ...rader.map(([k, v]) =>
-        h('div', { class: 'rad' }, h('span', null, k), h('b', null, v)))),
-      avvik.length ? h('div', { class: 'ark-tittel', style: 'margin-top:12px' }, 'Hva tilleggene gjør med brødet') : null,
-      ...avvik.map(rad => h('div', { class: 'ark-avvik' },
-        h('b', null, rad.navn),
-        h('span', null, rad.verdier.map(([lab, v]) => lab + ' ' + fmtDelta(v)).join(' · ')))),
-      avvik.length ? h('div', { style: 'font-size:.68rem;color:var(--color-neutral-500);margin-top:4px' },
-        '± er endring mot samme brød uten tillegg. Detaljer i «Hva valgene koster» på Deig.') : null,
-      // Gjæringskurven hører hjemme her: regnskapet sier hva deigen ER, grafen
-      // sier hvordan den kommer dit. Samme funksjon som på Tid, i mini-format —
-      // samme data, ingen ny matematikk.
-      regnskapGraf(r, K)));
-    // Bakteppe over innholdet — lukker ved trykk. Gjenbrukes hvis det allerede
-    // står der, ellers spilles fade-inn om igjen ved hver render.
-    if (!byId('bakteppe')) byId('telefon').appendChild(h('div', { class: 'regnskap-bakteppe', id: 'bakteppe',
-      onClick: () => { S.regnskapAapen = false; oppdater(); } }));
+  const gammeltArk = byId('regnskapArk');
+  if (!S.regnskapAapen) { if (gammeltArk) gammeltArk.remove(); return; }
+
+  const rader = [
+    ['Mel totalt', g0(r.melTotal)],
+    ['Vann i deigen', g0(r.vannHoved)],
+    r.ffPaa ? ['Forferment', g0(r.forferment.total)] : null,
+    ['Salt', fmt(r.salt, 1) + ' g'],
+    ['Gjær (tørr)', fmt(r.gjaerTotal, 2) + ' g'],
+    ['Effektiv hydrering', pst(r.effektivHydrering * 100, 1)],
+    ['Brødskala', fmt(r.brodskala.pct, 0) + ' % · ' + r.brodskala.kort],
+    ['Løftindeks', r.loft.loft + ' / 100'],
+    ['Total tid', fmt(K.totalT, 1) + ' t'],
+    ['Kostnad', fmt(r.kost.total, 0) + ' kr']
+  ].filter(Boolean);
+  // «Hva valgene koster» hører hjemme her: totalen over, avvikene mot
+  // brødet uten tillegget som referanse — samme tall som dose–respons-panelet.
+  const avvik = doseResponsRader();
+  const innmat = [
+    h('div', { class: 'ark-hank' }),
+    h('div', { class: 'ark-tittel' }, 'Deigregnskap'),
+    h('div', { class: 'regnskap' }, ...rader.map(([k, v]) =>
+      h('div', { class: 'rad' }, h('span', null, k), h('b', null, v)))),
+    avvik.length ? h('div', { class: 'ark-tittel', style: 'margin-top:12px' }, 'Hva tilleggene gjør med brødet') : null,
+    ...avvik.map(rad => h('div', { class: 'ark-avvik' },
+      h('b', null, rad.navn),
+      h('span', null, rad.verdier.map(([lab, v]) => lab + ' ' + fmtDelta(v)).join(' · ')))),
+    avvik.length ? h('div', { style: 'font-size:.68rem;color:var(--color-neutral-500);margin-top:4px' },
+      '± er endring mot samme brød uten tillegg. Detaljer i «Hva valgene koster» på Deig.') : null,
+    // Gjæringskurven hører hjemme her: regnskapet sier hva deigen ER, grafen
+    // sier hvordan den kommer dit. Samme funksjon som på Tid, i mini-format.
+    regnskapGraf(r, K)
+  ].filter(Boolean);
+
+  if (gammeltArk) {
+    const sc = gammeltArk.scrollTop;
+    gammeltArk.replaceChildren(...innmat);
+    gammeltArk.scrollTop = sc;
+  } else {
+    bl.appendChild(h('div', { class: 'regnskap-ark', id: 'regnskapArk',
+      onClick: () => { S.regnskapAapen = false; oppdater(); } }, ...innmat));
   }
-  bl.replaceChildren(...barn);
+  // Bakteppe over innholdet — lukker ved trykk. Gjenbrukes hvis det allerede
+  // står der, ellers spilles fade-inn om igjen ved hver render.
+  if (!byId('bakteppe')) byId('telefon').appendChild(h('div', { class: 'regnskap-bakteppe', id: 'bakteppe',
+    onClick: () => { S.regnskapAapen = false; oppdater(); } }));
 }
 /* Mini-gjæringskurve til deigregnskapet. Bruker nøyaktig samme planProfil() og
    gjaeringsGraf() som Tid-skjermen. */
@@ -486,7 +556,7 @@ function tegnBrodet(r, K) {
   // forsvant så snart loggen fikk sin første post, altså akkurat når man
   // begynte å ha noe ekte å gå tilbake til. Veien tilbake til et bak som funket
   // ligger nå der den hører hjemme: «Bak dette på nytt» på loggposten.
-  wrap.appendChild(h('div', { class: 'seksjonstittel' }, 'Hva skal du bake?'));
+  // Overskriften står i toppfeltet nå — en gjentakelse her ville vært støy.
   wrap.appendChild(h('div', { class: 'valg' }, ...BTYPER.map(bt => {
     const paa = bt.id === S.brotype || (bt.id === 'grovbrod' && S.brotype === 'loff');
     const rad = h('div', { class: 'brodvalg' + (paa ? ' paa' : '') });
@@ -709,7 +779,11 @@ function gramFelt(verdi, settInn, etikett) {
   return h('input', {
     class: 'gramfelt', type: 'number', inputmode: 'numeric', min: 0, step: 10,
     value: Math.round(verdi), 'aria-label': etikett,
-    onfocus: e => e.target.select(),
+    /* `select()` markerer hele verdien — og på Android utløser en markering
+       systemets kopier/lim-verktøylinje, som spretter opp over appen ved hvert
+       eneste felt man tar i. Praktisk med mus, plagsomt med finger. Derfor bare
+       når det faktisk finnes en presis peker. */
+    onfocus: e => { try { if (window.matchMedia('(pointer: fine)').matches) e.target.select(); } catch (err) {} },
     onchange: e => {
       const v = +e.target.value;
       if (!isFinite(v) || v < 0) { render(); return; }
@@ -745,7 +819,7 @@ function tegnDeigen(r) {
   // 1 · Grovhet — segmenterte piller (0/10/25/40/60/80), som designet
   if (!erPreset) {
     const bk = r.brodskala;
-    const trinn = [0, 10, 25, 40, 60, 80];
+    const trinn = [0, 25, 50, 75, 100];
     const boks = h('div', { class: 'kort' },
       h('div', { class: 'kort-hode' },
         h('span', { class: 'kort-num', style: 'display:inline' }, '1 · Hvor grovt'),
@@ -800,6 +874,10 @@ function tegnDeigen(r) {
         h('div', { class: 'info-linje' }, h('span', { class: 'etikett', style: 'flex:0 0 18px;color:' + f }, l), h('span', { class: 'tekst' }, tk)))));
     }
   });
+  // Legg til / fjern meltype. Uten dette var melblandingen låst til det
+  // grovhetstrappa fant på, og en meltype man faktisk har i skapet kunne ikke
+  // komme inn i oppskriften i det hele tatt.
+  melBoks.appendChild(tegnMelLeggTil(r));
   // Spørsmålet etter en gramendring: hva skal gi etter?
   const melSp = tegnMelEndring(r);
   if (melSp) melBoks.appendChild(melSp);
@@ -893,6 +971,51 @@ function tegnDeigen(r) {
   // 9 · Autolyse — egen boks, ikke en fotnote under «ingen forferment».
   wrap.appendChild(tegnAutolyse(r));
   return wrap;
+}
+
+/* Legg til en meltype, og fjern en du ikke vil ha.
+   Skriver til `S.melOverstyr`, samme mekanisme som gramredigeringen: fra det
+   øyeblikket man rører blandingen er den brukerens, og grovhetstrinnene styrer
+   den ikke lenger (varselet rett under sier fra, og tar deg tilbake). */
+function tegnMelLeggTil(r) {
+  const boks = h('div', { style: 'margin-top:12px' });
+  const brukt = new Set(r.mel.map(m => m.id));
+  const ledige = FLOURS.filter(f => !brukt.has(f.id));
+  if (r.mel.length > 1) {
+    boks.appendChild(h('div', { class: 'felt-label' }, 'Fjern en meltype'));
+    boks.appendChild(h('div', { class: 'piller', style: 'flex-wrap:wrap;margin-top:6px' },
+      ...r.mel.map((m, i) => h('button', { style: 'font-size:.74rem',
+        'aria-label': 'Fjern ' + m.navn,
+        onClick: () => {
+          const liste = (gyldigOverstyring(S.melOverstyr) || r.melListe).filter((_, j) => j !== i);
+          S.melOverstyr = liste.length ? liste : null;
+          oppdater();
+        } }, '✕ ' + m.navn))));
+  }
+  if (!ledige.length) return boks;
+  boks.appendChild(h('div', { class: 'felt-label', style: 'margin-top:10px' }, 'Legg til meltype'));
+  const velger = h('select', { class: 'sok', style: 'margin-top:6px', 'aria-label': 'Velg meltype å legge til' },
+    h('option', { value: '' }, 'Velg meltype …'));
+  let gruppe = '';
+  ledige.forEach(f => {
+    if (f.gruppe !== gruppe) { gruppe = f.gruppe; velger.appendChild(h('optgroup', { label: gruppe })); }
+    velger.lastChild.appendChild(h('option', { value: f.id }, (erFavoritt('mel', f.id) ? '★ ' : '') + f.navn));
+  });
+  boks.appendChild(velger);
+  boks.appendChild(h('button', { class: 'btn', style: 'margin-top:8px;width:100%;font-size:.82rem',
+    onClick: () => {
+      const id = velger.value;
+      if (!id) return;
+      /* Ny meltype kommer inn på 10 % og de andre skaleres ned til 90 %, så
+         summen blir 100 uansett hva den var. Å legge den inn på 0 % ville gitt
+         en rad som ikke gjorde noe, og krevd et ekstra steg for å bli synlig. */
+      const grunn = (gyldigOverstyring(S.melOverstyr) || r.melListe).map(m => ({ ...m }));
+      const sum = grunn.reduce((s2, m) => s2 + m.pct, 0) || 100;
+      const skalert = grunn.map(m => ({ id: m.id, pct: m.pct / sum * 90 }));
+      S.melOverstyr = skalert.concat([{ id, pct: 10 }]);
+      oppdater();
+    } }, 'Legg til i blandingen'));
+  return boks;
 }
 
 /* «Du satte X til N g — hva skal gi etter?»
@@ -1416,13 +1539,19 @@ function klasseStil(kort) {
     'Ekstra grovt': 'background:var(--color-accent-2-200);color:var(--color-accent-2-900)' };
   return m[kort] || m['Halvgrovt'];
 }
+/* Konsekvensteksten hentes fra TRINNET man står på, ikke fra en grovsortering.
+   Den gamle varianten bøttet på klasse, og siden både 10 % og 25 % er «fint
+   brød» fikk de nøyaktig samme setning — to ulike valg som så like ut.
+   Nå eier hvert trinn sin egen beskrivelse i `GROVHET`, og løftkostnaden legges
+   til fra den faktiske utregningen. */
 function grovKonsekvens(r) {
-  const g = S.grov, t = Math.round(r.loft.tap.grov);
-  if (g < 6) return 'Ren siktet hvete: maksimal glutenstyrke og maksimalt ovnsløft, minst smak.';
-  if (g <= 26) return 'Fint band. Tydelig mer smak til nesten ingen krummekostnad — det best dokumenterte byttet som finnes.';
-  if (g <= 51) return 'Halvgrovt. Her begynner kliens skarpe kanter å kutte glutentrådene: koster ca. ' + t + ' løftpoeng. Vurder form framfor frittstående.';
-  if (g <= 76) return 'Grovt etter norsk standard. Koster ca. ' + t + ' løftpoeng — form er det trygge valget, mer vann trengs.';
-  return 'Ekstra grovt. Bare ' + fmt(100 - g, 0) + ' % siktet mel å bygge nettverk av: formbrød, tett og saftig krumme framfor hull.';
+  const g = S.grov ?? 0, t = Math.round(r.loft.tap.grov);
+  const trinn = GROVHET.slice().sort((a, b) =>
+    Math.abs(parseFloat(a.kort) - g) - Math.abs(parseFloat(b.kort) - g))[0];
+  const naer = trinn && Math.abs(parseFloat(trinn.kort) - g) < 0.5;
+  const basis = naer ? trinn.om : 'Mellom to trinn: ' + fmt(g, 0) + ' % grovt mel, ' +
+    (r.brodskala.kort || '').toLowerCase() + ' på Brødskala\'n.';
+  return t >= 1 ? basis + ' Koster ca. ' + t + ' løftpoeng mot ren loff.' : basis;
 }
 /* Saltsonen er 1,8–2,0 % (samme tall som konsekvensteksten under skyveren). */
 /* `sone` er grønn/gul/rød og brukes til å farge HELE kortet, ikke bare pillen.
@@ -1849,6 +1978,27 @@ function klDato(ms) {
   return dag.charAt(0).toUpperCase() + dag.slice(1) + ', kl. ' + klHM(ms);
 }
 function ukedagKort(ms) { return new Date(ms).toLocaleDateString('nb-NO', { weekday: 'short' }).replace(/\.$/, ''); }
+/* Dato på en loggpost, skrevet så man ser NÅR PÅ ÅRET det var — «14. februar
+   2026», ikke «14.2.2026». Poenget med datoen i loggen er å kunne kjenne igjen
+   årstiden: melet, romtemperaturen og kjøkkenet er ikke det samme i februar som
+   i august, og det forklarer ofte hvorfor et bak oppførte seg som det gjorde.
+
+   `laget` er tidsstempelet i ms. Eldre poster har bare `dato` som tekst, og da
+   vises den som den er — bedre enn å gjette. */
+function loggDato(b) {
+  const ms = lagetMs(b);
+  if (ms > 0) {
+    const d = new Date(ms);
+    const naa = new Date();
+    const dager = Math.floor((naa - d) / 86400000);
+    const full = d.toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' });
+    if (dager <= 0) return 'i dag';
+    if (dager === 1) return 'i går';
+    if (dager < 7) return 'for ' + dager + ' dager siden';
+    return full;
+  }
+  return (b && b.dato) || '';
+}
 /* Antall døgnskiller mellom to tidspunkt (0 = samme dag). */
 function dagSpenn(startMs, sluttMs) {
   const a = new Date(startMs); a.setHours(0, 0, 0, 0);
@@ -2002,7 +2152,7 @@ function tegnLogg(r) {
     wrap.appendChild(h('div', { class: 'tomkort', style: 'margin-top:12px' },
       h('div', { class: 'hjelpetekst' }, 'Ingen bak logget ennå. Referansen appen måler mot kommer fra forvalget til du lagrer ditt første bak — da får avvikstallene et ekte anker.')));
   } else {
-    wrap.appendChild(h('div', { class: 'seksjonstittel' }, 'Tidligere bak'));
+    wrap.appendChild(h('div', { class: 'seksjonstittel' }, 'Tidligere bakeøkter'));
     // Nyeste først, men med den EKTE indeksen i behold — reverse() på en kopi
     // ville gitt feil rad ved rediger/slett.
     for (let i = S.loggListe.length - 1; i >= 0; i--) wrap.appendChild(loggPost(S.loggListe[i], i));
@@ -2067,11 +2217,14 @@ function bakPaaNytt(b) {
 function loggPost(b, i) {
   if (S.lgSlett === b.id) return loggSlettBekreft(b, i);
   if (S.lgRediger === b.id) return loggRediger(b, i);
+  /* Datoen står på EGEN linje, ikke klemt inn ved siden av navn og karakter:
+     «14. februar 2026» er for langt til å dele rad med dem på 390 px, og det er
+     nettopp den lange formen som gjør at man ser hvilken årstid baket var. */
   const kortEl = h('div', { class: 'kort' },
     h('div', { style: 'display:flex;align-items:baseline;gap:8px' },
       h('span', { style: 'font-family:var(--font-heading);font-size:1.05rem;flex:1;min-width:0' }, b.navn || 'Uten navn'),
-      h('span', { class: 'badge' }, b.kar + ' / 10'),
-      h('span', { style: 'font-size:.74rem;color:var(--color-neutral-600);white-space:nowrap' }, b.dato)),
+      h('span', { class: 'badge' }, b.kar + ' / 10')),
+    h('div', { style: 'font-size:.76rem;color:var(--color-neutral-600);margin-top:3px' }, loggDato(b)),
     h('div', { style: 'font-size:.8rem;color:var(--color-neutral-700);margin-top:4px;font-variant-numeric:tabular-nums' },
       b.grov + ' % grovt · ' + b.hyd + ' % vann · løft ' + b.loft + ' · dose ' + b.dose));
   if (b.notat) kortEl.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:6px' }, b.notat));
@@ -2744,8 +2897,14 @@ async function synkVedInnlogging() {
   // Del de lokale postene på eierskap FØR noe flettes. Bare kontoens egne skal
   // inn i kontoens logg; postene uten konto legges til side og spørres om.
   const lokalt = S.loggListe || [];
-  const mine = lokalt.filter(b => b && b.konto && b.konto === uid);
-  const utenKonto = lokalt.filter(b => b && !b.konto);
+  /* `erUtenKonto` er testen, ikke `!b.konto`.
+     Med den gamle testen falt hver eldre post (uten `konto`-feltet) UTENFOR
+     `mine` og INNENFOR `utenKonto` samtidig: den ble flyttet til enhetsbøtta,
+     forsvant fra kontoens logg — og ble lagt tilbake ved neste utlogging. Det
+     er også grunnen til at en sletting på én enhet ikke ble borte på den andre:
+     posten kom tilbake fra bøtta i stedet for å bli filtrert av gravsteinen. */
+  const mine = lokalt.filter(b => b && !erUtenKonto(b));
+  const utenKonto = lokalt.filter(erUtenKonto);
   if (utenKonto.length) {
     const anon = lesAnon();
     const kjent = new Set(anon.poster.map(b => b.id));
@@ -2791,8 +2950,20 @@ document.addEventListener('keydown', e => {
 /* ---------- Start ---------- */
 if (typeof Sky !== 'undefined' && Sky.klar()) {
   Sky.paaEndring(() => { render(); if (Sky.bruker()) synkVedInnlogging(); });
+  /* Hentes appen fram igjen, sjekkes skyen på nytt.
+     Uten dette skjedde nedhentingen bare ved oppstart, og en enhet som lå åpen
+     ville aldri se at et bak var slettet på en annen — den ville tvert imot
+     dytte sin egen (uten gravsteinen) opp igjen ved neste endring, og
+     gjenopplive posten. */
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !Sky.bruker()) return;
+    _harHentetNed = false;
+    synkVedInnlogging();
+  });
 }
 render();
+// Grunntilstand i historikken, så første tilbaketrykk har noe å falle tilbake på.
+try { history.replaceState({ skjerm: S.skjerm }, ''); } catch (e) {}
 /* Testkroken. `flettLogg` er eksponert fordi den er ren og fordi den er den
    viktigste funksjonen i appen å ha dekket: det er den som gjør at bakeloggen
    ikke kan forsvinne i en synk. */

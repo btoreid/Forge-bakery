@@ -725,27 +725,62 @@ function ffLoftFaktor(ffType, andel, styrkeVektet = 4.0, ekvTimer = 0) {
    slik at UI-et kan vise «hva dette koster / gir» i poeng uten å regne på nytt.
    Klemt til 20–100: 100 er referansemaks (loff, sterkt siktet mel, optimal plan,
    biga), og under 20 er tallet uansett ikke informativt.                       */
+/* ---------- Autolysens virkning ----------
+   Autolysen var en tidsluke uten konsekvens: den skjøv klokka og gjorde ingenting
+   med deigen. Det er feil — autolyse er en av de best dokumenterte teknikkene i
+   brødbaking, og den gjør to ting som appen allerede modellerer.
+
+   1 · ELTETID. Dette er hovedeffekten, og den er Calvels opprinnelige poeng:
+       melet hydreres fullt og glutenet organiserer seg passivt, så samme
+       utvikling nås med vesentlig kortere elting. Appen regner eltetid → friksjon
+       → vanntemperatur, så dette forplanter seg av seg selv.
+       Modellert som en reduksjonsfaktor som metter: 20 min gir mesteparten av
+       gevinsten, og lenger enn en time gir lite ekstra på eltefronten.
+
+   2 · LØFT. En autolysert deig er mer ekstensibel og gir noe bedre ovnsløft.
+       Retningen er sikker og godt beskrevet; STØRRELSEN er det ikke, og derfor
+       er den satt lavt og med et hardt tak: maks +4 % på løftindeksen.
+       Ført som anslag i PARAMETERREVISJON.md — ikke som et kildet tall.
+
+   Effekten flater ut fordi begge mekanismene er metningskurver: vannet er
+   opptatt og proteasene har gjort sitt etter en tid, og etter ~3 timer snur det
+   (se advarselen i autolyse-boksen).                                          */
+function autolyseFaktor(minutter) {
+  const m = Math.max(0, +minutter || 0);
+  if (!m) return { elt: 1, loft: 1, metning: 0 };
+  // Metning: 0 ved 0 min, ~0,63 ved 45 min, ~0,86 ved 90 min.
+  const metning = 1 - Math.exp(-m / 45);
+  return {
+    elt: 1 - 0.30 * metning,     // inntil 30 % kortere elting
+    loft: 1 + 0.04 * metning,    // inntil +4 % løft — bevisst forsiktig
+    metning
+  };
+}
+
 function loftIndeks(o) {
   const {
     plan, grovPct = 0, froPct = 0, tortFrak = 0, hydPct = 75, tak = 82,
-    ffType = 'ingen', ffAndel = 0, styrkeVektet = 4.0, ekvTimer = 0
+    ffType = 'ingen', ffAndel = 0, styrkeVektet = 4.0, ekvTimer = 0,
+    autolyseMin = 0
   } = o;
   const basis = (plan && (plan.ovnslosBasis ?? plan.ovnslos)) || 82;
   const fGrov = grovLoftFaktor(grovPct);
   const fFro  = froLoftFaktor(froPct, tortFrak);
   const fHyd  = hydLoftFaktor(hydPct, tak);
   const fFf   = ffLoftFaktor(ffType, ffAndel, styrkeVektet, ekvTimer);
-  const raa = basis * fGrov * fFro * fHyd * fFf;
+  const fAuto = autolyseFaktor(autolyseMin).loft;
+  const raa = basis * fGrov * fFro * fHyd * fFf * fAuto;
   const loft = Math.round(Math.max(20, Math.min(100, raa)));
   return {
     loft, basis, raa,
-    faktor: { grov: fGrov, fro: fFro, hyd: fHyd, ff: fFf },
+    faktor: { grov: fGrov, fro: fFro, hyd: fHyd, ff: fFf, autolyse: fAuto },
     // Poeng tapt/vunnet mot basis, til «hva dette koster»-visningen.
     tap: {
       grov: basis * (1 - fGrov),
       fro:  basis * fGrov * (1 - fFro),
       hyd:  basis * fGrov * fFro * (1 - fHyd),
-      ff:   basis * fGrov * fFro * fHyd * (fFf - 1)   // positivt = gevinst
+      ff:   basis * fGrov * fFro * fHyd * (fFf - 1),  // positivt = gevinst
+      autolyse: basis * fGrov * fFro * fHyd * fFf * (fAuto - 1)
     }
   };
 }
@@ -1069,7 +1104,8 @@ function regn(state) {
     plan, grovPct: r.brodskala.pct, froPct: froPctEkte, tortFrak,
     hydPct: hyd * 100, tak,
     ffType: ffT.id, ffAndel: pff,
-    styrkeVektet: r.styrkeVektet, ekvTimer: doseProfil.ekvTimer
+    styrkeVektet: r.styrkeVektet, ekvTimer: doseProfil.ekvTimer,
+    autolyseMin: state.autolyseMin || 0
   });
 
   return {
@@ -1083,6 +1119,10 @@ function regn(state) {
     gjaerTorr: torr, maalDose, gjaerUnderskudd,
     doseProfil, loft,
     prof, eltMin, vannTemp: dt.vannTemp, friksjon: dt.friksjonsOkning, wh: dt.friksjonsOkning / ELTING.GRAD_PER_WH,
+    // Anbefalt eltetid MED autolysen: melet er alt hydrert og glutenet delvis
+    // organisert, så samme utvikling nås på kortere tid.
+    eltMinAnbefalt: Math.max(2, Math.round(eltMin * autolyseFaktor(state.autolyseMin || 0).elt)),
+    autolyse: autolyseFaktor(state.autolyseMin || 0),
     melListe
   };
 }

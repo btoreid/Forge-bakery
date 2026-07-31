@@ -38,9 +38,14 @@
                  W i det hele tatt, og trinnet er da et anslag.
      maxPct      ⚠ ANSLAG basert på bakepraksis, ikke måledata.
    ─────────────────────────────────────────────────────────────────────────  */
+/* INGEN ★ i melnavnene.
+   Tre av dem hadde det som «kvalitetsmerke», og det er samme feil som ★-ene i
+   stekeprofilene og «det beste oppsettet du har» i utstyrslista: appen kårer en
+   favoritt på brukerens vegne. Stjerna i appen er brukerens egen merking, satt
+   i Oppslag → Mel & korn, og da må den ikke konkurrere med en trykt en.       */
 const FLOURS = [
   // Siktet hvete
-  { id:'regal_standard',  navn:'Regal Hvetemel standard ★',        gruppe:'Siktet hvete', protein:13.0, absorpsjon:1.02, styrke:'middels-sterk', maxPct:100, kr:10.0, grov:0,
+  { id:'regal_standard',  navn:'Regal Hvetemel standard',          gruppe:'Siktet hvete', protein:13.0, absorpsjon:1.02, styrke:'middels-sterk', maxPct:100, kr:10.0, grov:0,
     notat:'Det sterkeste melet du får i vanlig daglivare. Møllas egen beskrivelse: «svært god glutenkvalitet og høyt falltall». Inneholder askorbinsyre, som er en fordel her — det er en oksidant som strammer deigen. Ingen norsk mølle publiserer W, men anslag er 250–300. Førstevalg når mye av melet er glutenfritt.' },
   { id:'hvetemel',        navn:'Møllerens hvetemel siktet',        gruppe:'Siktet hvete', protein:12.2, absorpsjon:1.00, styrke:'middels',       maxPct:100, kr:10.0, grov:0,
     notat:'78 % utmaling. Tåler mye juling i maskinen og er tilgivende under heving, men svakere enn Regal standard. Ikke sterk nok alene til 80 %+ ciabatta.' },
@@ -50,7 +55,7 @@ const FLOURS = [
     notat:'Caputo Cuoco, Manitoba Oro o.l. Eneste trygge valg for ciabatta over 80 %. Kan brukes 20–40 % for å forsterke svakt norsk mel.' },
   { id:'hvetemel_stein',  navn:'Steinmalt hvetemel (Holli/Kvelde)', gruppe:'Siktet hvete', protein:12.5, absorpsjon:1.02, styrke:'middels',       maxPct:100, kr:22.0, grov:0,
     notat:'Smaker mye mer, men tåler mindre elting og kortere bulk. Halver eltetiden, forleng autolysen.' },
-  { id:'caputo_cuoco',    navn:'Caputo Cuoco «rød» Tipo 00 ★★',     gruppe:'Siktet hvete', protein:13.0, absorpsjon:1.02, styrke:'sterk',         maxPct:100, kr:59.9, grov:0,
+  { id:'caputo_cuoco',    navn:'Caputo Cuoco «rød» Tipo 00',       gruppe:'Siktet hvete', protein:13.0, absorpsjon:1.02, styrke:'sterk',         maxPct:100, kr:59.9, grov:0,
     notat:'W 300–320, P/L 0,45–0,55. Det STERKESTE melet du har, og det eneste som når den publiserte terskelen på W 300+ for ciabatta over 80 % hydrering. Laget for 24–72 timers modning, altså nøyaktig det du driver med. 55 % utmaling og svært fint malt. Ulempen er prisen: ca. 60 kr/kg mot Regals 10. Bruk den der styrken faktisk betaler seg — ciabatta, biga, og som forsterkning når du går grovt eller vått.' },
   { id:'caputo_blaa',     navn:'Caputo Pizzeria «blå» Tipo 00',     gruppe:'Siktet hvete', protein:12.5, absorpsjon:0.97, styrke:'middels-sterk', maxPct:100, kr:59.9, grov:0,
     notat:'W 260–280, P/L 0,50–0,60. Konstruert for 55–67 % hydrering og korte til middels modninger. God til pizza og til biga, men den røde Cuoco er et klart bedre valg til brød.' },
@@ -58,7 +63,7 @@ const FLOURS = [
     notat:'55 % utmaling. Fin til pizza på 60–67 %, ikke til ciabatta på 85 %.' },
   { id:'landhvete',       navn:'Landhvete siktet (Holli)',          gruppe:'Siktet hvete', protein:11.0, absorpsjon:0.98, styrke:'svak-middels',  maxPct:60,  kr:32.0, grov:0,
     notat:'Norsk landrase. Glutenkvalitet ligger mellom spelt og moderne hvete. Dyp kornsmak.' },
-  { id:'regal_tipo00',    navn:'Regal Tipo 00 ★',                   gruppe:'Siktet hvete', protein:13.0, absorpsjon:1.00, styrke:'sterk',         maxPct:100, kr:34.0, grov:0,
+  { id:'regal_tipo00',    navn:'Regal Tipo 00',                     gruppe:'Siktet hvete', protein:13.0, absorpsjon:1.00, styrke:'sterk',         maxPct:100, kr:34.0, grov:0,
     notat:'Beste norske kjøp. 13 % protein av 100 % norsk vårhvete, ingen askorbinsyre, i vanlig dagligvare til ca. halve prisen av Caputo. Møllas egen beskrivelse: glutenet er «elastisk og krever grundig elting». Norsk vårhvete gir kraftigere og mer elastisk gluten enn italiensk grano tenero — sterkere struktur, men strammere deig som trenger lengre benkehvile mellom foldinger. Falltall er ikke publisert, så oppførselen over 48 timer er uverifisert.' },
   { id:'kolonihagen',     navn:'Kolonihagen siktet hvete (øko)',    gruppe:'Siktet hvete', protein:14.0, absorpsjon:1.01, styrke:'sterk',         maxPct:100, kr:31.0, grov:0,
     notat:'14 % deklarert protein, helt rent — ingen askorbinsyre, ingen enzymer — til 31 kr/kg, og obligatorisk i de største REMA-butikkene. Fiberverdien på 5,0 g er konsistent med et ekte siktet mel. Men 14 % protein sier ingenting om KVALITETEN på glutenet, og verken falltall eller glutenstyrke er publisert. Verdt en test.' },
@@ -471,30 +476,36 @@ const FORMER = [
    Legger du frø i tillegg, endrer den seg IKKE — det er hele poenget med at
    ordningen holder frø utenfor.                                            */
 const GROVHET = [
+  /* Runde trinn: 0 · 25 · 50 · 75 · 100.
+     Den gamle trappa (0/10/25/40/60/80) hadde tall som verken var runde eller
+     landet på noe. De nye gjør begge deler — hvert trinn treffer TOPPEN av sin
+     klasse på Brødskala'n (fint 0–25,9 · halvgrovt 26–50,9 · grovt 51–75,9 ·
+     ekstra grovt 76–100), så trinnet sier både hvor grovt brødet er og hvilken
+     merkeklasse det ligger i.
+
+     Melprosentene summerer til 100 på hvert trinn, og de grove melene summerer
+     til nøyaktig trinnets tall. Mellomliggende verdier interpoleres fortsatt av
+     `melblandingForGrov()`, så en lagret 40 %-blanding virker som før.        */
   { id:0, navn:'Loff', kort:'0 % grovt', klasse:'Fint brød', basisHyd:70,
     mel:[{id:'regal_standard', pct:100}],
     om:'Ren siktet hvete. Maksimal glutenstyrke, maksimalt ovnsløft, minst smak.',
     ovnslos:'Referansen. Alt annet måles mot denne.' },
-  { id:1, navn:'Loff+', kort:'10 % grovt', klasse:'Fint brød', basisHyd:70,
-    mel:[{id:'regal_standard', pct:90}, {id:'samalt_hvete', pct:10}],
-    om:'Ekspertenes svar på «litt sunnere loff». 10–20 % grovt gir tydelig mer smak til nesten ingen krummekostnad — det er det best dokumenterte forholdet mellom smak og struktur som finnes. Merk at dette fortsatt er et FINT brød på Brødskala\'n; «litt sunnere» er en smaksforskjell, ikke en ernæringsmessig.',
-    ovnslos:'Praktisk talt uendret. Dette er gratis smak.' },
-  { id:2, navn:'Fin, øvre kant', kort:'25 % grovt', klasse:'Fint brød', basisHyd:70,
+  { id:1, navn:'Fint, øvre kant', kort:'25 % grovt', klasse:'Fint brød', basisHyd:70,
     mel:[{id:'regal_standard', pct:75}, {id:'samalt_hvete', pct:19}, {id:'samalt_rug', pct:6}],
     om:'Så grovt du kan gå og fortsatt selge det som fint brød — 26 % ville flyttet det til halvgrovt. Tydelig kornsmak, fortsatt åpen krumme. Rugen kommer inn her fordi den bringer amylase, som gir skorpefarge og mat til gjæren sent i hevingen.',
     ovnslos:'5–10 % lavere enn loff. Merkbart, men ikke noe du angrer på.' },
-  { id:3, navn:'Halvgrov', kort:'40 % grovt', klasse:'Halvgrovt brød', basisHyd:70,
-    mel:[{id:'regal_standard', pct:60}, {id:'samalt_hvete', pct:30}, {id:'samalt_rug', pct:10}],
-    om:'Midt i det halvgrove båndet, og over Nøkkelhullets 30 %-grense. Her begynner du å betale: kliens skarpe kanter kutter glutentrådene fysisk. Krever mer vann, kortere elting og lavere hevemål.',
-    ovnslos:'25–35 % lavere enn loff. Vurder form framfor frittstående.' },
-  { id:4, navn:'Grov', kort:'60 % grovt', klasse:'Grovt brød', basisHyd:70,
-    mel:[{id:'regal_standard', pct:40}, {id:'fullkorn_fibra', pct:25}, {id:'samalt_hvete', pct:25}, {id:'samalt_rug', pct:10}],
-    om:'Første trinn som faktisk fortjener ordet «grovt» etter norsk standard. Fullkornshveten bærer mesteparten fordi den er malt av bakekraftige sorter og tåler å være hovedmel; sammalt hvete alene ville tatt for mye av strukturen.',
-    ovnslos:'40–50 % lavere enn loff. Frittstående er mulig, men form er det trygge valget.' },
-  { id:5, navn:'Ekstra grov', kort:'80 % grovt', klasse:'Ekstra grovt brød', basisHyd:70,
-    mel:[{id:'regal_standard', pct:20}, {id:'fullkorn_fibra', pct:45}, {id:'samalt_hvete', pct:25}, {id:'samalt_rug', pct:10}],
-    om:'Toppen av Brødskala\'n. Bare 20 % siktet mel igjen å bygge nettverk av, så dette er et formbrød — ikke fordi det smaker dårlig, men fordi et frittstående emne ikke har nok gluten til å holde formen gjennom ovnsløftet.',
-    ovnslos:'55–65 % lavere enn loff. Bruk form, og regn med en tett, saftig krumme framfor hull.' }
+  { id:2, navn:'Halvgrovt', kort:'50 % grovt', klasse:'Halvgrovt brød', basisHyd:70,
+    mel:[{id:'regal_standard', pct:50}, {id:'fullkorn_fibra', pct:20}, {id:'samalt_hvete', pct:20}, {id:'samalt_rug', pct:10}],
+    om:'Toppen av det halvgrove båndet, og godt over Nøkkelhullets 30 %-grense. Her betaler du for alvor: kliens skarpe kanter kutter glutentrådene fysisk. Krever mer vann, kortere elting og lavere hevemål. Halvparten er fortsatt siktet mel, så et frittstående emne holder seg.',
+    ovnslos:'30–40 % lavere enn loff. Frittstående går, men form er tryggere.' },
+  { id:3, navn:'Grovt', kort:'75 % grovt', klasse:'Grovt brød', basisHyd:70,
+    mel:[{id:'regal_standard', pct:25}, {id:'fullkorn_fibra', pct:40}, {id:'samalt_hvete', pct:25}, {id:'samalt_rug', pct:10}],
+    om:'Toppen av det grove båndet. Fullkornshveten bærer mesteparten fordi den er malt av bakekraftige sorter og tåler å være hovedmel; sammalt hvete alene ville tatt for mye av strukturen. Bare en firedel siktet mel igjen å bygge nettverk av.',
+    ovnslos:'45–55 % lavere enn loff. Form er det trygge valget, og deigen trenger mer vann.' },
+  { id:4, navn:'Ekstra grovt', kort:'100 % grovt', klasse:'Ekstra grovt brød', basisHyd:70,
+    mel:[{id:'fullkorn_fibra', pct:55}, {id:'samalt_hvete', pct:30}, {id:'samalt_rug', pct:15}],
+    om:'Ingen siktet hvete i det hele tatt — alt melet er grovt. Dette er et formbrød, ikke fordi det smaker dårlig, men fordi det ikke finnes nok sammenhengende gluten til å holde et frittstående emne gjennom ovnsløftet. Regn med tett, saftig krumme og lang holdbarhet framfor store hull.',
+    ovnslos:'60–70 % lavere enn loff. Bruk form, mer vann, og la det kjøle helt før du skjærer.' }
 ];
 
 /* ---------- TIDSBUDSJETT ----------

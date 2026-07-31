@@ -99,7 +99,7 @@ input[type=range] { accent-color: var(--color-accent); }
 
 /* ---------- Topp ---------- */
 .topp {
-  padding: 16px 20px 12px;
+  padding: 13px 20px 11px;
   border-bottom: 1px solid var(--color-neutral-200);
   background: var(--color-bg);
   position: sticky; top: 0; z-index: 20;
@@ -110,7 +110,15 @@ input[type=range] { accent-color: var(--color-accent); }
 }
 .topp h1 {
   font-family: var(--font-heading); font-weight: 400;
-  font-size: 1.35rem; line-height: 1.1; margin: 3px 0 0;
+  font-size: 1.3rem; line-height: 1.15; margin: 0;
+  display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
+}
+/* Stegtallet er en etikett foran tittelen, ikke en overskrift over den. */
+.topp h1 .steg-tall {
+  font-family: var(--font-body); font-size: .64rem; font-weight: 800;
+  letter-spacing: .09em; text-transform: uppercase;
+  color: var(--color-accent-2-700); background: var(--color-accent-2-100);
+  padding: 3px 8px; border-radius: 999px; white-space: nowrap;
 }
 .topp .undertittel { font-size: .82rem; color: var(--color-neutral-600); margin-top: 3px; }
 

@@ -442,3 +442,23 @@ Kilder:
 - <https://www.theperfectloaf.com/how-to-mix-bread-and-pizza-dough-with-a-ooni-halo-pro-spiral-mixer/>
 - <https://uk.ooni.com/blogs/ooni-insights/dough-mixing-101-with-ooni-halo-pro>
 - <https://www.thefreshloaf.com/node/69895/dough-temp-intensive-mixing>
+
+---
+
+## 31.07.2026 (natt) — Autolysens virkning, som anslag
+
+`autolyseFaktor()` i engine.js gir autolysen to virkninger. De er ulikt godt fundert, og
+det skal stå:
+
+| virkning | størrelse | grunnlag |
+|---|---|---|
+| kortere eltetid | inntil **−30 %** | Calvels opprinnelige poeng, og den best beskrevne effekten: melet hydreres fullt og glutenet organiserer seg passivt. Retning OG omtrentlig størrelse er godt beskrevet i faglitteraturen. |
+| bedre ovnsløft | inntil **+4 %** | Retningen er sikker (mer ekstensibel deig, bedre løft). **Størrelsen er et anslag.** Satt lavt og med hardt tak nettopp fordi den ikke er kildet. |
+
+Begge metter etter samme kurve, `1 − e^(−min/45)`: ~63 % av effekten ved 45 min, ~86 %
+ved 90 min. Metningen er valgt fordi begge mekanismene er metningsprosesser — vannet er
+opptatt og enzymene har gjort sitt — og fordi det stemmer med at 1–3 timer er det
+vanlige rådet. Over ~3 timer snur det, og appen advarer om det.
+
+**Skal kalibreres mot Bjørns egne bak** hvis løftgevinsten skal justeres. Ikke gjett den
+bort — den er med vilje satt så lavt at den ikke kan lyve mye.
