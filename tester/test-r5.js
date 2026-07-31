@@ -91,21 +91,34 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     const varm = regn(S);
     S.ffTemp = 4; FB.oppdater();
     await new Promise(r => setTimeout(r, 200));
-    const kald = regn(S);
+    const kald = regn(S);                              // 4 °C, planens tid (16 t)
+    S.ffTimer = 6;
+    const kaldKort = regn(S);                          // 4 °C, kort (6 t) — ekstremt
+    S.ffTimer = null;
     const K = kjede(S, kald, Date.now() + 864e5);
     const elt = K.find(s => s.id === 'elt');
     return {
       hoved: varm.gjaerHoved, total: varm.gjaerTotal, ffGjaer: varm.forferment.gjaer,
+      varmFersk: varm.forferment.gjaerPctAvFfMel * 3,
       kaldFersk: kald.forferment.gjaerPctAvFfMel * 3,
       paaTaket: kald.forferment.gjaerPaaTaket,
+      kortPaaTaket: kaldKort.forferment.gjaerPaaTaket,
       eltTekst: JSON.stringify(elt.tall) + elt.gjor
     };
   });
   ok('hoveddeigens gjær er mindre enn totalen når forfermenten tar sitt',
     gj.hoved < gj.total - 1e-6, gj.hoved.toFixed(2) + ' av ' + gj.total.toFixed(2) + ' g');
   ok('eltesteget oppgir hoveddeigens gjær, ikke totalen', /Tørrgjær nå/.test(gj.eltTekst));
-  ok('kald forferment stopper på 2 % fersk', gj.kaldFersk <= 2.05, gj.kaldFersk.toFixed(1) + ' % fersk');
-  ok('appen flagger at dosen står på taket', gj.paaTaket);
+  /* Kjølebane-modellen: en vanlig kald over-natta-poolish (blandet i rommet)
+     trenger MER gjær enn varm, men fornuftig mye — ~1,6 % fersk, godt under
+     2 %-taket. Den gamle isoterme modellen ga 6,3 % og flagget «går ikke opp». */
+  ok('kald poolish trenger mer gjær enn varm', gj.kaldFersk > gj.varmFersk,
+    gj.varmFersk.toFixed(2) + ' → ' + gj.kaldFersk.toFixed(2) + ' % fersk');
+  ok('kald poolish ligger fornuftig under 2 %-taket', gj.kaldFersk < 2.0,
+    gj.kaldFersk.toFixed(2) + ' % fersk');
+  ok('en vanlig kald over-natta-poolish står IKKE på taket', !gj.paaTaket);
+  // Men en ekstremt kort/kald kombinasjon klemmes fortsatt — taket lever.
+  ok('en ekstremt kort kald forferment klemmes på taket', gj.kortPaaTaket);
 
   // Et levain podes med starter, ikke med tørrgjær.
   const surdeig = await page.evaluate(() => {

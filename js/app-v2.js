@@ -41,6 +41,7 @@ const STANDARD = {
   kompSporsmal: false,        // kompensasjonsmodalen er reist av en endring
   melVelger: false,           // meltype-velgeren er åpen
   ffTemp: null,               // forfermentens temperatur; null = planens forslag
+  ffRomTemp: null,            // romtemp der forfermenten står/blandes; null = følg romTemp
   autolyseMin: 0,             // autolyse i minutter; 0 = av
   handlelisteOk: false,       // «dette må være i huset» er kvittert bort
   krukkeStart: null,          // startnivået du merker av i målekrukka (valgfritt)
@@ -284,6 +285,22 @@ function ikonSvg(name) {
     logg: () => { P('M12 7v13'); P('M3 17a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z'); },
     oppslag: () => { C(11, 11, 7); P('m21 21-4.3-4.3'); }
   }[name] || (() => {}))();
+  return svg;
+}
+
+/* Ordentlig info-ikon i samme strektegnede stil som resten av ikonene, i stedet
+   for ﻿ⓘ-tegnet (U+24D8), som rendres ulikt på tvers av skrifter og så klumpete
+   ut. «i» i en sirkel: prikk + strek. */
+function infoIkon(px = 15) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  [['viewBox', '0 0 24 24'], ['width', px], ['height', px], ['fill', 'none'], ['stroke', 'currentColor'],
+   ['stroke-width', '2.2'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'], ['aria-hidden', 'true']].forEach(a => svg.setAttribute(a[0], a[1]));
+  const P = d => { const e = document.createElementNS(NS, 'path'); e.setAttribute('d', d); svg.appendChild(e); };
+  const e = document.createElementNS(NS, 'circle');
+  e.setAttribute('cx', 12); e.setAttribute('cy', 12); e.setAttribute('r', 9.5); svg.appendChild(e);
+  P('M12 16.5v-5');            // «i»-stammen
+  P('M12 8h.01');             // prikken over
   return svg;
 }
 
@@ -645,7 +662,7 @@ function tegnBrodet(r, K) {
     // ⓘ per brødtype i stedet for ett kollapskort for den valgte. Da kan man
     // lese hva en ciabatta ER før man bytter til den — som er når man lurer.
     rad.appendChild(h('button', { class: 'info-ring', 'aria-label': 'Om ' + bt.navn,
-      onClick: () => { S.brodInfo = S.brodInfo === bt.id ? null : bt.id; oppdater(); } }, 'ⓘ'));
+      onClick: () => { S.brodInfo = S.brodInfo === bt.id ? null : bt.id; oppdater(); } }, infoIkon()));
     const boks = h('div');
     boks.appendChild(rad);
     if (S.brodInfo === bt.id) boks.appendChild(brodInfoBoks(bt, paa ? K : null));
@@ -975,7 +992,7 @@ function tegnDeigen(r) {
           oppdater();
         }, 'Gram ' + m.navn),
         h('div', { class: 'p' }, fmt(m.pct, 0) + ' %')),
-      h('button', { class: 'info-ring', 'aria-label': 'Info om ' + m.navn, onClick: () => { S.tilleggInfo = null; S.melInfo = S.melInfo === m.id ? null : m.id; oppdater(); } }, 'ⓘ')));
+      h('button', { class: 'info-ring', 'aria-label': 'Info om ' + m.navn, onClick: () => { S.tilleggInfo = null; S.melInfo = S.melInfo === m.id ? null : m.id; oppdater(); } }, infoIkon())));
     if (S.melInfo === m.id && info) {
       const linjer = [];
       if (info.plus) info.plus.forEach(p => linjer.push(['+', p, 'var(--color-accent-2-700)']));
@@ -1247,7 +1264,7 @@ function tegnMelEndring(r) {
 
 function kort(num, infoId, ...barn) {
   const hode = h('div', { class: 'kort-num' }, num);
-  if (infoId) hode.appendChild(h('button', { class: 'info-knapp', 'aria-label': 'Info', onClick: () => toggleInfo(infoId) }, 'ⓘ'));
+  if (infoId) hode.appendChild(h('button', { class: 'info-knapp', 'aria-label': 'Info', onClick: () => toggleInfo(infoId) }, infoIkon()));
   return h('div', { class: 'kort' }, hode, ...barn);
 }
 function toggleInfo(id) { S.paramInfo = S.paramInfo === id ? null : id; oppdater(); }
@@ -1360,7 +1377,7 @@ function tilleggRad(t, r) {
         h('span', { style: 'flex:1;min-width:0' },
           h('span', { style: 'display:block;font-weight:700;font-size:.9rem' }, t.navn),
           h('span', { style: 'display:block;font-size:.74rem;color:var(--color-neutral-600)' }, status))),
-      h('button', { class: 'info-knapp', 'aria-label': 'Info om ' + t.navn, onClick: () => { S.tilleggInfo = S.tilleggInfo === t.id ? null : t.id; oppdater(); } }, 'ⓘ')));
+      h('button', { class: 'info-knapp', 'aria-label': 'Info om ' + t.navn, onClick: () => { S.tilleggInfo = S.tilleggInfo === t.id ? null : t.id; oppdater(); } }, infoIkon())));
   // Finjustering vises bare når tillegget er PÅ.
   if (paa) rad.appendChild(h('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px' },
     h('div', { class: 'stepper', style: 'flex:1' },
@@ -1532,63 +1549,57 @@ function tegnFfTemp(r, f) {
   const boks = h('div', { style: 'margin-top:12px' });
   boks.appendChild(h('div', { class: 'felt-label' }, 'Hvor står forfermenten?'));
   const kald = f.temp <= 12;
+  const ffRom = (S.ffRomTemp != null && isFinite(S.ffRomTemp)) ? +S.ffRomTemp : (isFinite(S.romTemp) ? +S.romTemp : 22);
   boks.appendChild(h('div', { class: 'piller', style: 'margin-top:4px' },
     h('button', { class: kald ? '' : 'paa', onClick: () => { S.ffTemp = null; oppdater(); } },
-      'I rommet ' + fmt(S.romTemp || 22, 0) + ' °C'),
+      'I rommet ' + fmt(ffRom, 0) + ' °C'),
     h('button', { class: kald ? 'paa' : '', onClick: () => { S.ffTemp = S.kjolskapTemp || 4; oppdater(); } },
       'I kjøleskapet ' + fmt(S.kjolskapTemp || 4, 0) + ' °C')));
-  /* Det er ROMMET man vet temperaturen på, ikke forfermenten.
-     Feltet het «Temperatur på forfermenten», og det er en temperatur ingen har
-     målt: forfermenten holder den temperaturen omgivelsene gir den. Står den i
-     rommet, følger den romtemperaturen du alt har satt; står den i kjøleskapet,
-     følger den kjøleskapet. Da er det de to man skal kunne stille på — og de
-     står begge på Tid, ett sted, i stedet for som et tredje tall her. */
-  boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
-    kald
-      ? 'Forfermenten holder kjøleskapets temperatur — ' + grader(f.temp, 0) + ' — ikke sin egen. Er skapet ditt kaldere eller varmere, still det under Tid, så følger regnestykket med.'
-      : 'Forfermenten holder rommets temperatur — ' + grader(f.temp, 0) + '. Endrer rommet seg gjennom døgnet, still romtemperaturen under Tid.'));
 
-  // Hva kulda koster i tid. Regnet, ikke påstått.
-  const ekv = ffTidEkvivalent(f.timer, f.standardTemp, f.temp);
-  const linjer = [];
-  if (ekv && Math.abs(ekv - f.timer) > 0.3) {
-    const saktere = ekv > f.timer;
-    linjer.push('Ved ' + grader(f.temp, 0) + ' går modningen ' + fmt(ekv / f.timer, 1) + '× ' +
-      (saktere ? 'saktere' : 'raskere') + ' enn ved ' + grader(f.standardTemp, 0) + '. Skulle du hatt samme modning på ' +
-      fmtTimer(f.timer) + ' der, måtte den stått ' + fmtTimer(ekv) + ' her.');
+  /* EGEN romtemp for forfermenten. Brukeren har bedt om dette gjentatte ganger:
+     romtemperaturen ved forfermentering er ofte en annen enn ved bake-ut —
+     forfermenten settes kvelden før på et kjøligere kjøkken, mens bake-ut skjer
+     på dagen med ovnen på. Derfor et eget, redigerbart tall her, uavhengig av
+     «Romtemp der deigen hever» under Tid. Selv når forfermenten står KALDT er
+     dette blandetemperaturen (den blandes varm), og den styrer nedkjølingsbanen. */
+  boks.appendChild(stepperRad(
+    kald ? 'Romtemp den blandes ved' : 'Romtemp der forfermenten står',
+    ffRom, 'ffRomTemp', 10, 30, 0.5));
+  boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:2px' },
+    'Eget tall for forfermenten, uavhengig av rommet der deigen hever (under Tid).'));
+
+  boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' },
+    kald
+      ? 'Forfermenten settes i kjøleskapet på ' + grader(f.temp, 0) + '. Er skapet ditt kaldere eller varmere, still det under Tid.'
+      : 'Forfermenten holder rommets temperatur — ' + grader(f.temp, 0) + '.'));
+
+  /* Kald forferment: yngre MED VILJE, ikke «umulig». Den gamle teksten regnet
+     isotermt ved kjøleskapstemperatur og påsto at en 16-timers poolish måtte stå
+     ~481 timer (20 døgn!) — bak mål. Motoren regner nå med at forfermenten gjærer
+     godt mens den kjøles ned de første timene (samme avkjølingsmodell som
+     hoveddeigen), så gjærmengden lander der erfarne bakere faktisk kjører den. */
+  if (kald) {
+    boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
+      'En kald forferment over natta er MED VILJE yngre og mer aromatisk enn en varm: kulda bremser gjæren mer enn melkesyrebakteriene, så du får mer smaksdybde og litt mindre gassdriv. Den blandes varm og gjærer godt mens den kjøles ned de første timene — derfor holder ',
+      h('b', null, veiG(f.gjaer)), ' gjær, ikke den isoterme overdosen. Den ser mindre voluminøs ut enn en varm poolish; det er forventet, ikke et tegn på at den ikke er klar.'));
+  } else {
+    boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
+      'Appen løser gjærmengden mot tid og temperatur — derfor står det ', h('b', null, veiG(f.gjaer)), ' gjær.'));
   }
-  linjer.push('Appen holder tiden fast på ' + fmtTimer(f.timer) + ' og løser gjærmengden mot temperaturen i stedet — derfor står det ' +
-    veiG(f.gjaer) + ' gjær nå. Setter du den kaldt uten å øke tiden, er det gjæren som må ta igjen forskjellen.');
-  if (kald) linjer.push('Kaldt skap flytter dessuten balansen mot syre: melkesyrebakteriene bremses mindre av kulde enn gjæren gjør. Det gir mer smaksdybde og mindre gassdrivkraft — som er hele grunnen til at man gjør det med vilje.');
-  linjer.forEach(t => boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' }, t)));
 
   if (f.temp < 2.5) boks.appendChild(h('div', { class: 'varsel' },
-    'Under ~2 °C står gjæringen praktisk talt stille i modellen, og tallene under blir da mer et anslag enn en beregning.'));
-  /* Appen holder tiden fast og løser gjæren. Setter man en poolish kaldt uten å
-     forlenge, blir svaret matematisk riktig og bakefaglig meningsløst: dosen
-     løp opp i 5,3 % tørrgjær — 15,9 % fersk — der en kald biga kjøres på 1 %
-     fersk. Motoren klemmer nå dosen mot taket, og her sier appen hvorfor og hva
-     man gjør med det.
+    'Under ~2 °C står gjæringen nesten stille, og tallene blir da mer et anslag enn en beregning.'));
 
-     Terskelen måles i FERSK gjær. Den sto på «2» og ble sammenlignet med en
-     tørrgjærprosent, altså 6 % fersk — tre ganger for høyt, så advarselen kom
-     aldri i praksis. */
+  /* Gjærtaket KLEMMER, det NEKTER ikke. Over ~2 % fersk begynner forfermenten å
+     smake gjær; når en svært kald/kort kombinasjon ville krevd mer, stopper appen
+     der og sier at forfermenten blir litt yngre — ikke at det er «umulig», og
+     ingen 481-timer-knapp. */
   if (f.gjaerPaaTaket) {
-    const onsketFersk = gjaerKonverter(f.gjaerPctOnsket, r.gjaerType, 'fersk');
     const takFersk = gjaerKonverter(f.gjaerTakPct, r.gjaerType, 'fersk');
-    const v = h('div', { class: 'varsel fare' },
-      h('b', null, 'Denne kombinasjonen går ikke opp. '),
-      'For å rekke samme modning på ' + fmtTimer(f.timer) + ' ved ' + grader(f.temp, 0) +
-      ' måtte forfermenten hatt ' + fmt(onsketFersk, 1) + ' % fersk gjær på sitt eget mel. ' +
-      'Over ~' + fmt(takFersk, 0) + ' % smaker det gjær, og poenget med en forferment forsvinner — så appen har stoppet på ' +
-      veiG(f.gjaer) + ' (' + fmt(takFersk, 0) + ' % fersk). Forfermenten blir da mindre moden enn planen regner med.');
-    if (ekv && ekv > f.timer) v.appendChild(h('button', { class: 'btn', style: 'margin-top:8px;width:100%;font-size:.82rem',
-      onClick: () => { S.ffTimer = Math.round(ekv * 2) / 2; oppdater(); } },
-      'Gi den ' + fmtTimer(ekv) + ' i stedet — da rekker den'));
-    v.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:6px;width:100%;font-size:.8rem',
-      onClick: () => { S.ffTemp = null; oppdater(); } },
-      'Eller sett den tilbake til planens ' + fmt(f.standardTemp, 0) + ' °C'));
-    boks.appendChild(v);
+    boks.appendChild(h('div', { class: 'varsel' },
+      h('b', null, 'Gjæren er kappet på ' + fmt(takFersk, 0) + ' % fersk. '),
+      'Så kaldt eller kort som du har satt den, ville full modning krevd litt mer gjær enn det — og over ~' + fmt(takFersk, 0) +
+      ' % begynner forfermenten å smake gjær. Appen holder ' + veiG(f.gjaer) + ', og forfermenten blir da litt yngre enn planen regner med. Det er helt brukbart — gi den gjerne noen timer ekstra, eller en litt varmere start, om du vil ha den mer moden.'));
   }
   return boks;
 }
@@ -2499,8 +2510,11 @@ function tegnTimerpanel() {
     boks.appendChild(h('div', { class: 'timer-hint' },
       'Varsling er avslått for denne siden — timeren teller ned her, men ringer ikke. Slå den på igjen i nettleserens innstillinger.'));
   } else if (Notification.permission === 'granted' && !planlagteVarslerStottes()) {
+    // Ærlig om den reelle begrensningen: uten en push-tjeneste kan ikke en PWA
+    // vekke en LÅST telefon. Timeren holder skjermen på mens den går (wakelock),
+    // så den ringer så lenge du ikke slår av skjermen selv.
     boks.appendChild(h('div', { class: 'timer-hint' },
-      'Nettleseren støtter ikke planlagte varsler — hold appen åpen, så ringer den når tiden er ute.'));
+      'Telefonen holder skjermen på mens en timer går, så alarmen ringer. Låser du telefonen med av-knappen, kan varselet utebli — nettleseren får ikke vekke en helt lukket app uten en egen varslingstjeneste. La appen ligge åpen for de viktige timerne.'));
   }
   return boks;
 }
@@ -2771,7 +2785,7 @@ function tegnLogg(r) {
    ikke «hele S minus litt»: visningstilstand, logg, favoritter og kontoting har
    ingenting i en oppskrift å gjøre, og en svarteliste ville sluppet gjennom
    hvert nytt felt som legges til senere. */
-const OPPSKRIFT_FELT = ['brotype', 'grov', 'hyd', 'tid', 'ff', 'ffType', 'ffTemp', 'ffTimer', 'ffKjol',
+const OPPSKRIFT_FELT = ['brotype', 'grov', 'hyd', 'tid', 'ff', 'ffType', 'ffTemp', 'ffRomTemp', 'ffTimer', 'ffKjol',
   'tillegg', 'antall', 'vekt', 'startTemp', 'melTemp', 'maskin', 'eltMin', 'romTemp', 'kjolskapTemp',
   'stekeProfil', 'stekeProfilManuell', 'lokk', 'fulltKjol', 'form', 'utstyr', 'pyrexIOvn',
   'saltPct', 'heveplan', 'melOverstyr', 'okDeig'];
@@ -3143,7 +3157,7 @@ function oppslagMel() {
       const tallKnapp = (nokkel, lab, verdi) => h('button', {
         style: 'background:none;border:none;padding:0;font:inherit;cursor:pointer;color:inherit;text-align:left',
         'aria-label': lab + ' — forklaring', onClick: () => { S.meltallInfo = S.meltallInfo === (f.id + nokkel) ? null : (f.id + nokkel); oppdater(); } },
-        lab + ' ', h('b', null, verdi), h('span', { style: 'color:var(--color-neutral-400);font-size:.7em' }, ' ⓘ'));
+        lab + ' ', h('b', null, verdi), h('span', { style: 'display:inline-flex;vertical-align:-2px;margin-left:3px;color:var(--color-neutral-400)' }, infoIkon(12)));
       // Favoritter utheves med ramme rundt hele kortet, ikke bare stjerna.
       const kortEl = h('div', { class: 'kort flat' + (fav ? ' fav' : '') },
         h('div', { style: 'display:flex;align-items:flex-start;gap:10px' },
@@ -3685,17 +3699,40 @@ function alarmLyd() {
 function stoppLyd() { try { if (navigator.vibrate) navigator.vibrate(0); } catch (e) {} _alarmTeller = 0; }
 
 function timerId() { return 't' + Date.now().toString(36) + Math.floor(Math.random() * 1e5).toString(36); }
+/* Skjerm-wakelock: så lenge en timer går, holdes skjermen VÅKEN, så sekund-
+   tikken og alarmen faktisk kjører. En PWA-timer stopper når skjermen slukner
+   (nettleseren fryser fanen), og det er derfor varselet uteble «da telefonen
+   gikk i svart». Wakelock er det eneste en app UTEN en push-tjeneste kan gjøre —
+   den hindrer at skjermen slukner av seg selv. Låser du telefonen manuelt
+   (av-knappen), slippes den likevel; da kan varselet utebli, og det sier appen
+   ærlig fra om i timer-panelet. */
+let _wakeLock = null;
+async function oppdaterWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  const harTimer = (S.timere || []).length > 0;
+  try {
+    if (harTimer && !_wakeLock && document.visibilityState === 'visible') {
+      _wakeLock = await navigator.wakeLock.request('screen');
+      _wakeLock.addEventListener('release', () => { _wakeLock = null; });
+    } else if (!harTimer && _wakeLock) {
+      await _wakeLock.release(); _wakeLock = null;
+    }
+  } catch (e) { _wakeLock = null; }
+}
+
 async function startTimer(navn, minutter, stegId) {
   const tillat = await beOmVarsling();
   const t = { id: timerId(), navn: navn || 'Timer', slutt: Date.now() + Math.round(minutter * 60000), stegId: stegId || null, ringt: false };
   S.timere = (S.timere || []).concat([t]);
   if (tillat === 'granted') planleggVarsel(t);
+  oppdaterWakeLock();
   oppdater();
 }
 function avbrytTimer(id) {
   S.timere = (S.timere || []).filter(t => t.id !== id);
   avlysVarsel(id);
   stoppLyd();               // stopp vibrasjon/alarm med en gang
+  oppdaterWakeLock();
   oppdater();
 }
 function justerTimer(id, deltaMin) {
@@ -3751,6 +3788,12 @@ function initTimere() {
     else if (Notification.permission === 'granted') planleggVarsel(t);   // re-arm etter omstart
   });
   if (_timerTikk == null) _timerTikk = setInterval(tikkTimere, 1000);
+  // Wakelock slippes automatisk når fanen skjules — hent den igjen når appen
+  // kommer fram, så lenge en timer fortsatt går.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') oppdaterWakeLock();
+  });
+  oppdaterWakeLock();
   // Trykk på varselet åpner prosess-skjermen på riktig steg.
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', e => {

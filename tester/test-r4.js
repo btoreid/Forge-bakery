@@ -457,9 +457,13 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     const tekst = document.body.innerText;
     return { varmTemp: varm.forferment.temp, kaldTemp: kald.forferment.temp,
       varmGjaer: varm.forferment.gjaer, kaldGjaer: kald.forferment.gjaer,
+      paaTaket: kald.forferment.gjaerPaaTaket,
       ekv: ffTidEkvivalent(varm.forferment.timer, varm.forferment.temp, 4),
       rom: S.romTemp,
-      advarer: /går ikke opp/i.test(tekst), harKjoleskapsknapp: /I kjøleskapet/.test(tekst) };
+      // Ny, korrekt oppførsel: en vanlig kald over-natta-poolish er IKKE «umulig».
+      umulig: /går ikke opp/i.test(tekst),
+      medVilje: /med vilje yngre/i.test(tekst),
+      harKjoleskapsknapp: /I kjøleskapet/.test(tekst) };
   });
   /* Forfermenten holder ROMMETS temperatur når man ikke har rørt den — ikke et
      tabelltall på 21 grader. Det er rommet man vet temperaturen på. */
@@ -468,8 +472,13 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   ok('kjøleskapsknappen setter kjøleskapstemperaturen', ffT.kaldTemp === 4 && ffT.harKjoleskapsknapp);
   ok('kaldt krever mer gjær for samme tid', ffT.kaldGjaer > ffT.varmGjaer,
     ffT.varmGjaer.toFixed(2) + ' → ' + ffT.kaldGjaer.toFixed(2) + ' g');
-  ok('ekvivalent tid regnes ut', ffT.ekv > 0 && isFinite(ffT.ekv), Math.round(ffT.ekv) + ' t');
-  ok('appen sier fra når kombinasjonen ikke går opp', ffT.advarer);
+  // Kjølebane-modellen: kald poolish trenger MER gjær, men fornuftig mye — ikke
+  // 30× (den gamle isoterme feilen som ga «481 timer»/«går ikke opp»).
+  ok('kald poolish får fornuftig gjærmengde, ikke isoterm overdose', ffT.kaldGjaer < ffT.varmGjaer * 12,
+    ffT.varmGjaer.toFixed(2) + ' → ' + ffT.kaldGjaer.toFixed(2) + ' g');
+  ok('en vanlig kald over-natta-poolish flagges IKKE som umulig', !ffT.umulig);
+  ok('kald poolish beskrives som med vilje yngre, ikke som feil', ffT.medVilje);
+  ok('ekvivalent tid finnes fortsatt som motorfunksjon', ffT.ekv > 0 && isFinite(ffT.ekv), Math.round(ffT.ekv) + ' t');
 
   /* ---------------------------------------------------------------
      14 · Autolyse som eget steg

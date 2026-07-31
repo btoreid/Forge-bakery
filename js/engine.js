@@ -290,15 +290,46 @@ function stivhetsMultiplikator(hydrering) {         // 1,0 ved ≥70 %, 2,5 ved 
   return 1 + 1.5 * (0.70 - Math.min(hydrering, 0.70)) / 0.20;
 }
 
+/* ---------- Kjølebane-midlet ratefaktor for en forferment ----------
+   En forferment blandes ved ROMTEMPERATUR og settes så eventuelt i kjøleskapet.
+   Den kjøles ned over flere timer (Newton, samme modell som hoveddeigen), og
+   størstedelen av gjæringen skjer i den varme nedkjølingsfasen. Å regne den
+   isotermt ved kjøleskapstemperatur — som den gamle modellen gjorde — undervurderer
+   kald gjæring dramatisk (~4×): en 16-timers poolish i kjøleskap krevde da 6,3 %
+   fersk gjær og ble flagget «går ikke opp», mens en kald over-natta-poolish i
+   virkeligheten kjøres på ~0,7–1 % fersk og fungerer utmerket.
+
+   Denne returnerer gjennomsnittlig ratefaktor langs den faktiske temperaturbanen
+   fra blandetemp til miljøtemp. Er de like (forferment i rommet), er svaret bare
+   rateFactor(miljo) — isotermt, som før. */
+function kjolebaneRate(timer, blandeTemp, miljo, masseKg) {
+  if (!(timer > 0)) return rateFactor(miljo);
+  if (Math.abs(blandeTemp - miljo) < 0.3) return rateFactor(miljo);   // står i rommet: ingen nedkjøling
+  const tau = tauHours(Math.max(masseKg || 0.35, 0.05), { lokk: true });
+  const steg = 120;
+  const dt = timer / steg;
+  let sum = 0;
+  for (let i = 0; i < steg; i++) {
+    const tMid = (i + 0.5) * dt;
+    sum += rateFactor(doughTempAt(tMid, blandeTemp, miljo, tau)) * dt;
+  }
+  return sum / timer;
+}
+
 /* Potensloven alene treffer den publiserte tabellen (23 °C: 12 t 0,11 % tørr,
    14 t 0,09, 16 t 0,07, 18 t 0,05) innenfor ca. 15 % over hele spennet.
    Her lå tidligere et ekstra ledd som halverte gjærmengden brått så snart
    modningstiden passerte 16 timer. Det gjorde to ting galt: det brøt med appens
    egen tabell ved 18 t (0,027 % mot 0,05 %), og det ga et sprang midt i et felt
-   brukeren justerer i halvtimer — 16,0 t ga dobbelt så mye gjær som 16,5 t. */
+   brukeren justerer i halvtimer — 16,0 t ga dobbelt så mye gjær som 16,5 t.
+
+   `temp` er MILJØET forfermenten står i (rom eller kjøleskap). `blandeTemp` er
+   temperaturen den blandes ved (romtemp), og `masseKg` dens masse — begge trengs
+   for kjølebanen. Uten dem faller den tilbake på isoterm beregning. */
 function forfermentGjaerPct(timer, temp, o = {}) {
-  const { hydrering = 1.0, type = 'torr' } = o;
-  const tempJust = rateFactor(temp) / rateFactor(FERM.POOLISH_TREF);
+  const { hydrering = 1.0, type = 'torr', blandeTemp = temp, masseKg = 0.35 } = o;
+  const effRate = kjolebaneRate(timer, blandeTemp, temp, masseKg);
+  const tempJust = effRate / rateFactor(FERM.POOLISH_TREF);
   let ferskPct = (FERM.POOLISH_K / Math.pow(Math.max(timer, 1), FERM.POOLISH_N)) / tempJust;
   ferskPct *= stivhetsMultiplikator(hydrering);
   return gjaerKonverter(ferskPct, 'fersk', type);
@@ -548,8 +579,13 @@ function beregnOppskrift(inn) {
   if (forferment && forferment.bruk) {
     const ffMel = melTotal * forferment.pctMel / 100;
     const ffVann = ffMel * forferment.hydrering / 100;
+    // Blandetemp (romtemp) og masse trengs for kjølebanen: en kald forferment
+    // blandes varm og gjærer godt mens den kjøles ned de første timene.
+    const ffMasseKg = (ffMel + ffVann) / 1000;
     const ffGjaerPct = forfermentGjaerPct(forferment.timer, forferment.temp, {
-      hydrering: forferment.hydrering / 100, type: gjaerType
+      hydrering: forferment.hydrering / 100, type: gjaerType,
+      blandeTemp: (forferment.mikstemp != null && isFinite(forferment.mikstemp)) ? forferment.mikstemp : forferment.temp,
+      masseKg: ffMasseKg
     });
     /* Taket på forfermentens egen gjærdose.
        Modellen holder tiden fast og løser gjærmengden mot temperaturen. Det gir
@@ -1199,6 +1235,12 @@ function regnKjerne(state) {
      «i rommet» eller «på kjøl» måles mot disse to, ikke mot tabellens tall. */
   const romT = isFinite(state.romTemp) ? +state.romTemp : ROM_NOMINELL;
   const kjolskapT = isFinite(state.kjolskapTemp) ? +state.kjolskapTemp : KJOLSKAP_STD;
+  /* Rommet der FORFERMENTEN står kan være et annet enn der deigen hever — den
+     settes ofte kvelden før (kjøligere kjøkken), mens bake-ut skjer på dagen med
+     ovnen på. Egen verdi, med bulk-romtemp som fallback til brukeren setter den. */
+  // NB: isFinite(null) er TRUE (null → 0), så null-sjekken må komme først —
+  // ellers ble «ikke satt» tolket som 0 °C.
+  const ffRomT = (state.ffRomTemp != null && isFinite(state.ffRomTemp)) ? +state.ffRomTemp : romT;
 
   // Forferment: TYPEN eies av valget, TIDSPLANEN (timer, andel) av planen.
   const ffT = ffTypeFor(state.ffType);
@@ -1223,14 +1265,18 @@ function regnKjerne(state) {
   if (ffNominell <= KALDGRENSE) {
     ffStandardTemp = kjolskapT;
   } else if (isFinite(ffT.tempMin) && isFinite(ffT.tempMax)) {
-    ffStandardTemp = Math.max(ffT.tempMin, Math.min(ffT.tempMax, romT));
+    ffStandardTemp = Math.max(ffT.tempMin, Math.min(ffT.tempMax, ffRomT));
   } else {
-    ffStandardTemp = romT;
+    ffStandardTemp = ffRomT;
   }
   const forferment = {
     bruk: ffPaa, type: ffT.id,
     pctMel: pf.pctMel || ffT.pctMel,
     hydrering: ffT.hyd || pf.hydrering || 100,
+    // Blandetemp = forfermentens romtemp (den blandes varm, uansett hvor den
+    // siden står). Trengs for kjølebanen når den settes kaldt.
+    mikstemp: ffRomT,
+    romTemp: ffRomT,
     /* Modningstiden kan overstyres på samme måte som temperaturen. Uten den
        hadde appen ingen vei ut av «for kaldt til å rekke det»: den kunne bare
        konstatere at kombinasjonen ikke går opp, uten å la deg gjøre noe med
@@ -1320,7 +1366,11 @@ function regnKjerne(state) {
      Uten dette sto hoveddeigens gjærmengde helt stille enten forfermenten stod
      på 26 eller på 4 grader — og det var åpenbart galt. */
   const ffRef = forferment.standardTemp || 21;
-  const ffAktiv = ffPaa ? Math.max(0, Math.min(1, rateFactor(forferment.temp) / Math.max(rateFactor(ffRef), 1e-6))) : 0;
+  // Aktiviteten måles langs kjølebanen, ikke isotermt: en kald forferment gjærer
+  // godt mens den kjøles ned, så den er mer moden enn en ren rate(4 °C) skulle si.
+  const ffMasseKg = r.forferment ? (r.forferment.mel + r.forferment.vann) / 1000 : 0.35;
+  const ffEffRate = ffPaa ? kjolebaneRate(forferment.timer, forferment.mikstemp, forferment.temp, ffMasseKg) : 0;
+  const ffAktiv = ffPaa ? Math.max(0, Math.min(1, ffEffRate / Math.max(rateFactor(ffRef), 1e-6))) : 0;
   const pff = ffPaa ? (forferment.pctMel / 100) * ffAktiv : 0;
   const maalDose = maalDoseFor(r.grovMelAndel, pff);
   const opt = { lokk: !!state.lokk, fulltKjol: !!state.fulltKjol, antall: state.antall || 1 };
