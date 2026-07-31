@@ -253,41 +253,6 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   ok('kostnaden per brød er i et rimelig leie', pris.perBrod > 4 && pris.perBrod < 40,
     pris.perBrod.toFixed(1) + ' kr');
 
-  /* ---------------------------------------------------------------
-     H · Databasesjekken i Logg → Konto og sky
-     ---------------------------------------------------------------
-     SQL-en kjøres for hånd, én gang. Går den halvveis gjennom, faller appen
-     pent tilbake på anslagene og sier ingenting — riktig i bruk, ubrukelig når
-     man skal finne ut om det BLE riktig. Sky stubbes her; poenget er at panelet
-     oversetter de tre utfallene til noe man kan handle på. */
-  console.log('— Databasesjekk —');
-  const dbTilfeller = [
-    ['begge svarer', { state: { ok: true, tekst: 'svarer' }, kalib: { ok: true, tekst: 'svarer' }, kanSkrive: true },
-      t => /✅/.test(t) && !/❌/.test(t) && /skrivetilgang/.test(t)],
-    ['kalibreringstabellen mangler',
-      { state: { ok: true, tekst: 'svarer' }, kalib: { ok: false, mangler: true, tekst: 'tabellen finnes ikke' }, kanSkrive: true },
-      t => /❌/.test(t) && /Kjør SQL-en/.test(t)],
-    ['uten skrivetilgang', { state: { ok: true, tekst: 'svarer' }, kalib: { ok: true, tekst: 'svarer' }, kanSkrive: false },
-      t => /ikke skrive dem/.test(t)]
-  ];
-  for (const [navn, svar, godkjenn] of dbTilfeller) {
-    const tekst = await page.evaluate(async (svar) => {
-      const FB = window.__FB;
-      Sky.status = () => ({ tilstand: 'lagret', tekst: 'Lagret i skyen', epost: 'test@example.com' });
-      Sky.bruker = () => ({ id: 'x', email: 'test@example.com' });
-      Sky.sjekkOppsett = async () => svar;
-      FB.S.skjerm = 'logg'; FB.render();
-      await new Promise(r => setTimeout(r, 200));
-      const knapp = [...document.querySelectorAll('button')].find(b => /Sjekk databaseoppsettet/.test(b.textContent));
-      if (!knapp) return 'INGEN KNAPP';
-      knapp.click();
-      await new Promise(r => setTimeout(r, 300));
-      const k = [...document.querySelectorAll('.kort')].find(x => /Konto og sky/.test(x.textContent));
-      return k ? k.innerText : 'INGEN KORT';
-    }, svar);
-    ok('databasesjekken: ' + navn, godkjenn(tekst), tekst.replace(/\n+/g, ' | ').slice(-95));
-  }
-
   /* Skjermbilder — «rendrer uten feil» er ikke det samme som «ser riktig ut». */
   await page.evaluate(async () => {
     const FB = window.__FB, S = FB.S;

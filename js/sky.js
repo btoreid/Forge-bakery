@@ -146,36 +146,6 @@ async function hentKalibreringer() {
   data.forEach(rad => { if (rad && rad.maskin_id) ut[rad.maskin_id] = rad; });
   return ut;
 }
-/* Er databasen satt opp slik SUPABASE.md beskriver?
-   SQL-en kjøres for hånd i Supabase, én gang, og går den halvveis gjennom får
-   man ingen beskjed: appen faller pent tilbake på anslagene og sier ingenting.
-   Det er riktig oppførsel i bruk, og ubrukelig når man skal finne ut om det
-   BLE riktig. Denne leser bare — én rad fra hver tabell — og oversetter svaret.
-
-   Det avgjørende er å skille de tre utfallene fra hverandre:
-     tabellen mangler   → PostgREST svarer PGRST205 / «schema cache»
-     tabellen finnes    → 200, tom eller med rader
-     RLS avviser        → egen feilkode, ikke det samme som «finnes ikke» */
-async function sjekkOppsett() {
-  if (!klient) return { feil: 'Sky er ikke konfigurert i denne versjonen.' };
-  if (!bruker) return { feil: 'Du må være innlogget for å sjekke oppsettet.' };
-  const prov = async (tabell, kolonne) => {
-    const { error } = await klient.from(tabell).select(kolonne).limit(1);
-    if (!error) return { ok: true, tekst: 'svarer' };
-    const m = String(error.message || '').toLowerCase();
-    if (m.includes('could not find the table') || m.includes('schema cache') ||
-        (m.includes('relation') && m.includes('does not exist'))) {
-      return { ok: false, mangler: true, tekst: 'tabellen finnes ikke' };
-    }
-    return { ok: false, tekst: norsk(error) };
-  };
-  const [state, kalib] = await Promise.all([
-    prov(TABELL, 'bruker_id'),
-    prov('maskinkalibrering', 'maskin_id')
-  ]);
-  return { state, kalib, kanSkrive: kanPublisere() };
-}
-
 async function lagreKalibrering(maskinId, friksjon, deigvekt) {
   if (!klient || !bruker) return { feil: 'Ikke innlogget.' };
   const { error } = await klient.from('maskinkalibrering')
@@ -239,7 +209,7 @@ window.Sky = {
   sesjonSjekket: () => sesjonSjekket,
   status, paaEndring: cb => lyttere.push(cb),
   registrer, loggInn, loggUt, glemtPassord,
-  kanPublisere, hentKalibreringer, lagreKalibrering, sjekkOppsett,
+  kanPublisere, hentKalibreringer, lagreKalibrering,
   hentNed, lagreOpp, skyvNaa
 };
 })();

@@ -141,6 +141,11 @@ update — én felles policy ville ikke dekket begge riktig.
 
 ## Sjekk at det ble riktig
 
+Dette sto en kort stund som en knapp i appen også. Den er tatt ut igjen: begge
+tabellene svarte grønt, og en diagnose som har gjort jobben sin blir til støy om
+den blir stående. Spørringene under koster ingenting å ha liggende, og det er her
+man leter om man setter opp prosjektet på nytt.
+
 Kjørte du feil spørring først, eller er du usikker på om alt gikk gjennom: kjør
 denne i SQL Editor. Den skriver ingenting — den leser bare skjemaet og gir én
 linje per regel, med ✅ eller ❌.

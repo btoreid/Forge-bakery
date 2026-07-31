@@ -38,6 +38,12 @@ utenfor `S`, i likhet med `skyForm` — en diagnose er ikke data og skal ikke sy
 
 Tre nye sjekker i `test-r5.js` med stubbet Sky. Service worker til `forgebakery-v6`.
 
+**Fjernet igjen samme kveld.** Begge tabellene svarte grønt, og da er knappen ikke
+lenger et verktøy — den er en permanent påminnelse om et engangsproblem. Bjørn: «det er
+bare støy.» Riktig: en diagnose som har gjort jobben sin skal ut, ellers samler appen
+opp knapper ingen trykker på. Kontrollspørringen i `SUPABASE.md` står igjen, for den
+koster ingenting å ha liggende og er der man leter når man setter opp på nytt.
+
 ---
 
 ## 31.07.2026 (kveld, sent) — Melprisene hentet fra nett, ikke arvet fra regnearket
