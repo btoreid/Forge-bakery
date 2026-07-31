@@ -1262,20 +1262,13 @@ function regnKjerne(state) {
      Tabellens 21 grader er ingen som har målt; det er en antakelse. Er den
      derimot ment å stå kaldt, er det kjøleskapet, og da gjelder ditt skap.
 
-     UNNTAK: en biga vil stå KJØLIGERE enn rommet (16–18 °C). Har typen et
-     temperaturbånd (`tempMin`/`tempMax`), klemmes romtemperaturen inn i det —
-     så en biga på et 24 °C-kjøkken lander på 20 (kjøligste realistiske) i stedet
-     for å gjære for fort på full romtemp, og en biga på et 17 °C-kjøkken står på
-     17. Gjærdosen løses mot den faktiske temperaturen uansett. */
+     En varm forferment holder ROMMET DITT — det tallet du faktisk ser og setter.
+     En biga TRIVES svalere (16–18 °C), men det er nå et RÅD i teksten, ikke en
+     stille nedjustering: å vise «22 °C» i toggelen og likevel regne med 20 var
+     forvirrende. Setter du rommet til 22, står forfermenten på 22, og gjærdosen
+     løses mot det. */
   const ffNominell = pf.temp || ffT.temp || 21;
-  let ffStandardTemp;
-  if (ffNominell <= KALDGRENSE) {
-    ffStandardTemp = kjolskapT;
-  } else if (isFinite(ffT.tempMin) && isFinite(ffT.tempMax)) {
-    ffStandardTemp = Math.max(ffT.tempMin, Math.min(ffT.tempMax, ffRomT));
-  } else {
-    ffStandardTemp = ffRomT;
-  }
+  const ffStandardTemp = ffNominell <= KALDGRENSE ? kjolskapT : ffRomT;
   const forferment = {
     bruk: ffPaa, type: ffT.id,
     pctMel: pf.pctMel || ffT.pctMel,
@@ -1308,6 +1301,7 @@ function regnKjerne(state) {
   const romTidBase = isFinite(ffT.romTidBase) ? ffT.romTidBase : 1.5;
   let romTidStd = ffErKald ? romTidBase * Math.pow(2, (21 - ffRomT) / 8) : 0;
   romTidStd = Math.max(0.5, Math.min(3, romTidStd));
+  romTidStd = Math.round(romTidStd * 2) / 2;                       // hele halvtimer, ikke rå float
   if (forferment.timer > 18 || ffRomT > 26) romTidStd = 0;        // rett i kjøl
   if (!ffErKald) romTidStd = 0;
   forferment.romTidStd = romTidStd;

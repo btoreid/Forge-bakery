@@ -919,12 +919,16 @@ function stepperRad(label, verdi, felt, min, max, steg) {
      først. Uten den falt `ffTemp: null` tilbake på 0 og «+» ga 1 °C. */
   const naa = (S[felt] != null && isFinite(S[felt])) ? +S[felt]
             : (verdi != null && isFinite(verdi)) ? +verdi : min;
-  const sett = v => { S[felt] = Math.min(max, Math.max(min, v)); oppdater(); };
+  /* Vis alltid et rent tall med komma-desimal, aldri en rå float som
+     «1.8340080864093424». Antall desimaler følger stegstørrelsen: heltallssteg
+     gir heltall, ellers én desimal — som er det fineste noen stepper her bruker. */
+  const dec = Number.isInteger(steg) ? 0 : 1;
+  const sett = v => { S[felt] = Math.min(max, Math.max(min, Math.round(v / steg) * steg)); oppdater(); };
   return h('div', { class: 'stepper-blokk' },
     h('div', { class: 'felt-label' }, label),
     h('div', { class: 'stepper' },
       h('button', { 'aria-label': 'Mindre ' + label, onClick: () => sett(naa - steg) }, '−'),
-      h('input', { type: 'text', inputmode: 'numeric', value: String(verdi), 'aria-label': label,
+      h('input', { type: 'text', inputmode: 'numeric', value: fmt(naa, dec), 'aria-label': label,
         onblur: e => { const v = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(v)) sett(v); else oppdater(); } }),
       h('button', { 'aria-label': 'Mer ' + label, onClick: () => sett(naa + steg) }, '+')));
 }
@@ -1598,6 +1602,15 @@ function tegnFfTemp(r, f) {
     kald
       ? 'Forfermenten settes i kjøleskapet på ' + grader(f.temp, 0) + '. Er skapet ditt kaldere eller varmere, still det under Tid.'
       : 'Forfermenten holder rommets temperatur — ' + grader(f.temp, 0) + '.'));
+
+  /* Biga TRIVES svalere (16–18 °C). Motoren klemmer ikke lenger temperaturen ned
+     i det stille (det ga «22 i toggelen, 20 i regnestykket»); i stedet et ærlig
+     råd når rommet er varmt. Gjærdosen er allerede løst mot den temperaturen du
+     ser, så tallet er trygt — dette er kun en smaks-/styrkeanbefaling. */
+  if (!kald && f.type === 'biga' && ffRom > 20) {
+    boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
+      'En biga blir best litt svalere enn dette — 16–18 °C gir dypere smak og en sterkere, mer ekstensibel deig. Finner du et kjøligere hjørne (kjeller, nordvendt vindu) er det verdt det. Regner du med ', grader(ffRom, 0), ' er tallene riktige for det; gjæren er løst mot temperaturen du ser.'));
+  }
 
   /* Kald forferment: yngre MED VILJE, ikke «umulig». Den gamle teksten regnet
      isotermt ved kjøleskapstemperatur og påsto at en 16-timers poolish måtte stå
