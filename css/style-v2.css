@@ -709,9 +709,13 @@ svg.brodsvg .fyll { fill: var(--color-accent-200); }
 }
 .fav-stjerne { color: var(--color-accent-500); margin-left: 5px; }
 .m-fjern {
-  flex: 0 0 30px; width: 30px; height: 30px; border-radius: 999px; cursor: pointer;
+  /* Matcher .info-ring i størrelse så de to runde knappene til høyre på mel-raden
+     står som et jevnt par. Flex-gap-en på .melrad2 gir avstanden — ingen egen
+     margin. */
+  flex: 0 0 26px; width: 26px; height: 26px; border-radius: 999px; cursor: pointer;
+  display: grid; place-items: center;
   border: 1px solid var(--color-neutral-300); background: #fff;
-  color: var(--color-neutral-600); font-size: .8rem; line-height: 1; margin-left: 4px;
+  color: var(--color-neutral-600); font-size: 1rem; line-height: 1; padding: 0;
   position: relative;
 }
 /* Utvider treffflaten til 44px uten å endre den synlige knappen — samme grep som

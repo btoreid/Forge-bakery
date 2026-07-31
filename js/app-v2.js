@@ -970,15 +970,7 @@ function tegnDeigen(r) {
     melBoks.appendChild(h('div', { class: 'melrad2' + (i === 0 ? ' forst' : '') },
       h('div', { class: 'm-navn' },
         h('div', { class: 'n' }, m.navn, fav ? h('span', { class: 'fav-stjerne', title: 'Favoritt' }, '★') : null),
-        h('div', { class: 'sub' }, melUndertekst(m, flour, bidrag)),
-        // × på selve raden. Løsrevne «fjern»-piller under lista var vanskelige
-        // å knytte til riktig mel.
-        r.mel.length > 1 ? h('button', { class: 'm-fjern', 'aria-label': 'Fjern ' + m.navn,
-          onClick: () => {
-            const liste = (gyldigOverstyring(S.melOverstyr) || r.melListe).filter((_, j) => j !== i);
-            S.melOverstyr = liste.length ? liste : null;
-            oppdater();
-          } }, '×') : null),
+        h('div', { class: 'sub' }, melUndertekst(m, flour, bidrag))),
       // Gram er redigerbart. Har du 500 g igjen av en melsort, skriver du 500 —
       // i stedet for å regne ut hvilken andel det blir. Selve omregningen ligger
       // i engine.js (settMelGram), som itererer fordi melmengden avhenger av
@@ -993,7 +985,15 @@ function tegnDeigen(r) {
           oppdater();
         }, 'Gram ' + m.navn),
         h('div', { class: 'p' }, fmt(m.pct, 0) + ' %')),
-      h('button', { class: 'info-ring', 'aria-label': 'Info om ' + m.navn, onClick: () => { S.tilleggInfo = null; S.melInfo = S.melInfo === m.id ? null : m.id; oppdater(); } }, infoIkon())));
+      h('button', { class: 'info-ring', 'aria-label': 'Info om ' + m.navn, onClick: () => { S.tilleggInfo = null; S.melInfo = S.melInfo === m.id ? null : m.id; oppdater(); } }, infoIkon()),
+      // × til HØYRE på raden, etter info — «fjern denne meltypen». Lå før inne i
+      // navnekolonnen til venstre, der den svevde under undertoksten.
+      r.mel.length > 1 ? h('button', { class: 'm-fjern', 'aria-label': 'Fjern ' + m.navn,
+        onClick: () => {
+          const liste = (gyldigOverstyring(S.melOverstyr) || r.melListe).filter((_, j) => j !== i);
+          S.melOverstyr = liste.length ? liste : null;
+          oppdater();
+        } }, '×') : null));
     if (S.melInfo === m.id && info) {
       const linjer = [];
       if (info.plus) info.plus.forEach(p => linjer.push(['+', p, 'var(--color-accent-2-700)']));
@@ -1035,11 +1035,20 @@ function tegnDeigen(r) {
   // Veien tilbake til anbefalingen. Uten den er en egen blanding en enveisdør,
   // og grovhetsdialen ser ut som den har sluttet å virke.
   if (S.melOverstyr) {
+    /* Knappen skal beskrive blandingen du går tilbake TIL — grovhetstrinnet du
+       satte — ikke den egne blandingen du står på nå. Før brukte den den EGNE
+       blandingens grovhet (f.eks. 19 %) og hardkodet ordet «grovt», så den både
+       viste feil tall og motsa grovhetskortet over (som klassifiserte samme tall
+       som «fint» etter Brødskala). Nå regnes den anbefalte blandingen (uten
+       overstyring), og både prosenten og klassen kommer derfra — samme språk som
+       kortet over. */
+    const anbefalt = regn({ ...S, melOverstyr: null });
+    const ab = anbefalt.brodskala;
     melBoks.appendChild(h('div', { class: 'varsel', style: 'margin-top:10px' },
       h('div', null, h('b', null, 'Du har din egen melblanding.'), ' Grovhetstrinnene over styrer den ikke lenger.'),
       h('button', { class: 'btn', style: 'margin-top:8px;width:100%;font-size:.82rem',
         onClick: () => { S.melOverstyr = null; oppdater(); } },
-        'Tilbake til anbefalt blanding for ' + fmt(r.brodskala.pct, 0) + ' % grovt')));
+        'Tilbake til anbefalt blanding · ' + fmt(ab.pct, 0) + ' % · ' + ab.kort.toLowerCase())));
   }
   /* En kostnad uten dato er en påstand uten holdbarhet.
      Prisene sto fra Bjørns gamle regneark og var flere år gamle — siktet
