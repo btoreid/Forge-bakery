@@ -1380,6 +1380,15 @@ function kjede(state, r, ferdigMs) {
   // L-10: ÉN kilde til totaltiden — kjeden selv, første steg til avkjølt brød.
   const siste = steg[steg.length - 1];
   steg.totalT = (siste.tid.getTime() + siste.varighet * 60000 - steg[0].tid.getTime()) / 3600000;
+  /* Tiden fram til brødet er UTE AV OVNEN, altså «ferdig» slik resten av appen
+     bruker ordet. `totalT` inkluderer nedkjølingen, som er 2–3 timer og lik for
+     hver eneste plan — så en «Ekspress» kom ut på nesten åtte timer og så ut som
+     alt annet enn ekspress. Planvalget skal sammenlignes på det som faktisk
+     skiller planene. */
+  const utAvOvnen = steg.filter(x => x.id !== 'kjol');
+  const sisteFoerKjol = utAvOvnen[utAvOvnen.length - 1] || siste;
+  steg.tilOvnenT = (sisteFoerKjol.tid.getTime() + sisteFoerKjol.varighet * 60000 - steg[0].tid.getTime()) / 3600000;
+  steg.kjolT = steg.totalT - steg.tilOvnenT;
   steg.filter(x => x.id === 'kjol').forEach(x => { x.sideV = fmt(steg.totalT, 1) + ' t'; });
   steg.start = steg[0].tid;
   steg.ferdig = ferdig;

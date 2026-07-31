@@ -401,6 +401,34 @@ Historikk per skjermbytte. Overlegg (bilde, modal, regnskap, oppslagsside) lukke
 `select()` på fokus i gramfeltene markerer hele verdien, og en markering utløser Androids
 kopier/lim-verktøylinje. Nå bare når det finnes en presis peker (mus).
 
+### 54 · Egendefinert tidsplan må merkes og valideres — `levert` · bøtte: ui
+
+> «dersom man legger til egne tidsvinduer … må man merke at dette er en egendefinert
+> tidsplan. Man må korrigere gjærforhold og andre ting basert på den tidsplanen, og komme
+> med varsling dersom den er urealistisk … Det kan hende at en bedre plan er å ikke ha en
+> ekspress som tar ni timer eller ti timer; det er for lenge.»
+
+Tre ting. **Merkelapp:** redigerte trinn gir «Egendefinert tidsplan» med vei tilbake.
+**Gjær:** løses allerede numerisk mot dine egne trinn — det står nå eksplisitt.
+**Varsel:** når dosen står på taket (0,833 % tørrgjær) rekker deigen ikke måldosen
+uansett, og da sier appen det — uten å nekte, for en kort plan er et gyldig valg.
+
+**Og hovedfunnet:** «Ekspress» viste 7,9 t fordi totalen inkluderte 3 t nedkjøling og
+1,75 t forvarming — likt for hver plan. Planvalget viser nå **tid til brødet er ute av
+ovnen**, som er det ordet «ferdig» betyr ellers i appen. Nedkjølingen står som egen linje.
+
+### 55 · Kalibreringen målte noe som ikke finnes ennå — `levert` · bøtte: ui
+
+> «under kalibreringen av maskinen din snakker du om deigtemperatur før elting. Man kan
+> ikke måle en deig før den er eltet; da er den ikke en deig. Så da må du heller ha mål
+> over fem minutter som en referanse … Og det kan også være at man skal for eksempel si:
+> "Kjør på to minutter på 20%, to minutter på 50%, og to minutter på 80%"»
+
+Helt riktig — et termometer i en melhaug måler ingenting. Nullpunktet er nå deigen slik
+den er når alt akkurat er samlet, og målingen er tre drag à to minutter på lav, middels
+og høy fart. Appen bruker MIDDELS, fordi det er der utviklingen skjer. Deigvekten
+registreres med, fordi samme maskin varmer en liten deig raskere per minutt enn en stor.
+
 ### 17 · Bedre appikon — `levert` · bøtte: infra
 
 > «ikonet til appen er litt dårlig. Brødbakeikonet. Prøv å lage et bedre ikon som er litt

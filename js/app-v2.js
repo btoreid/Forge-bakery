@@ -1469,6 +1469,32 @@ function leggTilTrinn() { const p = basePlan(); p.push({ navn: 'Nytt trinn', tim
 function tegnHeveplan(r) {
   const boks = kort('Heveplan', null);
   const trinn = basePlan();
+  /* Har man redigert planen, er den EGENDEFINERT — og det skal stå, ikke bare
+     antydes ved at tallene ikke lenger stemmer med kortet man valgte. */
+  if (S.heveplan) {
+    const grunn = TIDSPLANER.find(t => t.id === S.tid);
+    boks.appendChild(h('div', { class: 'varsel', style: 'margin-top:6px' },
+      h('div', { style: 'font-weight:800;margin-bottom:2px' }, 'Egendefinert tidsplan'),
+      h('div', { style: 'font-size:.8rem;line-height:1.45' },
+        'Du har endret trinnene, så dette er ikke lenger «' + (grunn ? grunn.navn : 'planen') +
+        '» slik den er kalibrert. Gjærmengden er løst om mot dine egne trinn — ' +
+        veiG(r.gjaerTotal) + ' (' + fmt(r.gjaerTorr, 3) + ' %).'),
+      h('button', { class: 'btn', style: 'margin-top:8px;width:100%;font-size:.82rem',
+        onClick: () => { S.heveplan = null; oppdater(); } },
+        'Tilbake til ' + (grunn ? grunn.navn : 'planens standard'))));
+    /* Er planen for kort til at gjæren rekker det? Da står dosen på taket, og da
+       er svaret matematisk riktig og fysisk umulig — gjær har en maksfart.
+       Appen skal si det, men ikke nekte: en kort plan er et gyldig valg, den gir
+       bare et annet brød. */
+    const paaTaket = r.gjaerTorr >= GJAER_TAK_TORR - 0.001;
+    const sumT = trinn.reduce((s2, t) => s2 + (t.timer || 0), 0);
+    if (paaTaket) boks.appendChild(h('div', { class: 'varsel' },
+      h('b', null, 'For kort for gjæren. '),
+      'Planen din gir ' + fmtTimer(sumT) + ' heving, og selv med gjæren på taket (' +
+      fmt(GJAER_TAK_TORR, 2) + ' % tørrgjær) rekker ikke deigen måldosen. Over dette taket får du gjærsmak og dårligere løft i stedet for mer heving. Brødet blir bakt, men tettere og mindre smakfullt enn planen sikter mot — gi den en time eller to til, eller sett trinnene varmere.'));
+    else if (sumT < 1.5) boks.appendChild(h('div', { class: 'varsel' },
+      'Under halvannen time samlet heving er svært kort. Det går, men regn med tett krumme og lite smak — det meste av både smaken og strukturen kommer av tid.'));
+  }
   // Rommet deigen faktisk skal stå i — «Rommet ditt»-knappen per trinn bruker
   // denne, så du slipper å taste temperatur i hvert felt.
   const rt = S.romTemp || 22;
@@ -1649,10 +1675,17 @@ function tegnTid(r, K) {
     wrap.appendChild(h('button', { class: 'valgkort plan-valg' + (paa ? ' paa' : ''), onClick: () => { S.tid = tp.id; S.heveplan = null; oppdater(); } },
       h('div', { class: 'plankort' },
         h('div', { style: 'flex:1;min-width:0' },
-          h('div', null, h('span', { class: 'p-navn' }, tp.navn), h('span', { class: 'p-tid' }, fmt(pK.totalT, 1) + ' t')),
+          // «t til ovnen», ikke totalen: nedkjølingen er den samme for alle
+          // planer og skjulte forskjellen mellom dem.
+          h('div', null, h('span', { class: 'p-navn' }, tp.navn),
+            h('span', { class: 'p-tid' }, fmt(pK.tilOvnenT, 1) + ' t til ovnen')),
           h('div', { class: 'p-sub' }, sub)),
         h('div', { class: 'p-loft' }, h('div', { class: 'v' }, String(prov.loft.loft)), h('div', { class: 'l' }, 'LØFT')))));
   });
+
+  wrap.appendChild(h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin:2px 0 10px;padding:0 2px' },
+    'Tidene er fra du starter til brødet er ute av ovnen. Nedkjøling kommer i tillegg — ' +
+    fmt(K.kjolT, 1) + ' t for denne størrelsen, og den er lik for alle planene.'));
 
   // Redigerbar heveplan + «løs for»
   wrap.appendChild(tegnHeveplan(r));
@@ -1762,32 +1795,72 @@ function fartFaser(faser, totalMin) {
 function tegnKalibrering(r) {
   if (S.friksjonKalibrert && S.maskin === 'egen') return null;
   const k = S.kalib || {};
-  const gyldig = isFinite(k.foer) && isFinite(k.etter) && isFinite(k.min) && k.min > 0 && k.etter > k.foer;
-  const resultat = gyldig ? (k.etter - k.foer) / k.min : null;
+  const sett = (nokkel, v) => { S.kalib = Object.assign({}, S.kalib, { [nokkel]: v }); oppdater(); };
   const boks = h('div', { class: 'kort', style: 'margin-top:12px;background:var(--color-accent-2-100)' },
     h('div', { class: 'kort-num' }, 'Kalibrer maskinen din'),
     h('div', { class: 'hjelpetekst', style: 'margin-top:4px' },
-      'Tallene i lista er anslag for maskinTYPEN — for Ooni Halo Pro finnes ingen produsentoppgitt verdi. Mål din egen én gang, så treffer vanntemperaturen resten av tiden.'),
-    h('div', { class: 'hjelpetekst', style: 'margin-top:6px' },
-      h('b', null, 'Slik: '), 'stikk termometeret i deigen rett før du starter maskinen, elt som vanlig, og mål igjen med én gang du stopper.'));
-  const felt = (lab, nokkel, enhet) => h('div', { class: 'gramrad' },
-    h('span', { class: 'gramrad-lab' }, lab),
-    gramFelt(k[nokkel] != null ? k[nokkel] : '', v => { S.kalib = Object.assign({}, S.kalib, { [nokkel]: v }); oppdater(); }, lab),
-    h('span', { class: 'gramrad-enhet' }, enhet));
-  boks.appendChild(felt('Deigtemp før elting', 'foer', '°C'));
-  boks.appendChild(felt('Deigtemp etter elting', 'etter', '°C'));
-  boks.appendChild(felt('Minutter du eltet', 'min', 'min'));
-  if (resultat) {
-    boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' },
-      '(', h('b', null, fmt(k.etter, 1) + ' °C'), ' − ', h('b', null, fmt(k.foer, 1) + ' °C'), ') ÷ ',
-      h('b', null, k.min + ' min'), ' = ', h('b', null, fmt(resultat, 2) + ' °C/min')));
+      'Tallene i lista er anslag for maskinTYPEN — for Ooni Halo Pro finnes ingen produsentoppgitt verdi. Mål din egen én gang, så treffer vanntemperaturen resten av tiden.'));
+
+  /* Protokollen måler ETTER sammenblanding, ikke før.
+     Første utgave ba om «deigtemp før elting», og det finnes ikke: før maskinen
+     har gått er det mel og vann, ikke deig, og et termometer i en tørr melhaug
+     måler ingenting brukbart. Nullpunktet er derfor deigen slik den er når alt
+     akkurat er samlet.
+
+     Tre korte drag i stedet for ett langt: friksjonen er ikke den samme på lav
+     og høy fart, og med tre punkter ser man forskjellen i stedet for å måtte tro
+     på ett tall. Appen bruker MIDDELS, fordi det er der utviklingen skjer og der
+     mesteparten av eltetiden ligger. */
+  boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
+    h('b', null, 'Slik gjør du det: '),
+    'bland mel og vann til det ikke er tørt mel igjen, og la maskinen stå. Nå har du en deig, og nå måler du. Kjør så to minutter på hver fart og mål på nytt mellom hver.'));
+
+  boks.appendChild(h('div', { class: 'gramrad' },
+    h('span', { class: 'gramrad-lab' }, 'Deigvekt du målte på'),
+    gramFelt(k.vekt != null ? k.vekt : Math.round(r.totalVekt), v => sett('vekt', v), 'Deigvekt i gram'),
+    h('span', { class: 'gramrad-enhet' }, 'g')));
+  boks.appendChild(h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:2px;line-height:1.4' },
+    'Vekten betyr noe: samme maskin varmer en liten deig raskere per minutt enn en stor, fordi effekten fordeles på mindre masse. Måler du på ' +
+    g0(k.vekt != null ? k.vekt : r.totalVekt) + ', gjelder tallet best rundt den størrelsen.'));
+
+  boks.appendChild(h('div', { class: 'gramrad', style: 'margin-top:12px' },
+    h('span', { class: 'gramrad-lab' }, h('b', null, 'Start'), ' — deigen akkurat samlet'),
+    gramFelt(k.t0 != null ? k.t0 : '', v => sett('t0', v), 'Temperatur ved start'),
+    h('span', { class: 'gramrad-enhet' }, '°C')));
+
+  const FARTER = [
+    { n: 'lav', lab: 'Lav fart', min: 2 },
+    { n: 'mid', lab: 'Middels fart', min: 2 },
+    { n: 'hoy', lab: 'Høy fart', min: 2 }
+  ];
+  const temp = n => (n === 'start' ? k.t0 : k['t_' + n]);
+  const forrige = i => (i === 0 ? k.t0 : k['t_' + FARTER[i - 1].n]);
+  FARTER.forEach((f, i) => {
+    boks.appendChild(h('div', { class: 'gramrad' },
+      h('span', { class: 'gramrad-lab' }, 'Etter ' + f.min + ' min på ' + f.lab.toLowerCase()),
+      gramFelt(k['t_' + f.n] != null ? k['t_' + f.n] : '', v => sett('t_' + f.n, v), 'Temperatur etter ' + f.lab),
+      h('span', { class: 'gramrad-enhet' }, '°C')));
+    const fra = forrige(i), til = k['t_' + f.n];
+    if (isFinite(fra) && isFinite(til)) {
+      const rate = (til - fra) / f.min;
+      boks.appendChild(h('div', { style: 'font-size:.74rem;color:var(--color-neutral-700);margin:-2px 0 6px;padding-left:2px;font-variant-numeric:tabular-nums' },
+        '→ ' + fmt(rate, 2) + ' °C/min' + (f.n === 'mid' ? ' — dette er tallet appen bruker' : '')));
+    }
+  });
+
+  const midRate = (isFinite(k.t_lav) && isFinite(k.t_mid)) ? (k.t_mid - k.t_lav) / 2 : null;
+  if (midRate != null && midRate > 0) {
     boks.appendChild(h('button', { class: 'btn btn-primary btn-full', style: 'margin-top:10px',
-      onClick: () => { S.egenFriksjon = Math.round(resultat * 100) / 100; S.maskin = 'egen'; S.friksjonKalibrert = true; oppdater(); } },
-      'Bruk ' + fmt(resultat, 2) + ' °C/min for maskinen min'));
+      onClick: () => {
+        S.egenFriksjon = Math.round(midRate * 100) / 100;
+        S.maskin = 'egen'; S.friksjonKalibrert = true; oppdater();
+      } }, 'Bruk ' + fmt(midRate, 2) + ' °C/min for maskinen min'));
   } else {
     boks.appendChild(h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:8px' },
-      'Fyll inn de tre tallene, så regner appen ut friksjonen.'));
+      'Fyll inn start og de to første fartene, så regner appen ut friksjonen. Høy fart er valgfri — den er der for å vise deg forskjellen.'));
   }
+  if (midRate != null && midRate <= 0) boks.appendChild(h('div', { class: 'varsel' },
+    'Temperaturen gikk ikke opp mellom lav og middels. Enten gikk det for kort tid, eller så er kjøkkenet kaldere enn deigen — mål på nytt med litt lengre drag.'));
   boks.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:6px;font-size:.78rem',
     onClick: () => { S.friksjonKalibrert = true; oppdater(); } }, 'Ikke nå — bruk tabellverdien'));
   return boks;
