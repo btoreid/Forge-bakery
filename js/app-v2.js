@@ -3080,6 +3080,44 @@ function oppslagOrdliste() {
 const skyForm = { epost: '', passord: '', modus: 'inn', melding: null, feil: null, jobber: false };
 let _harHentetNed = false;
 
+/* «Ble databasen satt opp riktig?»
+   SQL-en i SUPABASE.md kjøres for hånd, én gang, og går den halvveis gjennom
+   sier appen ingenting: den faller pent tilbake på anslagene og fortsetter. Det
+   er riktig i bruk og ubrukelig når man skal finne ut om det BLE riktig — man
+   må inn i SQL Editor for å se noe som helst.
+
+   Knappen leser én rad fra hver tabell og sier hva som svarte. Den skriver
+   ingenting, så den kan trykkes så mange ganger man vil. */
+let dbSjekk = { jobber: false, svar: null };
+function tegnDbSjekk() {
+  const boks = h('div', { style: 'margin-top:12px;border-top:1px solid var(--color-neutral-200);padding-top:10px' });
+  boks.appendChild(h('button', { class: 'btn-ghost', style: 'width:100%;font-size:.8rem',
+    disabled: dbSjekk.jobber ? '' : null,
+    onClick: async () => {
+      dbSjekk.jobber = true; dbSjekk.svar = null; render();
+      dbSjekk.svar = await Sky.sjekkOppsett();
+      dbSjekk.jobber = false; render();
+    } }, dbSjekk.jobber ? 'Sjekker …' : 'Sjekk databaseoppsettet'));
+  const s = dbSjekk.svar;
+  if (!s) return boks;
+  if (s.feil) { boks.appendChild(h('div', { class: 'varsel' }, s.feil)); return boks; }
+  const linje = (navn, res, hva) => h('div', { style: 'display:flex;gap:8px;align-items:baseline;margin-top:6px;font-size:.78rem' },
+    h('span', { style: 'flex:0 0 auto' }, res.ok ? '✅' : '❌'),
+    h('div', { style: 'min-width:0' },
+      h('b', null, navn), ' — ' + res.tekst,
+      h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);line-height:1.4' }, hva)));
+  boks.appendChild(linje('bakerstate', s.state, 'bakeloggen og innstillingene dine'));
+  boks.appendChild(linje('maskinkalibrering', s.kalib, 'delte friksjonsmålinger for maskinene'));
+  if (s.kalib.mangler) boks.appendChild(h('div', { class: 'varsel' },
+    h('b', null, 'Den delte tabellen mangler. '),
+    'Kjør SQL-en for «maskinkalibrering» fra SUPABASE.md i Supabase → SQL Editor. Alt annet i appen virker som før — friksjonstallene står som anslag til den er på plass.'));
+  else if (s.kalib.ok) boks.appendChild(h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:8px;line-height:1.45' },
+    s.kanSkrive
+      ? 'Begge tabellene svarer, og du har skrivetilgang — «Del målingen» dukker opp under Varmebalanse når du har kalibrert en maskin. Sjekken leser bare; om policyene er nøyaktig riktige ser du med kontrollspørringen nederst i SUPABASE.md.'
+      : 'Begge tabellene svarer. Du kan lese delte kalibreringer, men ikke skrive dem — det er bare eieren av appen som kan det.'));
+  return boks;
+}
+
 function tegnKonto() {
   if (typeof Sky === 'undefined' || !Sky.klar()) return null;
   const st = Sky.status();
@@ -3102,6 +3140,7 @@ function tegnKonto() {
       ' Prøv «Synk nå» når du har nett igjen, så kan du logge ut trygt.'));
     boks.appendChild(h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:8px;line-height:1.45' },
       'Logger du ut, lastes bakeloggen opp og fjernes fra denne enheten. Da ser ingen bakene dine uten å logge inn. De hentes ned igjen neste gang du logger inn.'));
+    boks.appendChild(tegnDbSjekk());
     return boks;
   }
   // Utlogget: registrer / logg inn

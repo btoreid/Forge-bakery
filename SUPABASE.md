@@ -136,3 +136,93 @@ verre enn en app med et gammelt tall.
 Endres e-posten, må begge policyene skrives om. De står som to separate policyer
 fordi PostgreSQL krever `with check` på insert og både `using` og `with check` på
 update — én felles policy ville ikke dekket begge riktig.
+
+---
+
+## Sjekk at det ble riktig
+
+Kjørte du feil spørring først, eller er du usikker på om alt gikk gjennom: kjør
+denne i SQL Editor. Den skriver ingenting — den leser bare skjemaet og gir én
+linje per regel, med ✅ eller ❌.
+
+```sql
+select sjekk,
+       case when ok then '✅ ok' else '❌ IKKE OK' end as status,
+       detalj
+from (
+  select 'bakerstate · tabellen finnes' as sjekk,
+         to_regclass('public.bakerstate') is not null as ok,
+         'holder din egen tilstand' as detalj
+  union all
+  select 'bakerstate · RLS er på',
+         coalesce((select relrowsecurity from pg_class
+                   where oid = to_regclass('public.bakerstate')), false),
+         'uten den kan hvem som helst lese alles data'
+  union all
+  select 'bakerstate · fire policyer (les/sett inn/oppdater/slett)',
+         (select count(*) from pg_policies
+          where schemaname = 'public' and tablename = 'bakerstate') = 4,
+         'fant ' || (select count(*) from pg_policies
+                     where schemaname = 'public' and tablename = 'bakerstate')
+  union all
+  select 'maskinkalibrering · tabellen finnes',
+         to_regclass('public.maskinkalibrering') is not null,
+         'den delte tabellen'
+  union all
+  select 'maskinkalibrering · RLS er på',
+         coalesce((select relrowsecurity from pg_class
+                   where oid = to_regclass('public.maskinkalibrering')), false),
+         'uten den kan hvem som helst overskrive kalibreringene'
+  union all
+  select 'maskinkalibrering · alle innloggede kan lese',
+         (select count(*) from pg_policies
+          where schemaname = 'public' and tablename = 'maskinkalibrering'
+            and cmd = 'SELECT') = 1,
+         'fant ' || (select count(*) from pg_policies
+                     where schemaname = 'public' and tablename = 'maskinkalibrering'
+                       and cmd = 'SELECT') || ' select-policy'
+  union all
+  select 'maskinkalibrering · kun eier kan skrive',
+         (select count(*) from pg_policies
+          where schemaname = 'public' and tablename = 'maskinkalibrering'
+            and cmd in ('INSERT', 'UPDATE')) = 2,
+         'skal være to: én insert, én update'
+  union all
+  select 'maskinkalibrering · e-posten står i begge skrivepolicyene',
+         (select count(*) from pg_policies
+          where schemaname = 'public' and tablename = 'maskinkalibrering'
+            and cmd in ('INSERT', 'UPDATE')
+            and coalesce(qual, '') || coalesce(with_check, '')
+                ilike '%bjorn@medthings.no%') = 2,
+         'skrivetilgangen henger på JWT-e-posten'
+  union all
+  select 'maskinkalibrering · INGEN slettepolicy',
+         (select count(*) from pg_policies
+          where schemaname = 'public' and tablename = 'maskinkalibrering'
+            and cmd = 'DELETE') = 0,
+         'med vilje — en kalibrering rettes ved å overskrives, ikke fjernes'
+) t
+order by ok, sjekk;
+```
+
+Alle ni skal si ✅. Er noen ❌, kjør SQL-en over på nytt — den er skrevet med
+`create table if not exists`, så den kan kjøres flere ganger uten skade.
+Policyene tåler det derimot ikke: `create policy` feiler hvis policyen finnes
+fra før. Får du «policy already exists», er den alt på plass — hopp over den.
+
+### Ble det liggende igjen noe fra en feil spørring?
+
+Denne lister ALT som finnes i `public`, så du ser om noe uventet står igjen:
+
+```sql
+select table_name as tabell,
+       (select count(*) from pg_policies p
+        where p.schemaname = 'public' and p.tablename = t.table_name) as antall_policyer
+from information_schema.tables t
+where table_schema = 'public' and table_type = 'BASE TABLE'
+order by table_name;
+```
+
+Det skal stå nøyaktig to rader: `bakerstate` (4 policyer) og `maskinkalibrering`
+(3). Står det flere tabeller, er de fra noe annet — en tom tabell gjør ingen
+skade, men `drop table public.<navn>;` rydder den bort.

@@ -7,6 +7,39 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 31.07.2026 (natt) — Databasesjekk i appen
+
+Bjørn: «tror jeg kjørte feil query først … har kjørt begge nå. sjekker du at det ble
+riktig?»
+
+Jeg kommer ikke til Supabase fra dette miljøet — proxyen blokkerer `supabase.co`, både
+fra skallet og fra Chromium i containeren. Så det måtte løses to andre veier.
+
+**1 · Kontrollspørring i `SUPABASE.md`.** Ni linjer med ✅/❌: at begge tabellene finnes,
+at RLS er på begge, at `bakerstate` har fire policyer, at `maskinkalibrering` har én
+select-policy og to skrivepolicyer, at e-posten faktisk står i begge skrivepolicyene, og
+at det IKKE finnes en slettepolicy. Pluss en spørring som lister alt i `public`, så man
+ser om noe ble liggende igjen fra en feil kjøring.
+
+**2 · «Sjekk databaseoppsettet» i Logg → Konto og sky.** Grunnen til at dette trengs i
+appen og ikke bare i SQL Editor: SQL-en kjøres for hånd, én gang, og går den halvveis
+gjennom **sier appen ingenting**. Den faller pent tilbake på anslagene og fortsetter —
+riktig oppførsel i bruk, og ubrukelig når man skal finne ut om det ble riktig.
+
+`Sky.sjekkOppsett()` leser én rad fra hver tabell og skiller de tre utfallene fra
+hverandre, som er hele poenget: PostgREST svarer `PGRST205`/«schema cache» når tabellen
+mangler, 200 når den finnes (også tom), og en annen feilkode når RLS avviser. Uten det
+skillet leses «finnes ikke» og «du får ikke lov» som samme sak — og de krever motsatt
+handling.
+
+Panelet skriver ✅/❌ per tabell og hva man gjør med et ❌. Den skriver ingenting til
+databasen, så den kan trykkes så mange ganger man vil. `dbSjekk` ligger som modulvariabel
+utenfor `S`, i likhet med `skyForm` — en diagnose er ikke data og skal ikke synkes.
+
+Tre nye sjekker i `test-r5.js` med stubbet Sky. Service worker til `forgebakery-v6`.
+
+---
+
 ## 31.07.2026 (kveld, sent) — Melprisene hentet fra nett, ikke arvet fra regnearket
 
 Bjørn: «under kostnad må du også kontrollere at det ikke er hentet fra mitt gamle
