@@ -982,6 +982,22 @@ function tegnDeigen(r) {
         onClick: () => { S.melOverstyr = null; oppdater(); } },
         'Tilbake til anbefalt blanding for ' + fmt(r.brodskala.pct, 0) + ' % grovt')));
   }
+  /* En kostnad uten dato er en påstand uten holdbarhet.
+     Prisene sto fra Bjørns gamle regneark og var flere år gamle — siktet
+     hvetemel på 10 kr/kg, sammalt rug på 30 der den ligger på 17. Nå står det
+     hvor de er hentet og når, og hvilke som ikke lot seg etterprøve. */
+  if (typeof PRIS_HENTET !== 'undefined') {
+    const anslag = r.mel.filter(m => {
+      const f = FLOURS.find(x => x.id === m.id);
+      return f && f.prisAnslag && (m.gram || 0) > 0;
+    });
+    melBoks.appendChild(h('div', { style: 'font-size:.68rem;color:var(--color-neutral-500);margin-top:8px;line-height:1.45' },
+      'Kiloprisene er hentet ' + PRIS_HENTET + ' fra ' + PRIS_KILDE + '.' +
+      (anslag.length
+        ? ' ' + anslag.map(m => m.navn).join(', ') + (anslag.length > 1 ? ' er anslag' : ' er et anslag') +
+          ' — de fantes ikke å slå opp, så kostnaden for dem er omtrentlig.'
+        : '')));
+  }
   melBoks.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:8px', onClick: () => { S.skjerm = 'oppslag'; S.oppslag = 'mel'; oppdater(); } },
     'Se melbiblioteket — fordeler, ulemper og tak ›'));
   wrap.appendChild(melBoks);

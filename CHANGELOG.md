@@ -7,6 +7,49 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 31.07.2026 (kveld, sent) — Melprisene hentet fra nett, ikke arvet fra regnearket
+
+Bjørn: «under kostnad må du også kontrollere at det ikke er hentet fra mitt gamle
+regneark, men at det faktisk er hentet fra nett med cirka oppdaterte priser 2026.»
+
+Det var arvet fra regnearket, og feilen var ikke bare at tallene var gamle — den var
+**systematisk skjev**:
+
+| mel | før | nå | |
+|---|---|---|---|
+| Siktet hvetemel (Møllerens/Regal) | 10,00 | 17,00 | ikke hyllepris på mange år |
+| Sammalt hvete fin | 18,00 | 17,90 | traff |
+| Sammalt rug fin | 30,00 | 17,50 | var nesten dobbelt for høy |
+| Sammalt rug grov | 30,00 | 16,70 | samme |
+| Durum semola (Caputo) | 24,00 | 66,40 | var under en tredel |
+| Bokhvetemel | 110,00 | 159,80 | |
+| Spelt siktet | 41,00 | 47,30 | |
+| Svedjerug sammalt | 54,00 | 56,40 | traff |
+| Havremel | 27,50 | 32,90 | |
+| Emmer siktet | 38,00 | 64,90 | var nesten halv pris |
+
+Retningen på skjevheten er verdt å merke seg: **siktet mel var satt for billig og rug
+for dyrt**, altså i motsatt retning av virkeligheten. «Hva koster det å bake grovt»
+ga derfor feil svar begge veier.
+
+Kilde er **Oda.no**, som oppgir kilopris per vare og dermed er sammenlignbar på tvers
+av pakningsstørrelser, supplert med Meny for 2 kg-posene av siktet hvetemel (der Odas
+1 kg-boks ikke er det folk faktisk kjøper). Frø og gryn er hentet samme sted.
+
+Ti varer lot seg ikke slå opp — sterkt hvetemel/manitoba (generisk), enkorn, kikertmel,
+havregryn, ruggryn, knekt hvete, hvetekli, byggflak, «annet mel» og sammalt rug fin.
+De står med `prisAnslag:true`, og **appen sier det**: melkortet skriver nå hvor prisene
+er hentet og når, og navngir dem som bare er anslått. Samme prinsipp som «mangler
+kalibrering» på maskinene — et tall uten dekning skal ikke se ut som et tall med.
+
+Et 800 g grovbrød koster nå 9–11 kr i mel mot 8 kr før; en ren loff 8 kr.
+
+`PRIS_HENTET` og `PRIS_KILDE` i `data.js` er datoen og kilden, eksponert så UI-et kan
+vise dem. Seks nye sjekker i `test-r5.js` vokter at ingen pris faller tilbake til et
+åpenbart utdatert nivå.
+
+---
+
 ## 31.07.2026 (kveld) — Bakefaglig review: fire ting appen sa som ville ødelagt brød
 
 Bakeren, den tekniske revieweren og databasereviewen leverte hver sin liste. Dette er

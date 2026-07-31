@@ -587,3 +587,30 @@ tall — da er de valgt, ikke arvet.
 
 Forfermenten holder rommets eller kjøleskapets temperatur, ikke sin egen: den
 har ingen egen temperatur før den har stått en stund, og ingen måler den.
+
+---
+
+## 31.07.2026 (sent) — Melprisene var arvet, ikke observert
+
+Feltet `kr` i `FLOURS` var dokumentert som «observert dagligvarepris, norsk marked, juli
+2026». Det stemte ikke: verdiene kom fra Bjørns gamle regneark og var flere år gamle.
+
+Feilen var **systematisk**, ikke tilfeldig: siktet hvetemel sto på 10 kr/kg (ikke
+hyllepris på mange år) og sammalt rug på 30 der den ligger på 17. Altså siktet for
+billig og grovt for dyrt — i motsatt retning av virkeligheten, og nettopp langs den
+aksen appen bruker prisene til å svare på: «hva koster det å bake grovere?»
+
+**Ny kilde:** Oda.no, kilopris per vare, hentet 31.07.2026. Oda oppgir kilopris direkte
+og er derfor sammenlignbar på tvers av pakningsstørrelser — en 1 kg-boks og en 2 kg-pose
+er ikke samme vare. For siktet hvetemel er 2 kg-posen brukt (Meny), fordi Odas 1 kg-boks
+på 21,90 ikke er det folk kjøper.
+
+**Ti varer lot seg ikke verifisere** og står med `prisAnslag:true`: sterkt
+hvetemel/manitoba (generisk), enkorn, kikertmel, havregryn, ruggryn, knekt hvete,
+hvetekli, byggflak, «annet mel» og sammalt rug fin. De er satt ut fra nabovarer i samme
+gruppe. Appen navngir dem i melkortet i stedet for å late som at alt er like godt kjent.
+
+`PRIS_HENTET` og `PRIS_KILDE` ligger i `data.js` og vises i UI-et. **Disse råtner** —
+matvarepriser flytter seg mer enn de fleste tror. Er datoen mer enn et år gammel,
+stemmer ikke kostnadsregnskapet lenger, og da skal den hentes på nytt, ikke justeres
+på slump.

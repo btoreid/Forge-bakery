@@ -223,6 +223,36 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     return !!p && /gjelder ikke for hånd/.test(p.textContent);
   }));
 
+  /* ---------------------------------------------------------------
+     G · Melprisene er hentet, ikke arvet fra et gammelt regneark
+     --------------------------------------------------------------- */
+  console.log('— Priser —');
+  const pris = await page.evaluate(async () => {
+    const FB = window.__FB, S = FB.S;
+    S.skjerm = 'deigen'; S.grov = 50; S.melOverstyr = null; FB.oppdater();
+    await new Promise(r => setTimeout(r, 200));
+    const finn = id => (FLOURS.find(f => f.id === id) || {}).kr;
+    const r = regn(S);
+    return {
+      hentet: typeof PRIS_HENTET !== 'undefined' ? PRIS_HENTET : null,
+      siktet: finn('hvetemel'), rugFin: finn('samalt_rug'), sammaltHvete: finn('samalt_hvete'),
+      perBrod: r.kost.perBrod,
+      tekst: document.body.innerText,
+      // Ingen pris skal stå igjen på en verdi som var åpenbart utdatert.
+      billigst: Math.min.apply(null, FLOURS.map(f => f.kr))
+    };
+  });
+  ok('prisdatoen er oppgitt', !!pris.hentet, pris.hentet);
+  ok('appen forteller hvor prisene er hentet fra', /hentet 31\. juli 2026/.test(pris.tekst));
+  /* De to som var mest feil: siktet hvetemel sto på 10 kr/kg (ikke hyllepris på
+     mange år) og sammalt rug på 30 der den ligger rundt 17. */
+  ok('siktet hvetemel er ikke lenger 10 kr/kg', pris.siktet >= 14, pris.siktet + ' kr/kg');
+  ok('sammalt rug er ikke lenger dyrere enn sammalt hvete',
+    pris.rugFin <= pris.sammaltHvete + 2, 'rug ' + pris.rugFin + ' vs hvete ' + pris.sammaltHvete);
+  ok('ingen mel ligger under 15 kr/kg', pris.billigst >= 15, 'billigst ' + pris.billigst + ' kr/kg');
+  ok('kostnaden per brød er i et rimelig leie', pris.perBrod > 4 && pris.perBrod < 40,
+    pris.perBrod.toFixed(1) + ' kr');
+
   /* Skjermbilder — «rendrer uten feil» er ikke det samme som «ser riktig ut». */
   await page.evaluate(async () => {
     const FB = window.__FB, S = FB.S;

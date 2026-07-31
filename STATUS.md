@@ -318,6 +318,11 @@ egendefinert. Full liste med begrunnelser i `CHANGELOG.md` (31.07 kveld) og
 Uten den går appen videre på klasseanslagene og skriver «mangler kalibrering» — som er
 riktig oppførsel, men delingen virker ikke før tabellen finnes.
 
+**Melprisene er hentet på nytt (31.07 sent)** fra Oda.no, med dato og kilde i
+`PRIS_HENTET`/`PRIS_KILDE`. De gamle kom fra Bjørns regneark og var systematisk skjeve:
+siktet mel for billig, rug for dyrt. Ti varer lot seg ikke slå opp og står med
+`prisAnslag:true` — appen navngir dem i melkortet.
+
 ## Åpne punkter
 
 **Bjørn har ikke bestemt seg for melvalg.** Han har fått rangeringen etter smak per tapt
