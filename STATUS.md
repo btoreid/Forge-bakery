@@ -31,8 +31,17 @@ skjer, ikke hvor mye emnet reiser seg. `loft = ovnslosBasis × grovFaktor × fro
 hydFaktor × ffFaktor`, klemt 20–100. Melvekten løses i lukket form `m* = a/(1+b)` (ikke
 iterasjon — den divergerte).
 
-**Live på GitHub Pages** med `noindex`. Auto-deploy ved push til
-`claude/forge-bakery-mobile-v2-l4ean3`.
+**Live på GitHub Pages** med `noindex`. Auto-deploy ved push til **`master`**.
+
+> **Grenen ble flyttet 31.07 (natt).** Fram til da lå V2 på
+> `claude/forge-bakery-mobile-v2-l4ean3`, og Pages deployet den grenen mens `master`
+> fortsatt bare hadde V1. To sannheter samtidig er en felle som venter på å smelle:
+> workflowene kjøres uansett bare fra standardgrenen, og hver ny gren måtte huske hvor
+> den skulle pushe. Nå er `master` både standardgren, det som er live, og det som
+> utvikles — ett navn, ingen valg å ta.
+>
+> `claude/forge-bakery-mobile-v2-l4ean3` og `…-67w83p` står igjen som historikk. De er
+> begge inneholdt i `master` og kan slettes når som helst.
 
 ### Nylig levert: innlogging og sky-lagring (30.07 natt)
 

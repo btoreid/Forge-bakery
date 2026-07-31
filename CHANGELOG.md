@@ -7,6 +7,34 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 31.07.2026 (natt) — V2 er flyttet til `master`
+
+Bjørn: «burde vi merget til main nå og jobbet derfra, så det ikke blir noe forvirring
+framover?»
+
+Ja. Til nå har repoet hatt to sannheter: hele V2 lå på
+`claude/forge-bakery-mobile-v2-l4ean3` og Pages deployet den grenen, mens `master` —
+standardgrenen — fortsatt bare hadde V1 og supabase-ping-workflowen. Det er en felle som
+venter på å smelle, av tre grunner: planlagte workflows kjøres **kun** fra
+standardgrenen (derfor måtte ping-fila ligge et helt annet sted enn koden den pinger
+for), hver ny økt måtte få beskjed om hvor den skulle pushe, og «hva er egentlig live»
+hadde ikke et opplagt svar.
+
+Rekkefølgen som ble brukt, og hvorfor: `master` hadde én commit `l4ean3` manglet
+(workflow-fila). Den ble hentet inn i `l4ean3` FØRST, så `master` kunne fast-forwarde i
+stedet for å få en merge-commit — historikken forblir lineær, og det er lettere å lese
+tilbake i.
+
+**Rekkefølgen på selve byttet er den farlige biten.** Pages ble pekt om til `master`
+mens `master` fortsatt var V1, så i noen minutter serverte live den gamle appen.
+Riktig rekkefølge er å pushe `master` først og flippe Pages etterpå — da ser ingen noe
+til overgangen.
+
+Fra nå: `master` er standardgren, det som er live og det som utvikles.
+`…-l4ean3` og `…-67w83p` står igjen som historikk, begge inneholdt i `master`.
+
+---
+
 ## 31.07.2026 (natt) — Databasesjekk i appen
 
 Bjørn: «tror jeg kjørte feil query først … har kjørt begge nå. sjekker du at det ble
