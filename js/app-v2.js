@@ -819,7 +819,7 @@ function tegnDeigen(r) {
   // 1 · Grovhet — segmenterte piller (0/10/25/40/60/80), som designet
   if (!erPreset) {
     const bk = r.brodskala;
-    const trinn = [0, 25, 50, 75, 100];
+    const trinn = [0, 10, 25, 50, 75, 100];
     const boks = h('div', { class: 'kort' },
       h('div', { class: 'kort-hode' },
         h('span', { class: 'kort-num', style: 'display:inline' }, '1 · Hvor grovt'),

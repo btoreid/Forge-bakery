@@ -111,7 +111,10 @@ input[type=range] { accent-color: var(--color-accent); }
 .topp h1 {
   font-family: var(--font-heading); font-weight: 400;
   font-size: 1.3rem; line-height: 1.15; margin: 0;
-  display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
+  /* `center`, ikke `baseline`: pillen har egen bakgrunn og padding, så
+     baseline-justering la BOKSEN for lavt selv om skriften stod riktig. Med en
+     tekstetikett hadde baseline vært rett; med en boks er det midten som teller. */
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
 }
 /* Stegtallet er en etikett foran tittelen, ikke en overskrift over den. */
 .topp h1 .steg-tall {

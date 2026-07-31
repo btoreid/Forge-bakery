@@ -74,7 +74,7 @@ const FLOURS = [
 
   // Grovt hvete
   { id:'samalt_hvete',    navn:'Sammalt hvete fin',                 gruppe:'Grovt',        protein:13.4, absorpsjon:1.19, styrke:'svak-middels',  maxPct:60,  kr:18.0, grov:1,
-    notat:'Fin kli kutter glutenet mer enn grov kli gjør. Bløtlegg eller kjør lang autolyse.' },
+    notat:'Fin kli skader glutenet MER enn grov kli gjør — mer overflate gir mer kli–gluten-kontakt. Bløtlegg eller kjør lang autolyse.' },
   { id:'samalt_hvete_grov',navn:'Sammalt hvete grov',               gruppe:'Grovt',        protein:13.4, absorpsjon:1.17, styrke:'svak-middels',  maxPct:50,  kr:18.0, grov:1,
     notat:'Grov kli skader volumet mindre enn fin kli (målt). Bør bløtlegges 30 min i halve vannmengden.' },
   { id:'fullkorn_fibra',  navn:'Fullkornshvete ekstra finmalt',     gruppe:'Grovt',        protein:13.2, absorpsjon:1.16, styrke:'middels',       maxPct:100, kr:20.0, grov:1,
@@ -374,7 +374,7 @@ const PRESETS = [
 const BROTYPER = [
   { id:'loff', navn:'Loff', undertittel:'Fint, mykt, maks løft', ikon:'🍞',
     rute:'bygg', preset:'loff', grovhet:0, harForm:true, antall:2, vekt:800,
-    passer:'Når krummen skal være lys og myk og løftet størst mulig. Ingen kli som kutter glutentrådene, så dette er referansen alt annet måles mot.',
+    passer:'Når krummen skal være lys og myk og løftet størst mulig. Ingen kli som binder seg til glutenet, så dette er referansen alt annet måles mot.',
     merk:'Vil du ha loffens krumme med litt mer smak, er 10 % grovt det best dokumenterte byttet som finnes — flytt grovhetsdialen ett hakk opp i «Bygg brød», så er du der.' },
 
   { id:'grovbrod', navn:'Halvgrovt brød', undertittel:'Du velger grovheten, 0–80 %', ikon:'🌾',
@@ -476,7 +476,13 @@ const FORMER = [
    Legger du frø i tillegg, endrer den seg IKKE — det er hele poenget med at
    ordningen holder frø utenfor.                                            */
 const GROVHET = [
-  /* Runde trinn: 0 · 25 · 50 · 75 · 100.
+  /* Trinn: 0 · 10 · 25 · 50 · 75 · 100.
+     De fire øverste er runde OG treffer toppen av hver klasse på Brødskala'n.
+     10 % står i tillegg fordi det er et eget, veldokumentert punkt: tydelig mer
+     smak for praktisk talt ingenting i tapt løft. Det er ikke en klassegrense,
+     det er det beste byttet på hele skalaen, og da skal det være ett trykk unna.
+
+     Gammel kommentar om runde trinn:
      Den gamle trappa (0/10/25/40/60/80) hadde tall som verken var runde eller
      landet på noe. De nye gjør begge deler — hvert trinn treffer TOPPEN av sin
      klasse på Brødskala'n (fint 0–25,9 · halvgrovt 26–50,9 · grovt 51–75,9 ·
@@ -490,19 +496,23 @@ const GROVHET = [
     mel:[{id:'regal_standard', pct:100}],
     om:'Ren siktet hvete. Maksimal glutenstyrke, maksimalt ovnsløft, minst smak.',
     ovnslos:'Referansen. Alt annet måles mot denne.' },
-  { id:1, navn:'Fint, øvre kant', kort:'25 % grovt', klasse:'Fint brød', basisHyd:70,
+  { id:1, navn:'Loff+', kort:'10 % grovt', klasse:'Fint brød', basisHyd:70,
+    mel:[{id:'regal_standard', pct:90}, {id:'samalt_hvete', pct:10}],
+    om:'Ekspertenes svar på «litt sunnere loff», og det best dokumenterte byttet mellom smak og struktur som finnes: 10–20 % grovt gir tydelig mer smak til nesten ingen krummekostnad. Merk at dette fortsatt er et FINT brød på Brødskala\'n; «litt sunnere» er en smaksforskjell, ikke en ernæringsmessig.',
+    ovnslos:'Praktisk talt uendret. Dette er gratis smak.' },
+  { id:2, navn:'Fint, øvre kant', kort:'25 % grovt', klasse:'Fint brød', basisHyd:70,
     mel:[{id:'regal_standard', pct:75}, {id:'samalt_hvete', pct:19}, {id:'samalt_rug', pct:6}],
     om:'Så grovt du kan gå og fortsatt selge det som fint brød — 26 % ville flyttet det til halvgrovt. Tydelig kornsmak, fortsatt åpen krumme. Rugen kommer inn her fordi den bringer amylase, som gir skorpefarge og mat til gjæren sent i hevingen.',
     ovnslos:'5–10 % lavere enn loff. Merkbart, men ikke noe du angrer på.' },
-  { id:2, navn:'Halvgrovt', kort:'50 % grovt', klasse:'Halvgrovt brød', basisHyd:70,
+  { id:3, navn:'Halvgrovt', kort:'50 % grovt', klasse:'Halvgrovt brød', basisHyd:70,
     mel:[{id:'regal_standard', pct:50}, {id:'fullkorn_fibra', pct:20}, {id:'samalt_hvete', pct:20}, {id:'samalt_rug', pct:10}],
-    om:'Toppen av det halvgrove båndet, og godt over Nøkkelhullets 30 %-grense. Her betaler du for alvor: kliens skarpe kanter kutter glutentrådene fysisk. Krever mer vann, kortere elting og lavere hevemål. Halvparten er fortsatt siktet mel, så et frittstående emne holder seg.',
+    om:'Toppen av klassen «halvgrovt» — 51 % ville flyttet det til grovt — og godt over Nøkkelhullets 30 %-grense. Her betaler du for alvor: klien binder seg til glutenproteinene og hindrer dem i å bygge nettverk. Krever mer vann, kortere elting og lavere hevemål. Halvparten er fortsatt siktet mel, så et frittstående emne holder seg.',
     ovnslos:'30–40 % lavere enn loff. Frittstående går, men form er tryggere.' },
-  { id:3, navn:'Grovt', kort:'75 % grovt', klasse:'Grovt brød', basisHyd:70,
+  { id:4, navn:'Grovt', kort:'75 % grovt', klasse:'Grovt brød', basisHyd:70,
     mel:[{id:'regal_standard', pct:25}, {id:'fullkorn_fibra', pct:40}, {id:'samalt_hvete', pct:25}, {id:'samalt_rug', pct:10}],
-    om:'Toppen av det grove båndet. Fullkornshveten bærer mesteparten fordi den er malt av bakekraftige sorter og tåler å være hovedmel; sammalt hvete alene ville tatt for mye av strukturen. Bare en firedel siktet mel igjen å bygge nettverk av.',
+    om:'Toppen av klassen «grovt» — 76 % ville flyttet det til ekstra grovt. Fullkornshveten bærer mesteparten fordi den er malt av bakekraftige sorter og tåler å være hovedmel; sammalt hvete alene ville tatt for mye av strukturen. Bare en firedel siktet mel igjen å bygge nettverk av.',
     ovnslos:'45–55 % lavere enn loff. Form er det trygge valget, og deigen trenger mer vann.' },
-  { id:4, navn:'Ekstra grovt', kort:'100 % grovt', klasse:'Ekstra grovt brød', basisHyd:70,
+  { id:5, navn:'Ekstra grovt', kort:'100 % grovt', klasse:'Ekstra grovt brød', basisHyd:70,
     mel:[{id:'fullkorn_fibra', pct:55}, {id:'samalt_hvete', pct:30}, {id:'samalt_rug', pct:15}],
     om:'Ingen siktet hvete i det hele tatt — alt melet er grovt. Dette er et formbrød, ikke fordi det smaker dårlig, men fordi det ikke finnes nok sammenhengende gluten til å holde et frittstående emne gjennom ovnsløftet. Regn med tett, saftig krumme og lang holdbarhet framfor store hull.',
     ovnslos:'60–70 % lavere enn loff. Bruk form, mer vann, og la det kjøle helt før du skjærer.' }
@@ -631,7 +641,7 @@ const TILLEGG = [
     ned:'Bedre løft, men du mister det sterkeste ikke-sure smaksgrepet du har.' },
   { id:'hvetekli',   type:'fro',   navn:'Hvetekli',        pct:5,  min:2,  max:10,
     hvorfor:'Ren fiberøkning uten å bytte mel. Praktisk hvis du vil ha loffens krumme men mer fiber.',
-    obs:'Oppfører seg nesten som mel og kutter gluten som mel gjør. Regnes derfor mot grovheten.',
+    obs:'Oppfører seg nesten som mel og fortynner glutenet som grovt mel gjør. Regnes derfor mot grovheten.',
     opt:'0–3 % hvis løft er målet. Kli er den dyreste fiberkilden i struktur.',
     opp:'Mer fiber. Men målt er ren kli ca. 1,5× så skadelig for volumet som frø ved samme vektandel. Laboratoriemålt vannbindingsevne er 4–6 g per gram (sentrifugert WHC), men i deig gir kliet mye av det tilbake — praktisk binding er ca. 1 g kaldt og 1,7 g skåldet, som er tallene appen regner med. Fiberens fenoler hemmer dessuten glutendannelsen kjemisk.',
     ned:'Merkbart bedre løft. Vil du ha fiber billigere, bytt til litt sammalt mel i stedet.' },
@@ -715,7 +725,7 @@ const MEL_INFO = {
 
   samalt_hvete: { glutenbidrag:'fortynner', tilgang:'daglivare',
     plus:['Mye smak for relativt lite volumtap','Billig'],
-    minus:['Fin kli kutter glutenfilmen mer enn grov gjør','Krever bløtlegging eller lang autolyse'] },
+    minus:['Fin kli skader glutenet mer enn grov gjør — mer overflate, mer binding','Krever bløtlegging eller lang autolyse'] },
   samalt_hvete_grov: { glutenbidrag:'fortynner', tilgang:'daglivare',
     plus:['Grov kli skader volumet mindre enn fin kli (målt)','Tydelig kornsmak'],
     minus:['Bør bløtlegges 30 min','Vindusrute blir umulig'] },

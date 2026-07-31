@@ -462,3 +462,34 @@ vanlige rådet. Over ~3 timer snur det, og appen advarer om det.
 
 **Skal kalibreres mot Bjørns egne bak** hvis løftgevinsten skal justeres. Ikke gjett den
 bort — den er med vilje satt så lavt at den ikke kan lyve mye.
+
+---
+
+## 31.07.2026 (natt) — Rettet fagfeil: kli «kutter» ikke glutentråder
+
+Bjørn husket at den mekaniske forklaringen var motbevist. Det stemmer, og appen
+gjentok den fem steder.
+
+**Det appen sa:** «kliens skarpe kanter kutter glutentrådene fysisk».
+
+**Hva som faktisk er vist:** Noort m.fl. (2010), *Journal of Cereal Science*,
+«The effect of particle size of wheat bran fractions on bread quality — evidence
+for fibre–protein interactions». Studien konkluderer at skaden skyldes
+**fiber–gluten-interaksjoner**, og eksplisitt IKKE fortynning av gluten,
+punktering av gassceller, eller partikler som fysisk forstyrrer nettverket.
+
+**Det avgjørende beviset ligger i partikkelstørrelsen:** effekten blir VERRE når
+klien males finere. Kuttehypotesen forutsier det motsatte — mindre og rundere
+partikler skulle skåret mindre. At finere kli skader mer, passer derimot presist
+med interaksjonsforklaringen: mindre partikler har større samlet overflate per
+volum, altså mer kli-mot-gluten-kontakt.
+
+Appens egen `FLOURS`-tekst inneholdt allerede observasjonen («fin kli kutter
+glutenet mer enn grov») — altså det som motbeviser mekanismen den selv oppga.
+
+Rettet fem steder i `data.js`: grovhetstrinnet på 50 %, `passer`-teksten for
+siktet hvete, `notat` og `minus` for fin kli, og `obs` for knekt hvete.
+Formuleringen er nå at klien **binder seg til glutenproteinene og hindrer dem i
+å bygge nettverk**, og at finere kli skader mer fordi den har mer overflate.
+
+Kilde: <https://www.sciencedirect.com/science/article/abs/pii/S0733521010000524>
