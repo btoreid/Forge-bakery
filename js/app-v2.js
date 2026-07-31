@@ -2556,7 +2556,12 @@ function tegnTopplinjeTimer() {
    prosess-skjermen så «hvor lenge igjen» er ett blikk unna. */
 function tegnTimerpanel() {
   const now = Date.now();
-  const timere = (S.timere || []).slice().sort((a, b) => a.slutt - b.slutt);
+  /* STABIL rekkefølge (slik de ble startet), IKKE sortert på gjenstående tid.
+     Sorterte man på tid, hoppet radene om plass i det du justerte: trykket du
+     +5 til én timer passerte en annen, byttet radene stå, og neste trykk på
+     samme skjermplass traff plutselig en ANNEN timer — «man flytter på flere
+     timere samtidig». Fast rekkefølge holder raden (og +5/−5) på sin egen timer. */
+  const timere = (S.timere || []).slice();
   if (!timere.length) return null;
   const boks = h('div', { class: 'timer-panel' },
     h('div', { class: 'seksjonstittel', style: 'margin:2px 2px 6px' }, timere.length > 1 ? timere.length + ' timere' : 'Timer'),
