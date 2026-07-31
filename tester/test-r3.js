@@ -18,7 +18,7 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   console.log('— Brødtype-bytte —');
   // legg på et særpreg som IKKE skal følge med til ciabatta
   await page.evaluate(() => { const FB = window.__FB; FB.S.hyd = 80; FB.S.tillegg = { solsikke: 10 }; FB.render(); });
-  await page.click('.valgkort:has-text("Ciabatta")');
+  await page.click('.brodvalg-hoved:has-text("Ciabatta")');
   await page.waitForTimeout(200);
   ok('bekreftelseskort vises', await page.locator('.varsel:has-text("starte på nytt?")').count() === 1);
   ok('brødtype IKKE byttet ennå', await page.evaluate(() => window.__FB.S.brotype) === 'grovbrod');
@@ -28,7 +28,7 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await page.waitForTimeout(200);
   ok('avbryt lukker kortet', await page.locator('.varsel:has-text("starte på nytt?")').count() === 0);
   // så bekreft
-  await page.click('.valgkort:has-text("Ciabatta")');
+  await page.click('.brodvalg-hoved:has-text("Ciabatta")');
   await page.waitForTimeout(200);
   await page.click('button:has-text("Ja, start på nytt")');
   await page.waitForTimeout(250);
@@ -38,15 +38,24 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   ok('hyd tilbake til standard', st.hyd === 75, String(st.hyd));
   ok('preset-forferment synket (biga)', st.ff === true && st.ffType === 'biga');
 
-  console.log('— Om dette baket —');
-  const om = page.locator('details:has-text("Om dette baket")');
-  ok('om-baket-kort finnes', await om.count() === 1);
-  await om.locator('summary').click();
-  await page.waitForTimeout(200);
-  const omTekst = await om.innerText();
-  ok('beskrivelse av ciabatta', /biga/i.test(omTekst));
+  /* «Om dette baket» er flyttet fra ett kollapskort for den valgte baksten til
+     en ⓘ per brødtype — da kan man lese hva en ciabatta ER før man bytter til
+     den, som er når man lurer. Stegkjeden følger fortsatt med for den VALGTE. */
+  console.log('— Om dette baket (ⓘ per brødtype) —');
+  const raden = page.locator('.brodvalg:has-text("Ciabatta")');
+  await raden.locator('.info-ring').click();
+  await page.waitForTimeout(250);
+  const omTekst = await page.locator('.info-boks').first().innerText();
+  ok('beskrivelse av ciabatta', /biga/i.test(omTekst), omTekst.slice(0, 60));
   ok('prosess-steg fra kjeden', /Prosessen · totalt/.test(omTekst) && /Stek/.test(omTekst));
   await page.screenshot({ path: SHOT('r3-ombaket') });
+  // en ikke-valgt bakst viser beskrivelsen, men ingen oppdiktet kjede
+  await page.locator('.brodvalg:has-text("Focaccia")').locator('.info-ring').click();
+  await page.waitForTimeout(250);
+  const omAnnen = await page.locator('.info-boks').first().innerText();
+  ok('ikke-valgt bakst: beskrivelse uten kjede', /salamoia|olje/i.test(omAnnen) && !/Prosessen · totalt/.test(omAnnen));
+  await page.locator('.brodvalg:has-text("Focaccia")').locator('.info-ring').click();
+  await page.waitForTimeout(150);
 
   console.log('— Stekeprofiler —');
   await page.click('#bunnmeny button:has-text("Oppslag")');

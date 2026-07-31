@@ -100,7 +100,8 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   const komp = page.locator('.kort:has-text("Hva vil du gjøre med endringen?")');
   ok('kompensasjonspanel vises når tillegg er på', await komp.count() === 1);
   const kompTekst = await komp.innerText();
-  ok('panelet viser meltapet', /melet faller/.test(kompTekst));
+  // Formuleringen er endret; det som skal holde er at tapet oppgis i gram.
+  ok('panelet viser meltapet i gram', /faller melet\s+[\d\s ]+ g/.test(kompTekst), kompTekst.split('\n')[1]);
   ok('panelet har «Øk deigen»-knapp', /Øk deigen/.test(kompTekst));
   // trykk «Øk deigen» og sjekk at vekta faktisk økte (Brød-fanen)
   const melFoer = await page.locator('.kort:has-text("2 · Meltypene") .h-meta').innerText();
@@ -108,6 +109,20 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await page.waitForTimeout(250);
   const melEtter = await page.locator('.kort:has-text("2 · Meltypene") .h-meta').innerText();
   ok('melmengden økte etter «Øk deigen»', melFoer !== melEtter, melFoer + ' → ' + melEtter);
+
+  /* Regresjon fra Bjørns runde: «Øk deigen» var en HANDLING som skrev til
+     brødvekten, så den nye vekten ble grunnlag for neste utregning og deigen
+     vokste for hvert trykk. Nå er den et valg med to tilstander. Tre trykk til
+     skal ikke flytte noe. */
+  const vektEtter1 = await page.locator('#bunnlinje, .bunnlinje').first().innerText();
+  for (let i = 0; i < 3; i++) { await komp.locator('button:has-text("Øk deigen")').click(); await page.waitForTimeout(150); }
+  const vektEtter4 = await page.locator('#bunnlinje, .bunnlinje').first().innerText();
+  ok('«Øk deigen» akkumulerer IKKE ved gjentatte trykk', vektEtter1 === vektEtter4, vektEtter1.replace(/\n/g, ' ') + ' → ' + vektEtter4.replace(/\n/g, ' '));
+  // og den skal kunne slås av igjen
+  await komp.locator('button:has-text("Behold brødvekten")').click();
+  await page.waitForTimeout(200);
+  const melAv = await page.locator('.kort:has-text("2 · Meltypene") .h-meta').innerText();
+  ok('«Behold brødvekten» slår kompensasjonen av igjen', melAv === melFoer, melAv);
 
   // 9: dose–respons som ± mot normalen
   const dr = page.locator('.kort:has-text("Hva valgene koster")');

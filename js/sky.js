@@ -115,7 +115,11 @@ async function glemtPassord(epost) {
 async function hentNed() {
   if (!klient || !bruker) return null;
   const { data, error } = await klient.from(TABELL).select('state, oppdatert').eq('bruker_id', bruker.id).maybeSingle();
-  if (error) { sisteFeil = norsk(error); synkStatus = 'feil'; varsle(); return null; }
+  // Skill mellom «leseforsøket feilet» og «det ligger ingenting der». Begge ga
+  // før null, og kalleren tolket null som tomt og lastet opp sin egen tilstand —
+  // altså kunne et nettverksglipp eller en RLS-hikke overskrive historikken i
+  // skyen med det enheten tilfeldigvis hadde lokalt.
+  if (error) { sisteFeil = norsk(error); synkStatus = 'feil'; varsle(); return { feil: sisteFeil }; }
   if (!data || !data.state) return null;
   return { state: data.state, oppdatert: data.oppdatert };
 }

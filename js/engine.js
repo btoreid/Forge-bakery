@@ -775,6 +775,63 @@ function melblandingForGrov(grov) {
   return blad.map(m => ({ id: m.id, pct: m.pct / sum * 100 }));
 }
 
+/* ---------- Brukerens egen melblanding ----------
+   `state.melOverstyr` er [{id, pct}] og slår både preset og grovhetstrappa. Den
+   valideres her og ikke der den brukes, så en korrupt lagret tilstand (ukjent
+   meltype, NaN-prosent, tom liste) faller stille tilbake på den utledede
+   blandingen i stedet for å gi NaN gjennom hele oppskriften. */
+function gyldigOverstyring(liste) {
+  if (!Array.isArray(liste) || !liste.length) return null;
+  const rein = liste
+    .filter(m => m && FLOURS.some(f => f.id === m.id) && isFinite(m.pct) && m.pct >= 0)
+    .map(m => ({ id: m.id, pct: +m.pct }));
+  if (!rein.length || rein.reduce((s, m) => s + m.pct, 0) <= 0) return null;
+  return rein;
+}
+
+/* ---------- Gram inn, andel ut ----------
+   Melmengden avhenger av prosentene OG prosentene av melmengden: skriver du
+   500 g av en meltype, flytter det melTotal, som flytter hva 500 g utgjør i
+   prosent. Derfor itereres det til det står stille — seks runder holder langt
+   forbi vektas oppløsning.
+
+   Begge lever her, ikke i app-v2.js, fordi de REGNER. Appen kaller dem fra en
+   klikkhandler og tegner resultatet.                                          */
+function settMelGram(state, i, gram) {
+  const grunn = gyldigOverstyring(state.melOverstyr) || regn(state).melListe;
+  const liste = grunn.map(m => ({ ...m }));
+  if (!liste[i]) return liste;
+  const maal = Math.max(0, gram);
+  for (let n = 0; n < 6; n++) {
+    const r = regn({ ...state, melOverstyr: liste });
+    if (!isFinite(r.melTotal) || r.melTotal <= 0) break;
+    const sum = liste.reduce((s, m) => s + m.pct, 0) || 100;
+    const andreSum = sum - liste[i].pct;
+    // ny_pct / (ny_pct + andreSum) = ønsket andel  →  løst for ny_pct
+    const andel = Math.min(0.99, Math.max(0, maal / r.melTotal));
+    liste[i].pct = andreSum > 0
+      ? Math.max(0, andel * andreSum / Math.max(1 - andel, 1e-6))
+      : 100;
+  }
+  return liste;
+}
+/* Vann i gram → hydrering i prosent. Samme gjensidige avhengighet: vannet er
+   melTotal × hyd, og melTotal faller når hydreringen stiger i en fast deigvekt. */
+function settVannGram(state, gram) {
+  let hyd = state.hyd ?? 75;
+  const maal = Math.max(0, gram);
+  for (let n = 0; n < 6; n++) {
+    const r = regn({ ...state, hyd });
+    if (!isFinite(r.melTotal) || r.melTotal <= 0) break;
+    // vannTotal = melTotal × hydrering + vannet frøene drar med seg. Skriver du
+    // 700 g, mener du alt vannet du heller i — så frøvannet trekkes fra før
+    // hydreringen løses, ellers ville hvert frøtillegg forskjøvet tallet.
+    const froVann = r.vannTotal - r.melTotal * (hyd / 100);
+    hyd = Math.max(50, Math.min(100, (maal - froVann) / r.melTotal * 100));
+  }
+  return Math.round(hyd * 10) / 10;
+}
+
 /* tillegg {id: pct} → froListe [{id, gram, varmt}] + smak-parametre.
    `type:'fro'` blir frø med gram = melTotal · pct/100 (fikspunkt løses i regn()),
    `type:'smak'` skrives til sitt `felt` (honningPct, maltPct, oljePct …).
@@ -812,7 +869,11 @@ function regn(state) {
   const preset = bt.rute === 'preset' ? PRESETS.find(p => p.id === bt.preset) : null;
 
   // Melblanding: preset låser sin egen; bygg-ruta utleder av grov-skyveren.
-  const melListe = preset ? preset.mel.map(m => ({ ...m })) : melblandingForGrov(state.grov ?? 40);
+  // `melOverstyr` er brukerens egen blanding og slår begge — den settes når man
+  // skriver inn gram eller prosent på en meltype, og nullstilles av grovhets-
+  // trinnene (ellers ville dialen sluttet å virke uten at noe sa fra).
+  const melListe = gyldigOverstyring(state.melOverstyr)
+    || (preset ? preset.mel.map(m => ({ ...m })) : melblandingForGrov(state.grov ?? 40));
 
   // Hydrering og salt: preset eier sine, ellers brukerens valg.
   const hyd = (preset ? preset.hydrering : (state.hyd ?? 75)) / 100;
@@ -837,11 +898,27 @@ function regn(state) {
   // gir det eksakte fikspunktet m* = a/(1+b), med beregnOppskrift selv som eneste
   // kilde (ingen duplisert perMel-formel som kan komme i utakt med motoren).
   const smak = tilleggOppdelt(state.tillegg, 1).smak;
+
+  /* Kompensasjon for tillegg (`okDeig`): tillegg tar plass i en fast deigvekt, så
+     melet faller. Er valget på, skaleres deigvekten opp til melmengden er den
+     samme som uten tillegg.
+
+     Regnes HER, av state, og skriver aldri til `state.vekt`. Før satte knappen
+     `S.vekt` til den kompenserte vekten — og da ble den nye vekten selv grunnlag
+     for neste utregning, så hvert trykk økte deigen på nytt, i det uendelige.
+     `state.vekt` er brukerens valgte brødvekt og skal forbli det.               */
+  let vektPerBrod = state.vekt || 900;
+  if (state.okDeig && Object.keys(state.tillegg || {}).length) {
+    const uten = regn({ ...state, tillegg: {}, okDeig: false });
+    const med  = regn({ ...state, okDeig: false });
+    if (med.melTotal > 0 && isFinite(uten.melTotal)) vektPerBrod *= uten.melTotal / med.melTotal;
+  }
+
   const oppskrift = (gjaerPct, mFro) => beregnOppskrift({
     melListe, froListe: tilleggOppdelt(state.tillegg, mFro).froListe,
     hydrering: hyd, saltPct, ...smak,
     gjaerPct, gjaerType: 'torr', forferment,
-    antall: state.antall || 1, vektPerBrod: state.vekt || 900,
+    antall: state.antall || 1, vektPerBrod,
     froVannPaaToppen: state.froVannPaaToppen !== false
   });
   const losMel = (gjaerPct) => {

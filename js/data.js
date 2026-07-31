@@ -167,6 +167,24 @@ const BAKE_PROFILES = [
   { id:'brod_600', navn:'Åpen steking, mindre emner', anbefaltTil:'brød rundt 600 g', vekt:'600 g', hydrering:'70–75 %',
     inn:260, ned:230, nedNaar:'straks', damp:'som over', dampTid:'15 min',
     rist:'nederste tredel', tid:'35–40 min', kjerne:'96–98 °C', luft:'damp ut etter 17 min', notat:'' },
+  /* Vanlig ovnssteking — stekebrett eller brødform, ingen forvarmet masse og
+     ingen dampkar. Dette er måten de fleste faktisk baker på, og den manglet
+     helt: alle de andre profilene forutsetter stein, stål eller gryte.
+
+     Tallene er satt lavere og lengre enn de andre med vilje, og grunnen er
+     fysisk: et tynt stekebrett har nesten ingen lagret varme å gi fra seg.
+     15 mm stål lagrer ca. 55 700 J/m²K (tallet appen bruker ellers); et 1 mm
+     aluminiumsbrett lagrer 2 700 · 900 · 0,001 ≈ 2 400 J/m²K — omtrent 4 %.
+     Brettet er altså i praksis tomt etter noen sekunder, og bunnen får varme
+     fra ovnslufta i stedet for fra kontakt. Da er 270 °C ikke til hjelp: toppen
+     setter seg lenge før bunnen er ferdig. Lavere og lengre, nederste rille.  */
+  { id:'brod_brett', navn:'Vanlig steking i ovnen', anbefaltTil:'stekebrett eller brødform, uten stein, stål eller gryte',
+    vekt:'700–900 g', hydrering:'65–72 %',
+    inn:240, ned:210, nedNaar:'etter 15 min', damp:'ingen tilsatt — eventuelt en form med kokende vann i bunnen',
+    dampTid:'15 min hvis du bruker vannform',
+    rist:'nederste rille', tid:'40–50 min', kjerne:'96–99 °C',
+    luft:'ta ut vannformen etter 15 min, dørspalte siste 5 min',
+    notat:'Uten forvarmet masse under emnet får du mindre ovnsløft og en lysere bunn — det er ikke en feil, det er hva utstyret kan. To grep tar igjen mest: sett risten nederst, så bunnen får mest mulig strålevarme, og forvarm det tomme brettet sammen med ovnen hvis du kan laste over på bakepapir. En brødform er faktisk i favør her: veggene støtter deigen, så mindre ovnsløft koster mindre høyde. Hydreringen bør ligge lavere enn på de andre profilene — uten bunnkick og støtte flyter en våt deig ut i stedet for å reise seg.' },
   // 230 °C, ikke 250: Pyrexen tåler 220 °C termisk sprang, og 5-graders deig ned
   // i en 250-graders gryte er 245. Resten av appen har hele tiden sagt 230 —
   // denne profilen var det eneste stedet som sa noe annet.
@@ -175,7 +193,7 @@ const BAKE_PROFILES = [
   { id:'brod_glass_stal', navn:'Glassgryte PÅ 15 mm stål', anbefaltTil:'frittstående brød med Pyrex + stål', vekt:'700–800 g', hydrering:'72–78 %',
     inn:230, ned:230, nedNaar:'hold den der', damp:'ingen tilsatt — gryta holder på brødets eget damp', dampTid:'lokk på 20 min',
     rist:'gryta står oppå det forvarmede stålet, nederste tredel', tid:'45–50 min', kjerne:'96–99 °C', luft:'lokk av etter 20 min, dørspalte siste 5 min',
-    notat:'Dette er det beste du får ut av utstyret du har. Stålet leverer ca. 213 °C kontakttemperatur til bunnen ved 230-graders ovn (232-tallet gjelder 250 °C, som Pyrexen ikke tåler), glasset leverer dampen. Glasset alene gir bare ~140 °C mot bunnen — det er der ovnsløftet forsvinner. Forvarm stålet 90–120 min. LES ADVARSELEN om termisk sjokk under Utstyr før du forvarmer glasset.' },
+    notat:'Stålet leverer ca. 213 °C kontakttemperatur til bunnen ved 230-graders ovn (232-tallet gjelder 250 °C, som Pyrexen ikke tåler), glasset leverer dampen. Glasset alene gir bare ~140 °C mot bunnen — det er der ovnsløftet forsvinner. Forvarm stålet 90–120 min. LES ADVARSELEN om termisk sjokk under Utstyr før du forvarmer glasset.' },
   // 230 °C av samme grunn som glassgryte-profilen over: Pyrexen tåler 220 °C
   // termisk sprang, og en romtemperert kloke inn i 260-graders ovn er 235+.
   // Denne profilen stod alene på 260 og motsa både utstyrslista og tipset om
@@ -217,7 +235,11 @@ const BAKE_PROFILES = [
    Tung termisk masse (stål, kloke) trenger lengst; en form kortest.           */
 const FORVARM_MIN = {
   brod_kloke: 105, brod_glass_stal: 105, brod_gryte: 55,
-  brod_apen: 75, brod_600: 75, ciabatta: 105, baguette: 75, focaccia: 45
+  brod_apen: 75, brod_600: 75, ciabatta: 105, baguette: 75, focaccia: 45,
+  // Ingenting tungt skal opp i temperatur — bare ovnsrommet og eventuelt et
+  // tomt brett. Det er den korteste forvarmingen i lista, og den eneste ekte
+  // fordelen dette oppsettet har.
+  brod_brett: 20
 };
 
 /* ---------- FORVALG (presets) ----------
@@ -1249,9 +1271,13 @@ const PARAM_INFO = {
    Effusivitet e = √(k·ρ·c) styrer kontaktvarme. Kontakttemperaturen er
    regnet mot kald deig (6 °C rett fra kjøleskapet) ved 250 °C helle.        */
 const UTSTYR = [
-  { id:'stal15', navn:'★ Deig rett på stålet + glass som klokke', effusivitet:13625, kontakt:232, forvarm:'90–120 min',
-    damp:'glasset som klokke fanger dampen', best:'Best bunnvarme — deigen ligger RETT på stålet, Pyrexen snus over som klokke',
-    om:'Det beste oppsettet du har: deigen på det forvarmede stålet gir full stålkontakt mot bunnen (toppklasse — identisk med støpejern, 15 mm lagrer 55 700 J/m²K), og Pyrexen snudd opp-ned over emnet fanger brødets egen damp. Du får altså både maksimal bunnvarme OG damp. Stålet må forvarmes lenge: de fleste gir det 30–45 min, og da ligger det fortsatt 40–60 °C for lavt. Regn 90 min, gjerne 2 timer. Legg glasset over først etter at emnet er satt inn og snittet.' },
+  /* ★-et i navnet og «det beste oppsettet du har» i teksten er fjernet: appen
+     skal ikke kåre en favoritt på brukerens vegne. Tallene sier hva oppsettet
+     leverer, og ★-knappen i Oppslag → Stekeutstyr er brukerens egen merking.
+     Samme rettelse som ★-ene i stekeprofilene og «rundbrød» i denne lista. */
+  { id:'stal15', navn:'Deig rett på stålet + glass som klokke', effusivitet:13625, kontakt:232, forvarm:'90–120 min',
+    damp:'glasset som klokke fanger dampen', best:'Mest bunnvarme av oppsettene i lista — deigen ligger RETT på stålet, Pyrexen snus over som klokke',
+    om:'Deigen på det forvarmede stålet gir full stålkontakt mot bunnen (toppklasse — identisk med støpejern, 15 mm lagrer 55 700 J/m²K), og Pyrexen snudd opp-ned over emnet fanger brødets egen damp. Du får altså både maksimal bunnvarme OG damp. Stålet må forvarmes lenge: de fleste gir det 30–45 min, og da ligger det fortsatt 40–60 °C for lavt. Regn 90 min, gjerne 2 timer. Legg glasset over først etter at emnet er satt inn og snittet.' },
   { id:'glass', navn:'Pyrex Slow Cook 4,4 L med lokk (din)', effusivitet:1453, kontakt:147, forvarm:'sammen med stålet, maks 230 °C',
     damp:'utmerket — lukket kammer', best:'Damp og fuktighetskontroll, ikke bunnvarme',
     om:'Produsentspesifikasjon: tåler −40 til +300 °C, og termisk sjokk opptil 220 °C differanse. Det er borosilikat-tall — herdet kalknatronglass ligger på 60–80 °C — så den tåler langt mer enn typisk glassbakeutstyr. Som dampkammer er den fullverdig: en lukket gryte trenger bare ~2 g damp, og brødet inneholder selv 350–400 g vann. Som helle er den svak: effusivitet 1 453 mot støpejernets 13 123. Glasset måtte holdt 397 °C for å matche støpejern på 250. Løsningen er å la stålet levere bunnvarmen og glasset dampen. Innvendig 21,5 cm bred og 13,5 cm høy med lokket på — komfortabelt til 700–800 g emner, trangt over 900 g.' },
@@ -1266,7 +1292,17 @@ const UTSTYR = [
     om:'Løser damp og bunnvarme i én gjenstand. Dette er fasiten alle andre oppsett måles mot.' },
   { id:'apen', navn:'Åpen steking på stein', effusivitet:1730, kontakt:157, forvarm:'60–90 min',
     damp:'må ordnes separat', best:'Flere brød samtidig',
-    om:'Cordieritstein leverer 157 °C kontakttemperatur mot støpejernets 232. Krever et skikkelig dampoppsett for å konkurrere.' }
+    om:'Cordieritstein leverer 157 °C kontakttemperatur mot støpejernets 232. Krever et skikkelig dampoppsett for å konkurrere.' },
+  /* Vanlig ovnssteking. `kontakt` er null, ikke et tall: kontakttemperatur
+     forutsetter en helle med varme å gi fra seg, og et tynt brett har ikke det.
+     Å oppgi et tall her ville vært å låne troverdighet fra en modell som ikke
+     gjelder — brettets effusivitet er høy (aluminium ligger over stål), men
+     reservoaret er tomt etter sekunder, så tallet ville rangert oppsettet på
+     topp i appens egen liste. Se notatet i profilen `brod_brett`.            */
+  { id:'brett', navn:'Vanlig stekebrett eller brødform', effusivitet:null, kontakt:null, forvarm:'20 min (bare ovnsrommet)',
+    damp:'ingen — eventuelt en form med kokende vann i bunnen',
+    best:'Å bake uten spesialutstyr, og alt som steker i form',
+    om:'Utstyret de fleste har. Et 1 mm aluminiumsbrett lagrer rundt 2 400 J/m²K mot 15 mm ståls 55 700 — omtrent 4 % — så det er tomt for varme nesten med én gang deigen legges på, og bunnen får varme fra ovnslufta i stedet for fra kontakt. Det gir mindre ovnsløft og lysere bunn enn de andre oppsettene, og det er verdt å vite på forhånd i stedet for å lure på hva som gikk galt. Til gjengjeld: 20 minutters forvarming i stedet for to timer, ingenting glovarmt å manøvrere, og en brødform støtter deigen med vegger så tapt løft koster mindre høyde. Forvarm det tomme brettet med ovnen og last over på bakepapir hvis du vil ha litt igjen av bunnvarmen.' }
 ];
 
 /* ---------- ELTEMASKINER ----------

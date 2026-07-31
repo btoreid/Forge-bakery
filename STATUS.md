@@ -1,4 +1,4 @@
-# Status og neste steg — 30.07.2026
+# Status og neste steg — 31.07.2026
 
 Notat ved øktskifte. Appen er i en konsistent tilstand og live på GitHub Pages.
 
@@ -135,9 +135,58 @@ Pages: uten `max-age`+ETag ville cache-testen vært grønn av feil grunn.
 Testene rører ikke appen. Den lastes fortsatt uten byggverktøy og uten
 `node_modules` — npm-stoffet ligger isolert i `tester/`.
 
+### Innspillskøen ligger i `INNSPILL.md`
+
+Bjørns tilbakemeldinger skrives inn der med en gang de kommer, med status
+(`åpen` · `pågår` · `levert` · `avvist`) og hvilken fil de lander i. Den er kilden til
+hva som står igjen — ikke chatten, og ikke denne fila.
+
+### Levert 31.07 (fjerde brukertest, tolv punkter)
+
+Se CHANGELOG-posten «31.07.2026». Det viktigste er **synken**:
+
+**Bakeloggen kunne forsvinne ved innlogging, uopprettelig.** `oppdatert` ble stemplet på
+hver lagring, også ved ren navigasjon, så en enhet uten historikk kunne bli «nyest» bare
+ved at man blar til Logg for å logge inn — og la sin tomme logg over historikken i skyen.
+
+Tre ting holder det nå på plass, og **ingen av dem må fjernes**:
+
+1. `oppdatert` flytter seg bare når dataene endrer seg (`UI_FELT` + `dataAvtrykk()`).
+2. `flettLogg()` gjør **union** på loggposter ved synk. Innstillinger følger «nyeste
+   vinner»; loggen gjør det aldri. Historikk kan ikke ha en vinner.
+3. Sletting bruker **gravsteiner** (`S.loggSlettet`) — uten dem gjenoppliver unionen
+   hver slettet post.
+
+Og: `Sky.hentNed()` skiller leseferil fra tomt svar. Begge ga før `null`, og `null` ble
+tolket som «ingenting der oppe» → last opp lokalt. Rør ikke det skillet.
+
+**Andre ting som ikke bør rulles tilbake:**
+
+- **`okDeig` skalerer deigvekten i `regn()`, ikke ved å skrive til `S.vekt`.** Den gamle
+  knappen var en handling som skrev til brødvekten, og den nye vekten ble grunnlag for
+  neste utregning — så deigen vokste for hvert trykk.
+- **`settMelGram()`/`settVannGram()` ligger i engine.js.** De regner, og de itererer
+  fordi melmengden avhenger av andelene og andelene av melmengden.
+- **Stekebrettets `kontakt`/`effusivitet` er `null` med vilje.** Aluminium har høyere
+  effusivitet enn stål; et tall der ville rangert oppsettet på topp mens reservoaret
+  (~2 400 J/m²K mot 15 mm ståls 55 700) er tomt etter sekunder.
+- **Favoritt-id-er er navnerom-prefikset** (`mel:` · `utstyr:` · `steking:`). Uprefiksede
+  id-er i lagret tilstand er meltyper og migreres i `last()`.
+
 ### Åpne V2-punkter
 
-Ingen kjente åpne punkter. Neste runde avventer Bjørns tilbakemelding.
+Fem, alle i `INNSPILL.md` med Bjørns egen ordlyd:
+
+1. **Forfermentens temperatur og kjøleskapsvalg** (#10) — krever modellarbeid, ikke bare
+   et felt: han ber om at appen forklarer hva kulda gjør med tid OG effekt.
+2. **Hastighetsfaser på eltemaskinen** (#12) — `MASKIN_INFO.fart` er én setning prosa i
+   dag; skal bli en faseplan i minutter som følger utregnet eltetid.
+3. **Validere friksjonstallet for Ooni Halo Pro** (#13) — styrer vanntemperaturen i hele
+   appen. Skal etterprøves mot kilder og føres i `PARAMETERREVISJON.md`.
+4. **«Har du alt i huset?» som steg 1 i Prosess** (#15) — merk at `kjede()` eier de
+   TIDSATTE stegene; et steg uten varighet må ikke inn der.
+5. **Lufta i romtemp-boksen under heveplanen** (#11) — venter på at Bjørn peker ut hvilken
+   boks, og **nytt appikon** (#17), som nå er mulig via Higgsfield-koblingen.
 
 ---
 

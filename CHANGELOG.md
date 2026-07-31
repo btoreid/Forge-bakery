@@ -7,6 +7,150 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 31.07.2026 — V2: tolv punkter fra fjerde brukertest
+
+Bjørn matet inn tilbakemeldinger fortløpende gjennom økta. Alle er skrevet inn i
+`INNSPILL.md` etter hvert som de kom, med status, slik at køen overlever et øktskifte
+og ingenting lever bare i chatten. Tolv er levert her; fem står igjen som åpne.
+
+Verifisert i ekte Chromium: ny suite `tester/test-r4.js` (41 sjekker) pluss hele
+regresjonen — åtte suiter grønne.
+
+### Kritisk: bakeloggen kunne forsvinne ved innlogging
+
+Meldt som «logger du inn, får du ikke opp historikken din — da har man ingen logging
+igjen». Det var ekte datatap, og det var **uopprettelig**, så det er det viktigste i
+denne posten.
+
+**Årsaken:** `lagre()` stemplet `S.oppdatert = Date.now()` på HVER lagring, og
+`oppdater()` kjøres ved all bruk — også når man bare blar mellom skjermer. På en enhet
+uten historikk holdt det derfor å navigere til Logg for å logge inn: da var den tomme
+lokale tilstanden «nyest», og `synkVedInnlogging()` la den opp OVER historikken i skyen.
+
+Tre rettelser, som løser hver sin del:
+
+1. **`oppdatert` flytter seg bare når DATAENE endrer seg.** `UI_FELT` lister rent
+   visningstilstand (skjerm, utfellinger, søkefelt), og `dataAvtrykk()` sammenligner
+   resten mot forrige lagring. Grunnlinja settes fra tilstanden slik den ble LASTET —
+   med null ville aller første lagring alltid telt som en endring, og det er nettopp
+   den som skjer når man blar til Logg.
+2. **Bakeloggen FLETTES, den overskrives aldri.** Resten av tilstanden er innstillinger,
+   der «nyeste vinner» er riktig — det finnes bare én gjeldende oppskrift. Loggen er
+   historikk, og historikk kan ikke ha en vinner: en post som finnes på én enhet og
+   ikke på den andre er ikke en konflikt. `flettLogg()` gjør union på `id`; ved samme
+   id vinner den sist redigerte (`endret`). Rekkefølgen holdes kronologisk på `laget`.
+3. **Sletting bruker gravsteiner** (`S.loggSlettet`). Uten dem ville en union gjenopplivet
+   hver post man har slettet, hver gang den andre enheten synket.
+
+I tillegg: **`Sky.hentNed()` skiller nå leseferil fra tomt svar.** Begge ga før `null`,
+og kalleren tolket `null` som «ingenting der oppe» og lastet opp sin egen tilstand — så
+et nettverksglipp kunne overskrive historikken i skyen.
+
+### «Bak dette på nytt» erstatter startblokka
+
+Startblokka på Brød («Start fra forvalget Halvgrovt 40 %») er fjernet. Den lovet et
+utgangspunkt, men pekte på et forvalg Bjørn aldri hadde bakt — og den forsvant så snart
+loggen fikk sin første post, altså akkurat når man begynte å ha noe ekte å gå tilbake til.
+
+Loggpostene lagrer nå selve oppskriften (`OPPSKRIFT_FELT`, en hviteliste — en svarteliste
+ville sluppet gjennom hvert nytt felt som legges til senere), og har fått **«↻ Bak dette
+på nytt»**. Poster fra før feltet fantes sier det rett ut i stedet for å vise en knapp
+som ikke kan virke.
+
+### Kompensasjonspanelet kunne økes i det uendelige
+
+«Trykker du på "øk" igjen, kan du bare øke og øke og øke.» Riktig: «Øk deigen» var en
+HANDLING som skrev til `S.vekt`, og den nye vekten ble så grunnlag for neste utregning.
+
+Nå er det et VALG med to tilstander (`S.okDeig`), og selve skaleringen skjer i `regn()`
+av state — `state.vekt` er brukerens valgte brødvekt og røres aldri. Verifisert: fire
+trykk gir samme deig som ett, og melmengden lander eksakt på det den var uten tillegg.
+
+### Gram inn, prosent ut — begge veier
+
+Gramvekt per meltype var borte fra V2 (V1 hadde den). Den er tilbake, og vannet har fått
+det samme: et eget, redigerbart gramfelt i stedet for en bisetning i konsekvenslinja.
+
+`settMelGram(state, i, gram)` og `settVannGram(state, gram)` ligger i **engine.js**, ikke
+i app-v2.js, fordi de REGNER. Begge itererer: melmengden avhenger av andelene og andelene
+av melmengden. Målt: 500 g på en meltype treffer 500 g, 1500 g vann treffer 1498.
+
+Egen melblanding lever i `S.melOverstyr` og slår både preset og grovhetstrappa — men et
+grovhetstrinn nullstiller den, ellers ville dialen sett ut som om den sluttet å virke.
+Et varsel med «Tilbake til anbefalt blanding» står i kortet mens overstyringen er aktiv.
+
+**«Bruk anbefalt»-knapp** på vann og salt, synlig bare når man faktisk står et annet sted
+enn anbefalingen.
+
+### Vanlig steking i ovnen manglet helt
+
+Alle fem utstyrsoppsettene forutsatte forvarmet masse — stål, Pyrex, støpejern, stein.
+Vanlig stekebrett eller brødform, uten noe av det, fantes ikke. Det er måten de fleste
+faktisk baker på.
+
+Nytt oppsett `brett` + ny profil `brod_brett` (240 → 210 °C, nederste rille, 40–50 min,
+20 min forvarming). Tallene er lavere og lengre enn de andre, og grunnen er fysisk: et
+1 mm aluminiumsbrett lagrer 2 700 · 900 · 0,001 ≈ **2 400 J/m²K** mot 15 mm ståls
+55 700 — omtrent 4 %. Brettet er tomt for varme etter sekunder, og bunnen får varme fra
+ovnslufta i stedet for fra kontakt. Da hjelper ikke 270 °C: toppen setter seg før bunnen
+er ferdig.
+
+`kontakt` og `effusivitet` er **null**, ikke tall. Aluminiums effusivitet er høyere enn
+ståls, så et tall der ville rangert oppsettet på topp i appens egen liste — mens
+reservoaret altså er tomt. Å oppgi et tall ville vært å låne troverdighet fra en modell
+som ikke gjelder.
+
+### Favoritter er brukerens, ikke appens
+
+`stal15` het «★ Deig rett på stålet …» og ble beskrevet som «det beste oppsettet du har»;
+`brod_glass_stal` sa «det beste du får ut av utstyret du har». Samme klasse feil som
+★-merkene i stekeprofilene og «rundbrød» i utstyrsteksten, begge rettet 30.07: appen
+kårer en favoritt på Bjørns vegne.
+
+★-et og «beste»-formuleringene er ute. Favoritt-mekanikken, som fantes for mel, dekker nå
+også **stekeutstyr og stekeprofiler**. Id-ene er navnerom-prefikset (`mel:` · `utstyr:` ·
+`steking:`) fordi de tre listene ellers kunne kollidere; gamle, uprefiksede favoritter
+migreres i `last()`. Favoritter sorteres først i utstyrsvelgeren og får ★ der — det er
+den eneste måten en favoritt faktisk sparer noen for arbeid.
+
+Nytt oppslag: **Stekeutstyr**, med tall, ★-knapp og «Bruk dette oppsettet».
+
+### Brød-skjermen
+
+- Overskriften spør **«Hva skal du bake?»**.
+- Nøkkeltall-badgen («40 % GROVT», «82 % VANN») er byttet ut med **tegninger av de fire
+  brødtypene**. Et tall som endrer seg mens du blar er ikke et kjennetegn ved brødtypen —
+  det er tilstanden din, og den står allerede i Deig.
+- «Om dette baket» er flyttet fra ett kollapskort for den valgte baksten til **ⓘ per
+  brødtype**. Da kan man lese hva en ciabatta ER før man bytter til den, som er når man
+  lurer. Stegkjeden følger med for den valgte; for de andre vises beskrivelsen uten en
+  oppdiktet kjede.
+
+### Gjæringsgrafen: «hvordan når man 30 grader i kjøleskapet?»
+
+Ikke en regnefeil — en lesefeil grafen selv inviterte til. To skalaer deler tegneflate:
+0–tempMax til venstre (deigtemperatur), 0–100 % til høyre (akkumulert gjæring). Den
+akkumulerte kurven er normalisert mot sin egen sluttverdi og ender ALLTID på taket, og
+taket ligger på samme høyde som «30°»-linja i rutenettet.
+
+Aksene er nå farget som hver sin kurve og heter **«°C deig»** og **«% gjæring»**.
+
+### Bunnmenyen dekket ikke Androids gestlinje
+
+`viewport-fit=cover` gjør at 100dvh inkluderer området gestlinja ligger over. Uten
+`padding-bottom: env(safe-area-inset-bottom)` havnet knappene delvis under den svarte
+stripa — ikonene så ut som de var scrollet bort, og trykk nederst traff Androids meny.
+Paddingen ligger på beholderen, ikke på knappene, så bakgrunnsfargen fyller innstikket.
+
+### Åpent etter denne runden
+
+Forfermentens temperatur og kjøleskapsvalg · hastighetsfaser på eltemaskinen ·
+validering av friksjonstallet for Ooni Halo Pro · «har du alt i huset?» som steg 1 i
+prosessen · lufta i romtemp-boksen (trenger en peker på hvilken boks) · nytt appikon.
+Alle står i `INNSPILL.md`.
+
+---
+
 ## 30.07.2026 (natt, senere) — V2: innlogging og sky-lagring
 
 Bjørn ville ikke miste data, og opprettet et Supabase-prosjekt (`xoripdwbghqlzbgxkfps`).

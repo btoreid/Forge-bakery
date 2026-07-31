@@ -24,14 +24,20 @@ const STANDARD = {
   aktivSteg: 0, regnskapAapen: false, byttBekreft: null,
   loggListe: [], lgNavn: '', lgKar: 8, lgBilder: [], oppdatert: 0,
   lgRediger: null, lgSlett: null, bildeVis: null,
-  favoritter: [], oppslag: 'meny', oppslagSok: ''
+  // Gravsteiner: id-ene til slettede loggposter. Uten dem ville sammenfletningen
+  // ved synk gjenopplivet hver post man har slettet på en annen enhet.
+  loggSlettet: [],
+  favoritter: [], oppslag: 'meny', oppslagSok: '',
+  melOverstyr: null,          // brukerens egen melblanding; null = følg grovheten
+  brodInfo: null,             // hvilken brødtype som har ⓘ-utfellingen åpen
+  kompVist: false             // kompensasjonspanelet er åpnet av en endring
 };
 let S = last();
 
 function nyStandard() {
   const s = Object.assign({}, STANDARD);
   s.tillegg = Object.assign({}, STANDARD.tillegg);   // bryt delt referanse med STANDARD
-  s.loggListe = []; s.favoritter = []; s.lgBilder = [];
+  s.loggListe = []; s.favoritter = []; s.lgBilder = []; s.loggSlettet = [];
   return s;
 }
 function last() {
@@ -45,6 +51,13 @@ function last() {
   if (!Array.isArray(s.loggListe)) s.loggListe = [];
   if (!Array.isArray(s.favoritter)) s.favoritter = [];
   if (!Array.isArray(s.lgBilder)) s.lgBilder = [];
+  if (!Array.isArray(s.loggSlettet)) s.loggSlettet = [];
+  // Favorittene het før bare meltype-id-en. Nå kan også stekeutstyr og
+  // stekeprofiler merkes, så id-ene er navnerom-prefikset for å unngå at to
+  // lister med samme id kolliderer. Gamle, uprefiksede id-er er meltyper.
+  s.favoritter = s.favoritter.filter(x => typeof x === 'string')
+    .map(x => x.indexOf(':') > 0 ? x : 'mel:' + x);
+  if (s.melOverstyr != null && !Array.isArray(s.melOverstyr)) s.melOverstyr = null;
   // Hver loggpost trenger en stabil id, ellers ville rediger/slett pekt på
   // posisjon — og posisjon flytter seg når noe slettes eller når skyen synker
   // inn en annen liste. Eldre poster (lagret før id-en fantes) får en her.
@@ -63,10 +76,34 @@ function last() {
   }
   return s;
 }
+/* Rent VISNINGSTILstand — hvilken skjerm du står på, hvilke utfellinger som er
+   åpne. Disse skal IKKE flytte `oppdatert`.
+
+   Grunnen er at `oppdatert` avgjør hvem som vinner ved innlogging. Bumpet vi
+   den på hver render, holdt det å bla til Logg-skjermen for å logge inn: da var
+   den tomme lokale tilstanden «nyest», og den ble lastet opp over historikken i
+   skyen. Tidsstempelet må svare på «når endret dataene seg sist», ikke «når rørte
+   noen appen sist». */
+const UI_FELT = ['skjerm', 'paramInfo', 'tilleggInfo', 'melInfo', 'meltallInfo', 'aktivSteg',
+  'regnskapAapen', 'byttBekreft', 'lgRediger', 'lgSlett', 'bildeVis', 'oppslag', 'oppslagSok',
+  'brodInfo', 'kompVist'];
+function dataAvtrykk(s) {
+  const kopi = {};
+  Object.keys(s).forEach(k => { if (k !== 'oppdatert' && UI_FELT.indexOf(k) < 0) kopi[k] = s[k]; });
+  try { return JSON.stringify(kopi); } catch (e) { return null; }
+}
+/* Grunnlinja settes fra tilstanden slik den ble LASTET, ikke fra null. Med null
+   ville aller første lagring alltid talt som en endring — og det er nettopp den
+   som skjer når man blar til Logg for å logge inn. */
+let _sisteAvtrykk = dataAvtrykk(S);
 function lagre() {
-  // Tidsstempel på hver lagring: det er dette synken sammenligner når samme
-  // konto brukes fra to enheter (nyeste vinner).
-  S.oppdatert = Date.now();
+  // Tidsstempel når DATAENE endrer seg: det er dette synken sammenligner når
+  // samme konto brukes fra to enheter (nyeste vinner).
+  const avtrykk = dataAvtrykk(S);
+  if (avtrykk === null || avtrykk !== _sisteAvtrykk) {
+    S.oppdatert = Date.now();
+    _sisteAvtrykk = avtrykk;
+  }
   try { localStorage.setItem(LAGER, JSON.stringify(S)); } catch (e) {}
   // Lokalt først: localStorage er sannheten mens du bruker appen. Er du
   // innlogget, speiles den opp til skyen (debouncet inne i Sky).
@@ -93,6 +130,24 @@ function h(tag, attrs, ...kids) {
   return e;
 }
 const byId = id => document.getElementById(id);
+
+/* ---------- Favoritter ----------
+   Brukerens egne merker, ikke appens. Tre navnerom deler én liste: `mel:`,
+   `utstyr:` og `steking:`. Prefikset er der fordi id-ene ellers kunne kollidere
+   mellom listene — og fordi en favoritt uten navnerom ikke sier hva den peker på. */
+const favNokkel = (ns, id) => ns + ':' + id;
+function erFavoritt(ns, id) { return (S.favoritter || []).indexOf(favNokkel(ns, id)) >= 0; }
+function vekslFavoritt(ns, id) {
+  const n = favNokkel(ns, id);
+  S.favoritter = erFavoritt(ns, id) ? S.favoritter.filter(x => x !== n) : (S.favoritter || []).concat([n]);
+  oppdater();
+}
+/* ★-knappen, lik overalt den brukes. */
+function favKnapp(ns, id, navn) {
+  const paa = erFavoritt(ns, id);
+  return h('button', { class: 'info-knapp', style: paa ? 'color:var(--color-accent-500);border-color:var(--color-accent-300)' : '',
+    'aria-label': (paa ? 'Fjern favoritt: ' : 'Merk som favoritt: ') + navn, onClick: () => vekslFavoritt(ns, id) }, paa ? '★' : '☆');
+}
 
 /* ---------- Formattering (motorens hjelpere er globale) ---------- */
 const g0 = v => gram(v, 0);
@@ -146,6 +201,38 @@ function ikonSvg(name) {
     logg: () => { P('M12 7v13'); P('M3 17a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z'); },
     oppslag: () => { C(11, 11, 7); P('m21 21-4.3-4.3'); }
   }[name] || (() => {}))();
+  return svg;
+}
+
+/* ---------- Brødtegninger ----------
+   Erstatter nøkkeltall-badgen («40 % GROVT», «82 % VANN») på brødtypekortene.
+   Et tall som endrer seg mens du blar er ikke et kjennetegn ved brødtypen —
+   det er tilstanden din, og den står allerede i Deig. Formen er derimot det
+   ene som faktisk skiller de fire fra hverandre.
+
+   Tegnet i samme strek som ikonene ellers: stroke 1,6, rund, currentColor. */
+function brodTegning(id) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  [['viewBox', '0 0 44 44'], ['width', '44'], ['height', '44'], ['fill', 'none'],
+   ['stroke', 'currentColor'], ['stroke-width', '1.6'], ['stroke-linecap', 'round'],
+   ['stroke-linejoin', 'round'], ['class', 'brodsvg'], ['aria-hidden', 'true']].forEach(a => svg.setAttribute(a[0], a[1]));
+  const P = (d, kl) => { const e = document.createElementNS(NS, 'path'); e.setAttribute('d', d); if (kl) e.setAttribute('class', kl); svg.appendChild(e); };
+  ({
+    // Boule sett fra siden, med ett langt snitt på skrå — slik appen selv
+    // beskriver snittet under Form og kurv.
+    grovbrod: () => { P('M6 27c0-7.2 7.2-13 16-13s16 5.8 16 13a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4z', 'fyll'); P('M15 24.5c3.5-4 10.5-4 14 0'); },
+    // Flat, rektangulær, tydelig lavere — og prikkene som er den åpne krummen.
+    ciabatta: () => { P('M5 20.5c0-2.5 3-4.5 8-5l14-1.2c6-.5 12 1.5 12 5.5s-5 7.2-11 7.7l-14 1.2c-5 .4-9-2-9-5.5z', 'fyll');
+      P('M13 21.5h.01'); P('M19 24h.01'); P('M26 20h.01'); P('M31 23h.01'); },
+    // Lang og smal, med de skrå snittene som er baguettens kjennetegn.
+    baguette: () => { P('M4 27c0-3.3 2.4-6 5.4-6h25.2c3 0 5.4 2.7 5.4 6s-2.4 6-5.4 6H9.4C6.4 33 4 30.3 4 27z', 'fyll');
+      P('M11 24.5 14 29'); P('M18 24.5 21 29'); P('M25 24.5 28 29'); P('M32 24.5 35 29'); },
+    // Firkantet, i form, med fingergropene.
+    focaccia: () => { P('M7 15h30a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-9a3 3 0 0 1 3-3z', 'fyll');
+      P('M12 20.5h.01'); P('M19 20.5h.01'); P('M26 20.5h.01'); P('M33 20.5h.01');
+      P('M15 25.5h.01'); P('M22 25.5h.01'); P('M29 25.5h.01'); }
+  }[id] || (() => {}))();
   return svg;
 }
 
@@ -289,32 +376,33 @@ const sep = () => h('span', { class: 'sep' }, ' · ');
    ============================================================ */
 function tegnBrodet(r, K) {
   const wrap = h('div');
-  if (!S.loggListe.length) {
-    wrap.appendChild(h('div', { class: 'tomkort' },
-      h('div', { style: 'font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--color-neutral-600);font-weight:800' }, 'Bakeloggen er tom'),
-      h('div', { class: 'hjelpetekst', style: 'margin-top:6px' },
-        'Første gang har appen ingenting å sammenligne med. Start fra et forvalg — de er kalibrert mot 24 publiserte formler — og loggfør baket når det er ute av ovnen. Da måles alt du endrer senere mot noe du faktisk har smakt.'),
-      h('button', { class: 'btn btn-primary btn-full', style: 'margin-top:12px', onClick: startForvalg },
-        'Start fra forvalget «Halvgrovt 40 %»')));
-  }
-  wrap.appendChild(h('div', { class: 'seksjonstittel' }, 'Eller velg brødtype'));
+  // Startblokka «Start fra forvalget Halvgrovt 40 %» er fjernet. Den lovet et
+  // utgangspunkt, men pekte på et forvalg brukeren aldri hadde bakt — og den
+  // forsvant så snart loggen fikk sin første post, altså akkurat når man
+  // begynte å ha noe ekte å gå tilbake til. Veien tilbake til et bak som funket
+  // ligger nå der den hører hjemme: «Bak dette på nytt» på loggposten.
+  wrap.appendChild(h('div', { class: 'seksjonstittel' }, 'Hva skal du bake?'));
   wrap.appendChild(h('div', { class: 'valg' }, ...BTYPER.map(bt => {
     const paa = bt.id === S.brotype || (bt.id === 'grovbrod' && S.brotype === 'loff');
-    const erPreset = bt.rute === 'preset';
-    const preset = erPreset ? PRESETS.find(p => p.id === bt.id) : null;
-    const grov = erPreset ? null : Math.round(paa ? r.brodskala.pct : S.grov);
-    const badge = erPreset
-      ? h('span', { class: 'badge-rund badge-vann' }, h('span', { class: 'b1' }, fmt(preset.hydrering, 0) + ' %'), h('span', { class: 'b2' }, 'VANN'))
-      : h('span', { class: 'badge-rund badge-grov' }, h('span', { class: 'b1' }, grov + ' %'), h('span', { class: 'b2' }, 'GROVT'));
-    return h('button', { class: 'valgkort' + (paa ? ' paa' : ''), aria: { pressed: paa }, onClick: () => velgBrotype(bt.id) },
-      badge,
+    const rad = h('div', { class: 'brodvalg' + (paa ? ' paa' : '') });
+    rad.appendChild(h('button', { class: 'brodvalg-hoved', aria: { pressed: paa }, onClick: () => velgBrotype(bt.id) },
+      h('span', { class: 'brodvalg-ikon' }, brodTegning(bt.id)),
       h('span', { style: 'flex:1;min-width:0' },
         h('span', { class: 'tittel' }, bt.navn),
         h('span', { class: 'undertittel' }, bt.undertittel || '')),
-      paa ? h('span', { class: 'valgt-merke' }, '✓ valgt') : null);
+      paa ? h('span', { class: 'valgt-merke' }, '✓') : null));
+    // ⓘ per brødtype i stedet for ett kollapskort for den valgte. Da kan man
+    // lese hva en ciabatta ER før man bytter til den — som er når man lurer.
+    rad.appendChild(h('button', { class: 'info-ring', 'aria-label': 'Om ' + bt.navn,
+      onClick: () => { S.brodInfo = S.brodInfo === bt.id ? null : bt.id; oppdater(); } }, 'ⓘ'));
+    const boks = h('div');
+    boks.appendChild(rad);
+    if (S.brodInfo === bt.id) boks.appendChild(brodInfoBoks(bt, paa ? K : null));
+    return boks;
   })));
 
   // «Er du sikker?» — å bytte bakst er å starte på nytt, og det skal bekreftes.
+  // (Selve ⓘ-innholdet ligger i brodInfoBoks() rett under.)
   if (S.byttBekreft) {
     const ny = BTYPER.find(b => b.id === S.byttBekreft);
     wrap.appendChild(h('div', { class: 'varsel' },
@@ -325,27 +413,6 @@ function tegnBrodet(r, K) {
       h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
         h('button', { class: 'btn btn-primary', style: 'flex:1;font-size:.82rem', onClick: () => nyBakst(S.byttBekreft) }, 'Ja, start på nytt'),
         h('button', { class: 'btn', style: 'flex:1;font-size:.82rem', onClick: () => { S.byttBekreft = null; oppdater(); } }, 'Avbryt'))));
-  }
-
-  // Om dette baket — hva det er, og prosessen du har foran deg. Stegene
-  // GENERERES fra kjede(), samme kilde som Tid og Prosess leser.
-  const btNaa = BTYPER.find(b => b.id === S.brotype) || (S.brotype === 'loff' ? BTYPER[0] : null);
-  if (btNaa && btNaa.om && K && K.length) {
-    const d = h('details', { class: 'kort', style: 'padding:0' });
-    d.appendChild(h('summary', { style: 'padding:14px 16px;cursor:pointer;font-weight:800;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--color-neutral-600);list-style:none' },
-      'Om dette baket — prosessen kort ▾'));
-    const kropp = h('div', { style: 'padding:0 16px 14px' });
-    kropp.appendChild(h('div', { class: 'hjelpetekst' }, btNaa.om));
-    kropp.appendChild(h('div', { class: 'felt-label', style: 'margin-top:10px;font-weight:800' },
-      'Prosessen · totalt ' + fmt(K.totalT, 1) + ' t'));
-    K.forEach((s, j) => kropp.appendChild(h('div', { style: 'display:flex;gap:8px;align-items:baseline;font-size:.78rem;padding:3px 0;border-bottom:1px dotted var(--color-neutral-200)' },
-      h('span', { style: 'flex:0 0 18px;color:var(--color-neutral-500);font-variant-numeric:tabular-nums' }, String(j + 1)),
-      h('span', { style: 'flex:1' }, s.navn),
-      h('span', { style: 'color:var(--color-neutral-600);font-variant-numeric:tabular-nums;white-space:nowrap' }, fmtTimer(s.varighet / 60)))));
-    kropp.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-500);margin-top:6px' },
-      'Tidene følger valgene dine — hele kjeden med klokkeslett ligger under Prosess.'));
-    d.appendChild(kropp);
-    wrap.appendChild(d);
   }
 
   // Størrelse
@@ -369,6 +436,29 @@ function tegnBrodet(r, K) {
   wrap.appendChild(tegnUtstyrValg(r));
   return wrap;
 }
+/* ⓘ-innholdet per brødtype. For den VALGTE typen følger stegkjeden med, generert
+   fra kjede() — samme kilde som Tid og Prosess, så den kan ikke drifte. For de
+   andre vises bare hva baksten er: kjeden deres avhenger av valg som ikke er
+   gjort ennå, og en oppdiktet kjede ville vært verre enn ingen. */
+function brodInfoBoks(bt, K) {
+  const boks = h('div', { class: 'info-boks', style: 'margin:-2px 0 8px' });
+  boks.appendChild(h('div', { class: 'hjelpetekst' }, bt.om || ''));
+  if (K && K.length) {
+    boks.appendChild(h('div', { class: 'felt-label', style: 'margin-top:10px;font-weight:800' },
+      'Prosessen · totalt ' + fmt(K.totalT, 1) + ' t'));
+    K.forEach((s, j) => boks.appendChild(h('div', { style: 'display:flex;gap:8px;align-items:baseline;font-size:.78rem;padding:3px 0;border-bottom:1px dotted var(--color-neutral-200)' },
+      h('span', { style: 'flex:0 0 18px;color:var(--color-neutral-500);font-variant-numeric:tabular-nums' }, String(j + 1)),
+      h('span', { style: 'flex:1' }, s.navn),
+      h('span', { style: 'color:var(--color-neutral-600);font-variant-numeric:tabular-nums;white-space:nowrap' }, fmtTimer(s.varighet / 60)))));
+    boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-500);margin-top:6px' },
+      'Tidene følger valgene dine — hele kjeden med klokkeslett ligger under Prosess.'));
+  } else {
+    boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-500);margin-top:8px' },
+      'Velg denne baksten for å se hele stegkjeden med tider.'));
+  }
+  return boks;
+}
+
 function tegnFormKurv(r, emneMasse) {
   const boks = kort('Form og kurv', null);
   boks.appendChild(h('div', { class: 'valg', style: 'margin-top:6px' }, ...FORMER.map(f => {
@@ -390,13 +480,20 @@ function tegnFormKurv(r, emneMasse) {
 function tegnUtstyrValg(r) {
   const boks = kort('Stekeutstyr', null);
   const u = UTSTYR.find(x => x.id === S.utstyr) || UTSTYR[0];
+  // Favorittene øverst, med ★. Stjernen settes i Oppslag → Stekeutstyr; her er
+  // den bare en gjenfinning. (★-et som lå hardkodet i ett av navnene er borte.)
   boks.appendChild(h('select', { class: 'sok', style: 'margin-top:6px', 'aria-label': 'Stekeutstyr',
     onchange: e => { S.utstyr = e.target.value; if (!S.stekeProfilManuell) S.stekeProfil = profilForUtstyr(S.utstyr, S.form); oppdater(); } },
-    ...UTSTYR.map(x => h('option', { value: x.id, selected: x.id === S.utstyr ? 'selected' : null }, x.navn))));
+    ...favForst(UTSTYR, 'utstyr').map(x => h('option', { value: x.id, selected: x.id === S.utstyr ? 'selected' : null },
+      (erFavoritt('utstyr', x.id) ? '★ ' : '') + x.navn))));
   boks.appendChild(h('div', { style: 'display:flex;gap:12px;font-size:.76rem;color:var(--color-neutral-600);margin-top:8px;flex-wrap:wrap;font-variant-numeric:tabular-nums' },
-    h('span', null, 'Kontakt ', h('b', null, u.kontakt + ' °C')), h('span', null, 'Forvarm ', h('b', null, u.forvarm)), h('span', null, 'Damp: ', h('b', null, u.damp))));
+    u.kontakt != null ? h('span', null, 'Kontakt ', h('b', null, u.kontakt + ' °C')) : null,
+    h('span', null, 'Forvarm ', h('b', null, u.forvarm)), h('span', null, 'Damp: ', h('b', null, u.damp))));
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:6px' }, u.om));
   boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' }, 'Gir stekeprofilen ', h('b', null, r.prof.navn), '. Best til: ' + u.best + '.'));
+  boks.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:8px',
+    onClick: () => { S.skjerm = 'oppslag'; S.oppslag = 'utstyr'; oppdater(); } },
+    'Sammenlign oppsettene og merk favoritter ›'));
   // Pyrex i ovnen — vises bare når den valgte profilen faktisk har et varmt
   // alternativ, altså kloke-oppsettet. Se kommentaren ved `varm` i data.js for
   // hvorfor deig-i-gryta ikke får det samme.
@@ -418,14 +515,14 @@ function tegnUtstyrValg(r) {
   return boks;
 }
 function velgForm(id) { S.form = id; if (!S.stekeProfilManuell) S.stekeProfil = profilForUtstyr(S.utstyr, id); oppdater(); }
-const UTSTYR_PROFIL = { stal15: 'brod_kloke', glass: 'brod_glass_stal', glass_stal: 'brod_glass_stal', stopejern: 'brod_gryte', apen: 'brod_apen' };
+const UTSTYR_PROFIL = { stal15: 'brod_kloke', glass: 'brod_glass_stal', glass_stal: 'brod_glass_stal', stopejern: 'brod_gryte', apen: 'brod_apen', brett: 'brod_brett' };
 function profilForUtstyr(utstyrId, formId) {
   // Tidligere ble avlangt + stål tvunget til åpen steking (antatt at ingen gryte
   // tok avlange emner). Med den avlange Pyrexen tar klokke-oppsettet avlange
   // brød fint, så det spesialtilfellet er fjernet.
   return UTSTYR_PROFIL[utstyrId] || 'brod_apen';
 }
-function startForvalg() { S.brotype = 'grovbrod'; S.grov = 40; S.tid = 'lang'; S.skjerm = 'deigen'; oppdater(); }
+/* startForvalg() er fjernet sammen med startblokka på Brød-skjermen. */
 /* Å velge en annen brødtype er å starte et NYTT bak — før tok den med seg alle
    deigvalgene (tillegg, vann, salt, heveplan) inn i den nye baksten, så en
    ciabatta arvet f.eks. solsikkefrøene fra brødet. Nå spørres det først
@@ -459,6 +556,30 @@ function nyBakst(id) {
   oppdater();
 }
 
+/* ---------- Redigerbart gramtall ----------
+   Ser ut som tallet det erstatter, men er et felt. `onchange` og ikke `oninput`:
+   skriver du «7» på vei til «700», skal ikke oppskriften løses om for 7 g først
+   — og en re-render midt i tastingen ville dessuten tatt fokus fra feltet. */
+function gramFelt(verdi, settInn, etikett) {
+  return h('input', {
+    class: 'gramfelt', type: 'number', inputmode: 'numeric', min: 0, step: 10,
+    value: Math.round(verdi), 'aria-label': etikett,
+    onfocus: e => e.target.select(),
+    onchange: e => {
+      const v = +e.target.value;
+      if (!isFinite(v) || v < 0) { render(); return; }
+      settInn(v);
+    }
+  });
+}
+/* «Anbefalt»-knapp for et nivå. Vises bare når du faktisk står et annet sted enn
+   anbefalingen — ellers ville den vært en knapp som ikke gjør noe. */
+function anbefaltKnapp(naa, anbefalt, settInn, enhet) {
+  if (Math.abs((+naa || 0) - anbefalt) < 0.05) return null;
+  return h('button', { class: 'anbefalt-knapp', onClick: () => settInn(anbefalt) },
+    'Bruk anbefalt: ' + fmt(anbefalt, anbefalt % 1 ? 1 : 0) + (enhet || ''));
+}
+
 function stepperRad(label, verdi, felt, min, max, steg) {
   return h('div', { style: 'margin-top:10px' },
     h('div', { class: 'felt-label' }, label),
@@ -485,7 +606,10 @@ function tegnDeigen(r) {
         h('span', { class: 'kort-num', style: 'display:inline' }, '1 · Hvor grovt'),
         h('span', { class: 'h-verdi' }, fmt(bk.pct, 0) + ' % · ' + bk.kort.toLowerCase())),
       h('div', { class: 'piller' }, ...trinn.map(t =>
-        h('button', { class: S.grov === t ? 'paa' : '', onClick: () => { S.grov = t; oppdater(); } }, t + ' %'))),
+        // Å velge et grovhetstrinn er å be om den anbefalte blandingen for det
+        // trinnet, så en egen blanding må vike — ellers ville dialen sett ut som
+        // om den ikke virket.
+        h('button', { class: S.grov === t ? 'paa' : '', onClick: () => { S.grov = t; S.melOverstyr = null; oppdater(); } }, t + ' %'))),
       h('div', { class: 'konsekvens', style: 'margin-top:12px' }, grovKonsekvens(r)));
     wrap.appendChild(boks);
   }
@@ -500,14 +624,20 @@ function tegnDeigen(r) {
     const info = (typeof MEL_INFO !== 'undefined') && MEL_INFO[m.id];
     const flour = FLOURS.find(f => f.id === m.id) || {};
     const bidrag = info && GLUTENBIDRAG_TEKST[info.glutenbidrag] ? GLUTENBIDRAG_TEKST[info.glutenbidrag].navn : '';
-    const fav = (S.favoritter || []).includes(m.id);
+    const fav = erFavoritt('mel', m.id);
     // Favoritt vises som egen merkelapp, ikke ★ foran navnet — flere melnavn
     // har allerede ★ i seg (kvalitetsmerke), og to stjerner leste som støy.
     melBoks.appendChild(h('div', { class: 'melrad2' + (i === 0 ? ' forst' : '') },
       h('div', { class: 'm-navn' },
         h('div', { class: 'n' }, m.navn, fav ? h('span', { class: 'fav-pille' }, 'favoritt') : null),
         h('div', { class: 'sub' }, [bidrag, flour.protein != null ? fmt(flour.protein, 1) + ' g protein' : null].filter(Boolean).join(' · '))),
-      h('div', { class: 'm-tall' }, h('div', { class: 'g' }, g0(m.gram)), h('div', { class: 'p' }, fmt(m.pct, 0) + ' %')),
+      // Gram er redigerbart. Har du 500 g igjen av en melsort, skriver du 500 —
+      // i stedet for å regne ut hvilken andel det blir. Selve omregningen ligger
+      // i engine.js (settMelGram), som itererer fordi melmengden avhenger av
+      // andelene og andelene av melmengden.
+      h('div', { class: 'm-tall' },
+        gramFelt(m.gram, nyGram => { S.melOverstyr = settMelGram(S, i, nyGram); oppdater(); }, 'Gram ' + m.navn),
+        h('div', { class: 'p' }, fmt(m.pct, 0) + ' %')),
       h('button', { class: 'info-ring', 'aria-label': 'Info om ' + m.navn, onClick: () => { S.tilleggInfo = null; S.melInfo = S.melInfo === m.id ? null : m.id; oppdater(); } }, 'ⓘ')));
     if (S.melInfo === m.id && info) {
       const linjer = [];
@@ -518,6 +648,15 @@ function tegnDeigen(r) {
         h('div', { class: 'info-linje' }, h('span', { class: 'etikett', style: 'flex:0 0 18px;color:' + f }, l), h('span', { class: 'tekst' }, tk)))));
     }
   });
+  // Veien tilbake til anbefalingen. Uten den er en egen blanding en enveisdør,
+  // og grovhetsdialen ser ut som den har sluttet å virke.
+  if (S.melOverstyr) {
+    melBoks.appendChild(h('div', { class: 'varsel', style: 'margin-top:10px' },
+      h('div', null, h('b', null, 'Du har din egen melblanding.'), ' Grovhetstrinnene over styrer den ikke lenger.'),
+      h('button', { class: 'btn', style: 'margin-top:8px;width:100%;font-size:.82rem',
+        onClick: () => { S.melOverstyr = null; oppdater(); } },
+        'Tilbake til anbefalt blanding for ' + fmt(r.brodskala.pct, 0) + ' % grovt')));
+  }
   melBoks.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:8px', onClick: () => { S.skjerm = 'oppslag'; S.oppslag = 'mel'; oppdater(); } },
     'Se melbiblioteket — fordeler, ulemper og tak ›'));
   wrap.appendChild(melBoks);
@@ -543,7 +682,15 @@ function tegnDeigen(r) {
       h('input', { type: 'range', class: 'skyver', min: 62, max: 86, step: 1, value: S.hyd,
         oninput: e => oppdaterLive(+e.target.value),
         onchange: e => { S.hyd = +e.target.value; oppdater(); } }),
-      h('div', { style: 'font-size:.74rem;color:var(--color-neutral-600);margin-top:2px' }, 'Anbefalt 74 % for et frittstående brød på butikkmel.'),
+      // Gramtallet er det man faktisk heller opp, og lå før bare som en bisetning
+      // i konsekvenslinja. Nå står det som eget, redigerbart felt: skriver du
+      // 700, løses prosenten om (settVannGram i engine.js).
+      h('div', { class: 'gramrad' },
+        h('span', { class: 'gramrad-lab' }, 'Vann i deigen'),
+        gramFelt(r.vannTotal, nyGram => { S.hyd = settVannGram(S, nyGram); oppdater(); }, 'Gram vann'),
+        h('span', { class: 'gramrad-enhet' }, 'g')),
+      h('div', { style: 'font-size:.74rem;color:var(--color-neutral-600);margin-top:6px' }, 'Anbefalt 74 % for et frittstående brød på butikkmel.'),
+      anbefaltKnapp(S.hyd, 74, v => { S.hyd = v; oppdater(); }, ' %'),
       guideEl,
       h('div', { style: 'font-size:.78rem;color:var(--color-neutral-600);margin-top:6px;font-variant-numeric:tabular-nums' }, vannKonsekvens(r)),
       infoUtfelling('hydrering'));
@@ -577,6 +724,7 @@ function tegnDeigen(r) {
         },
         onchange: e => { S.saltPct = +e.target.value; oppdater(); } }),
       h('div', { class: 'konsekvens' }, g0(r.salt) + ' salt. Salt strammer glutenet og bremser gjæren; 1,8–2,0 % er sonen.'),
+      anbefaltKnapp(saltN, 1.8, v => { S.saltPct = v; oppdater(); }, ' %'),
       infoUtfelling('saltPct')));
   }
 
@@ -632,20 +780,30 @@ function tilleggSeksjon(r) {
    alltid automatisk for det frøene binder. */
 function tegnKompensasjon(r) {
   if (!Object.keys(S.tillegg || {}).length) return null;
-  const r0 = regn(Object.assign({}, S, { tillegg: {} }));
-  const tap = r0.melTotal - r.melTotal;
+  // Referansen er ALLTID «samme bakst uten tillegg og uten kompensasjon». Den er
+  // fast, og det er nettopp derfor panelet ikke lenger kan løpe løpsk.
+  const r0 = regn(Object.assign({}, S, { tillegg: {}, okDeig: false }));
+  const rRa = regn(Object.assign({}, S, { okDeig: false }));
+  const tap = r0.melTotal - rRa.melTotal;
   if (tap < 1) return null;
-  const faktor = r0.melTotal / Math.max(r.melTotal, 1);
-  const nyVekt = Math.round(S.vekt * faktor / 10) * 10;
+  const paa = !!S.okDeig;
+  const nyVekt = Math.round(r.totalVekt / Math.max(S.antall, 1) / 10) * 10;
   const boks = kort('Hva vil du gjøre med endringen?', null);
   boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:6px' },
-    'Tilleggene tar plass i en fast deigvekt på ', h('b', null, g0(r.totalVekt)), ': melet faller ',
-    h('b', null, g0(tap)), ' (fra ' + g0(r0.melTotal) + ' til ' + g0(r.melTotal) + '). Vannet er allerede justert for det frøene binder.'));
-  boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
-    h('button', { class: 'btn', style: 'flex:1;font-size:.8rem;background:var(--color-accent-2-100);border-color:var(--color-accent-2-300)' }, '✓ Behold deigvekten (som nå)'),
-    nyVekt > S.vekt ? h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: () => { S.vekt = nyVekt; oppdater(); } }, 'Øk deigen: ' + nyVekt + ' g/brød') : null));
+    'Tilleggene tar plass i deigen: uten kompensasjon faller melet ',
+    h('b', null, g0(tap)), ' (fra ' + g0(r0.melTotal) + ' til ' + g0(rRa.melTotal) + '). Vannet er allerede justert for det frøene binder.'));
+  // Ett valg med to tilstander, ikke to knapper som «gjør» noe hver gang de
+  // trykkes. Før var «Øk deigen» en handling som skrev til brødvekten — og siden
+  // den nye vekten ble grunnlag for neste utregning, kunne den trykkes i det
+  // uendelige og deigen vokse hver gang.
+  boks.appendChild(h('div', { class: 'piller', style: 'margin-top:10px' },
+    h('button', { class: paa ? '' : 'paa', onClick: () => { S.okDeig = false; oppdater(); } }, 'Behold brødvekten'),
+    h('button', { class: paa ? 'paa' : '', onClick: () => { S.okDeig = true; oppdater(); } }, 'Øk deigen')));
+  boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' }, paa
+    ? ['Deigen er økt til ', h('b', null, nyVekt + ' g/brød'), ' (du valgte ' + S.vekt + ' g), så melmengden blir ' + g0(r.melTotal) + ' — som uten tillegg. Brødene blir tilsvarende større.']
+    : ['Brødene er ', h('b', null, S.vekt + ' g'), ' som valgt, med ' + g0(r.melTotal) + ' mel — ' + g0(tap) + ' mindre enn uten tillegg. Litt tettere krumme, samme størrelse.']));
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
-    'Å øke deigen gir like mye mel som uten tillegg, men hvert brød blir tyngre. Å beholde vekten gir samme brødstørrelse med litt mindre mel og litt tettere krumme.'));
+    'Valget kan slås av og på uten at noe går tapt: brødvekten din står urørt på ' + S.vekt + ' g/brød under Størrelse.'));
   return boks;
 }
 function soakerKorn(id) { const s = SOAKERS.find(x => x.id === id); return s && s.korn; }
@@ -1210,7 +1368,14 @@ function gjaeringsGraf(pts, r, bulkStart, visNaa) {
     s += `<text x="${pad.l - 5}" y="${n(Yt(v) + 3)}" fill="var(--color-neutral-500)" font-size="8.5" text-anchor="end">${v}°</text>`;
   }
   // Gjæringsakse (høyre): 0 / 50 / 100 %.
-  [0, 50, 100].forEach(p => s += `<text x="${pad.l + iW + 5}" y="${n(Yd(p / 100) + 3)}" fill="var(--color-neutral-500)" font-size="8.5">${p}%</text>`);
+  //
+  // Aksene farges som hver sin kurve, og det er ikke pynt. De to skalaene deler
+  // tegneflate: 0–tempMax til venstre, 0–100 % til høyre. Den akkumulerte
+  // gjæringskurven ender ALLTID på taket (den er normalisert mot sin egen
+  // sluttverdi), og taket ligger på samme høyde som «30°»-linja i rutenettet.
+  // Leser man den mot venstre akse, ser det ut som deigen når 30 °C mens den
+  // står i kjøleskapet. Fargen knytter hvert tall til riktig kurve.
+  [0, 50, 100].forEach(p => s += `<text x="${pad.l + iW + 5}" y="${n(Yd(p / 100) + 3)}" fill="var(--color-accent-2-700)" font-weight="700" font-size="8.5">${p}%</text>`);
 
   // Gjæringsfart som areal — arealet under kurven ER dosen.
   let area = `M ${n(X(0))} ${n(pad.t + iH)}`;
@@ -1250,9 +1415,10 @@ function gjaeringsGraf(pts, r, bulkStart, visNaa) {
     s += `<line x1="${n(X(t))}" y1="${pad.t + iH}" x2="${n(X(t))}" y2="${pad.t + iH + 4}" stroke="var(--color-neutral-400)"/>`;
     s += `<text x="${n(X(t))}" y="${pad.t + iH + 15}" fill="var(--color-neutral-500)" font-size="8.5" text-anchor="middle">${klAv(t)}</text>`;
   }
-  // Aksetitler.
-  s += `<text x="${pad.l - 5}" y="${pad.t - 6}" fill="var(--color-neutral-500)" font-size="8" text-anchor="end">°C</text>`;
-  s += `<text x="${pad.l + iW + 5}" y="${pad.t - 6}" fill="var(--color-accent-2-700)" font-size="8">gjær</text>`;
+  // Aksetitler. «gjæring» og ikke «gjær»: tallet er hvor stor andel av hele
+  // planens gjæring som er unnagjort, ikke en mengde gjær og ikke en temperatur.
+  s += `<text x="${pad.l - 5}" y="${pad.t - 6}" fill="var(--color-neutral-600)" font-weight="700" font-size="8" text-anchor="end">°C deig</text>`;
+  s += `<text x="${pad.l + iW + 5}" y="${pad.t - 6}" fill="var(--color-accent-2-700)" font-weight="700" font-size="8">% gjæring</text>`;
 
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
@@ -1424,15 +1590,44 @@ function tegnLogg(r) {
   wrap.appendChild(tegnBackup());
   return wrap;
 }
+/* Feltene som SKAL til for å bake det samme igjen. Bevisst en hviteliste og
+   ikke «hele S minus litt»: visningstilstand, logg, favoritter og kontoting har
+   ingenting i en oppskrift å gjøre, og en svarteliste ville sluppet gjennom
+   hvert nytt felt som legges til senere. */
+const OPPSKRIFT_FELT = ['brotype', 'grov', 'hyd', 'tid', 'ff', 'ffType', 'ffTemp', 'ffKjol',
+  'tillegg', 'antall', 'vekt', 'startTemp', 'melTemp', 'maskin', 'eltMin', 'romTemp',
+  'stekeProfil', 'stekeProfilManuell', 'lokk', 'fulltKjol', 'form', 'utstyr', 'pyrexIOvn',
+  'saltPct', 'heveplan', 'melOverstyr', 'okDeig'];
+function oppskriftAvtrykk() {
+  const o = {};
+  OPPSKRIFT_FELT.forEach(k => { if (S[k] !== undefined) o[k] = S[k]; });
+  try { return JSON.parse(JSON.stringify(o)); } catch (e) { return null; }
+}
 function lagreBak(r) {
+  const naa = Date.now();
   S.loggListe = S.loggListe.concat([{
-    id: 'b' + Date.now(),
+    id: 'b' + naa,
+    laget: naa, endret: naa,
     navn: S.lgNavn || ('Bak #' + (S.loggListe.length + 1)),
     kar: S.lgKar, dato: new Date().toLocaleDateString('nb-NO'),
     grov: fmt(r.brodskala.pct, 0), hyd: fmt(r.hyd * 100, 0), loft: r.loft.loft, dose: fmt(r.doseProfil.dose, 2),
-    bilder: (S.lgBilder || []).slice()
+    bilder: (S.lgBilder || []).slice(),
+    // Selve oppskriften, ikke bare måletallene — det er dette «Bak dette på
+    // nytt» henter tilbake. Poster fra før dette feltet fantes kan ikke
+    // gjenskapes, og da vises knappen med vilje ikke.
+    oppskrift: oppskriftAvtrykk()
   }]);
   S.lgNavn = ''; S.lgBilder = [];
+  oppdater();
+}
+/* Bak dette på nytt: legg oppskriften tilbake i tilstanden og gå til Brød.
+   Loggen, favorittene, utstyret og maskinen røres ikke — de er dine, ikke
+   bakstens (samme skille som `nyBakst()` gjør ved brødtypebytte). */
+function bakPaaNytt(b) {
+  if (!b || !b.oppskrift) return;
+  Object.keys(b.oppskrift).forEach(k => { S[k] = b.oppskrift[k]; });
+  S.skjerm = 'brodet';
+  S.lgRediger = null; S.lgSlett = null; S.byttBekreft = null;
   oppdater();
 }
 
@@ -1455,6 +1650,16 @@ function loggPost(b, i) {
     ...b.bilder.map((src, j) => h('button', { class: 'logg-bilde', 'aria-label': 'Vis bilde ' + (j + 1) + ' i stort format',
       onClick: () => { S.bildeVis = { id: b.id, i: j }; oppdater(); } },
       h('img', { src, alt: 'Bilde ' + (j + 1) + ' av ' + (b.navn || 'baket') })))));
+  // «Bak dette på nytt» — hovedveien tilbake til et bak som funket. Erstatter
+  // startblokka på Brød-skjermen, som pekte på et forvalg i stedet for på noe
+  // Bjørn faktisk hadde bakt.
+  if (b.oppskrift) {
+    kortEl.appendChild(h('button', { class: 'btn btn-full', style: 'margin-top:10px;font-size:.82rem',
+      onClick: () => bakPaaNytt(b) }, '↻ Bak dette på nytt'));
+  } else {
+    kortEl.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
+      'Denne posten ble lagret før appen tok vare på selve oppskriften, så den kan ikke hentes tilbake. Nye bak kan.'));
+  }
   kortEl.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
     h('button', { class: 'btn-ghost', style: 'font-size:.78rem;padding:4px 0', onClick: () => { S.lgRediger = b.id; S.lgSlett = null; oppdater(); } }, 'Rediger'),
     h('button', { class: 'btn-ghost', style: 'font-size:.78rem;padding:4px 0;margin-left:auto;color:var(--color-danger)', onClick: () => { S.lgSlett = b.id; S.lgRediger = null; oppdater(); } }, 'Slett')));
@@ -1467,7 +1672,13 @@ function loggSlettBekreft(b, i) {
       'Posten og eventuelle bilder forsvinner for godt' + (b.bilder && b.bilder.length ? ' (' + b.bilder.length + (b.bilder.length === 1 ? ' bilde' : ' bilder') + ')' : '') + '. Dette kan ikke angres.'),
     h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
       h('button', { class: 'btn', style: 'flex:1;font-size:.82rem;background:var(--color-danger);color:#fff;border-color:transparent',
-        onClick: () => { S.loggListe = S.loggListe.filter((_, j) => j !== i); S.lgSlett = null; oppdater(); } }, 'Ja, slett'),
+        onClick: () => {
+          // Gravsteinen er det som gjør sletting varig: uten den ville posten
+          // kommet tilbake neste gang en annen enhet synket sin kopi opp.
+          S.loggSlettet = (S.loggSlettet || []).concat([b.id]);
+          S.loggListe = S.loggListe.filter((_, j) => j !== i);
+          S.lgSlett = null; oppdater();
+        } }, 'Ja, slett'),
       h('button', { class: 'btn', style: 'flex:1;font-size:.82rem', onClick: () => { S.lgSlett = null; oppdater(); } }, 'Avbryt')));
 }
 /* Redigerbart er det du selv har skrevet: navn, karakter, notat og bilder.
@@ -1476,7 +1687,9 @@ function loggSlettBekreft(b, i) {
 function loggRediger(b, i) {
   const settFelt = (felt, verdi) => {
     const liste = S.loggListe.slice();
-    liste[i] = Object.assign({}, liste[i], { [felt]: verdi });
+    // `endret` stemples her fordi det er den som avgjør hvem som vinner når
+    // samme post er redigert på to enheter.
+    liste[i] = Object.assign({}, liste[i], { [felt]: verdi, endret: Date.now() });
     S.loggListe = liste;
   };
   const inpFil = h('input', { type: 'file', accept: 'image/*', style: 'display:none',
@@ -1638,13 +1851,15 @@ function tegnOppslag(r) {
   if (S.oppslag === 'mel') return oppslagMel();
   if (S.oppslag === 'teknikk') return oppslagTeknikk();
   if (S.oppslag === 'steking') return oppslagSteking(r);
+  if (S.oppslag === 'utstyr') return oppslagUtstyr(r);
   if (S.oppslag === 'ordliste') return oppslagOrdliste();
   // Meny
   const wrap = h('div');
   const punkter = [
     ['mel', 'Mel & korn', (typeof FLOURS !== 'undefined' ? FLOURS.length : 30) + ' meltyper: protein, glutenbidrag, absorpsjon, tak og pris. Stjernemerk favorittene.'],
     ['teknikk', 'Teknikk og fagstoff', (typeof TIPS !== 'undefined' ? TIPS.length : 23) + ' seksjoner, verifisert mot forskning. Fire av dem motsier notatene.'],
-    ['steking', 'Stekeprofiler', 'Temperatur, damp og kjerne per utstyr — og hvilken planen din bruker.'],
+    ['steking', 'Stekeprofiler', 'Temperatur, damp og kjerne per metode — og hvilken planen din bruker. Stjernemerk favorittene.'],
+    ['utstyr', 'Stekeutstyr', UTSTYR.length + ' oppsett: bunnvarme, damp og forvarming. Stjernemerk dem du faktisk bruker.'],
     ['ordliste', 'Ordliste', (typeof ORDLISTE !== 'undefined' ? ORDLISTE.length : 44) + ' fagord, gruppert, med kryssreferanser.']
   ];
   punkter.forEach(([id, tit, und]) => wrap.appendChild(h('button', { class: 'valgkort', onClick: () => { S.oppslag = id; S.oppslagSok = ''; oppdater(); } },
@@ -1694,7 +1909,7 @@ function oppslagMel() {
   Object.keys(grupper).forEach(gr => {
     wrap.appendChild(h('div', { class: 'seksjonstittel' }, gr));
     grupper[gr].forEach(f => {
-      const fav = (S.favoritter || []).includes(f.id);
+      const fav = erFavoritt('mel', f.id);
       const info = (typeof MEL_INFO !== 'undefined') && MEL_INFO[f.id];
       // Klikkbare tall → MELTALL_INFO-forklaring (ⓘ per tall).
       const tallKnapp = (nokkel, lab, verdi) => h('button', {
@@ -1715,7 +1930,7 @@ function oppslagMel() {
               tallKnapp('styrke', 'Styrke', f.styrke),
               tallKnapp('maxPct', 'Tak', f.maxPct + ' %'),
               tallKnapp('pris', 'Pris', fmt(f.kr, 0) + ' kr/kg'))),
-          h('button', { class: 'info-knapp', style: fav ? 'color:var(--color-accent-500);border-color:var(--color-accent-300)' : '', 'aria-label': (fav ? 'Fjern favoritt: ' : 'Merk som favoritt: ') + f.navn, onClick: () => { S.favoritter = fav ? S.favoritter.filter(x => x !== f.id) : (S.favoritter || []).concat([f.id]); oppdater(); } }, fav ? '★' : '☆')));
+          favKnapp('mel', f.id, f.navn)));
       // MELTALL_INFO-utfelling
       const aapenNok = S.meltallInfo && S.meltallInfo.indexOf(f.id) === 0 ? S.meltallInfo.slice(f.id.length) : null;
       if (aapenNok && typeof MELTALL_INFO !== 'undefined' && MELTALL_INFO[aapenNok]) {
@@ -1759,20 +1974,55 @@ function oppslagTeknikk() {
   });
   return wrap;
 }
+/* Favoritter først. Rekkefølgen er den eneste måten en favoritt faktisk sparer
+   noen for arbeid — en stjerne som bare farger et kort er pynt. */
+function favForst(liste, ns) {
+  return liste.slice().sort((a, b) => (erFavoritt(ns, b.id) ? 1 : 0) - (erFavoritt(ns, a.id) ? 1 : 0));
+}
 function oppslagSteking(r) {
   const wrap = h('div', null, tilbakeknapp());
-  BAKE_PROFILES.forEach(p => {
+  favForst(BAKE_PROFILES, 'steking').forEach(p => {
     const aktiv = r.prof && r.prof.id === p.id;
-    wrap.appendChild(h('div', { class: 'kort' },
+    wrap.appendChild(h('div', { class: 'kort' + (erFavoritt('steking', p.id) ? ' fav' : '') },
       h('div', { style: 'display:flex;align-items:baseline;gap:8px' },
         h('span', { style: 'font-family:var(--font-heading);font-size:1.02rem;flex:1' }, p.navn),
-        aktiv ? h('span', { class: 'badge' }, 'planen din') : null),
+        aktiv ? h('span', { class: 'badge' }, 'planen din') : null,
+        favKnapp('steking', p.id, p.navn)),
       h('div', { style: 'font-size:.76rem;color:var(--color-neutral-600);margin-top:2px' }, (p.vekt || '') + ' · ' + (p.hydrering || '')),
       p.anbefaltTil ? h('div', { style: 'font-size:.78rem;margin-top:6px' },
         h('span', { class: 'pille', style: 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)' }, 'anbefalt til'), ' ' + p.anbefaltTil) : null,
       h('div', { style: 'margin-top:8px' },
         tallrad('Inn på', p.inn + ' °C'), tallrad('Ned til', p.ned + ' °C'), tallrad('Damp', p.damp), tallrad('Damptid', p.dampTid), tallrad('Kjerne', p.kjerne)),
       p.notat ? h('div', { class: 'hjelpetekst', style: 'margin-top:6px' }, p.notat) : null));
+  });
+  return wrap;
+}
+/* Stekeutstyr som eget oppslag. Det manglet helt, og det var her Bjørn fant
+   appens egen favorittisering («★ Deig rett på stålet», «det beste oppsettet du
+   har»). Merkingen er hans nå — appen oppgir tall og lar ham velge.
+
+   `kontakt`/`effusivitet` kan være null: et tynt stekebrett har ingen ekte
+   kontakttemperatur (se kommentaren ved oppsettet i data.js), og da skal det stå
+   ingenting i stedet for «null °C». */
+function oppslagUtstyr(r) {
+  const wrap = h('div', null, tilbakeknapp());
+  favForst(UTSTYR, 'utstyr').forEach(u => {
+    const brukt = S.utstyr === u.id;
+    const kortEl = h('div', { class: 'kort' + (erFavoritt('utstyr', u.id) ? ' fav' : '') },
+      h('div', { style: 'display:flex;align-items:baseline;gap:8px' },
+        h('span', { style: 'font-family:var(--font-heading);font-size:1.02rem;flex:1;min-width:0' }, u.navn),
+        brukt ? h('span', { class: 'badge' }, 'valgt nå') : null,
+        favKnapp('utstyr', u.id, u.navn)),
+      h('div', { style: 'margin-top:8px' },
+        u.kontakt != null ? tallrad('Kontakttemperatur', u.kontakt + ' °C') : tallrad('Kontakttemperatur', 'ikke meningsfull — ingen lagret varme'),
+        tallrad('Forvarming', u.forvarm),
+        tallrad('Damp', u.damp),
+        tallrad('Best til', u.best)),
+      h('div', { class: 'hjelpetekst', style: 'margin-top:8px' }, u.om));
+    if (!brukt) kortEl.appendChild(h('button', { class: 'btn', style: 'margin-top:10px;width:100%;font-size:.82rem',
+      onClick: () => { S.utstyr = u.id; if (!S.stekeProfilManuell) S.stekeProfil = profilForUtstyr(u.id, S.form); S.skjerm = 'brodet'; oppdater(); } },
+      'Bruk dette oppsettet'));
+    wrap.appendChild(kortEl);
   });
   return wrap;
 }
@@ -1866,25 +2116,66 @@ async function skyGlemt() {
   skyForm.feil = svar.feil || null; skyForm.melding = svar.melding || null;
   render();
 }
-/* Ved innlogging: hent ned skyens versjon og la den NYESTE vinne. Uten
-   tidsstempel-sammenligning ville en fersk logg på telefonen blitt overskrevet
-   av en gammel kopi fra PC-en, eller omvendt. */
+/* ---------- Bakeloggen flettes, den overskrives aldri ----------
+   Resten av tilstanden er INNSTILLINGER — der er «nyeste vinner» riktig, for det
+   finnes bare én gjeldende oppskrift. Bakeloggen er HISTORIKK, og historikk kan
+   ikke ha en vinner: en post som finnes på én enhet og ikke på den andre er ikke
+   en konflikt, den er en post den andre enheten ikke har sett ennå.
+
+   Dette er feilen Bjørn traff. `oppdatert` ble bumpet av all bruk, så en enhet
+   uten historikk kunne bli «nyest» bare ved at man blar til Logg for å logge inn
+   — og da la den sin tomme loggListe over historikken i skyen. Uopprettelig.
+
+   Sletting løses med gravsteiner (`loggSlettet`) i stedet for ved fravær. Uten
+   dem ville en union gjenopplivet hver post man har slettet, hver gang den andre
+   enheten synket. */
+function lagetMs(b) {
+  if (b && isFinite(b.laget)) return +b.laget;
+  const m = /^b(\d{10,})/.exec(String((b && b.id) || ''));   // id-ene er 'b' + Date.now()
+  return m ? +m[1] : 0;                                      // eldre id-er: sorteres først
+}
+function flettLogg(lokal, sky, slettet) {
+  const doed = new Set(slettet || []);
+  const kart = new Map();
+  (Array.isArray(sky) ? sky : []).forEach(b => { if (b && b.id) kart.set(b.id, b); });
+  (Array.isArray(lokal) ? lokal : []).forEach(b => {
+    if (!b || !b.id) return;
+    const fra = kart.get(b.id);
+    // Samme post begge steder: den sist redigerte vinner. Mangler `endret` på
+    // begge (poster fra før feltet fantes), beholdes den lokale.
+    if (!fra || (+b.endret || 0) >= (+fra.endret || 0)) kart.set(b.id, b);
+  });
+  return [...kart.values()].filter(b => !doed.has(b.id)).sort((a, b) => lagetMs(a) - lagetMs(b));
+}
+
+/* Ved innlogging: innstillingene følger nyeste tidsstempel, loggen flettes. */
 async function synkVedInnlogging() {
   if (_harHentetNed) return;
   _harHentetNed = true;
   const sky = await Sky.hentNed();
+  // Leseferil er IKKE det samme som «ingenting der oppe». Uten dette skillet
+  // kunne et nettverksglipp få appen til å laste opp lokal tilstand over en
+  // historikk den aldri fikk lest.
+  if (sky && sky.feil) { render(); return; }
   if (!sky || !sky.state) { Sky.lagreOpp(S); render(); return; }   // ingenting oppe ennå — legg opp det lokale
   const skyMs = sky.oppdatert ? new Date(sky.oppdatert).getTime() : 0;
   const lokaltMs = S.oppdatert || 0;
+  const lokalLogg = S.loggListe || [];
+  const skyState = sky.state || {};
+  const gravsteiner = [...new Set([].concat(S.loggSlettet || [], skyState.loggSlettet || []))];
+  const flettet = flettLogg(lokalLogg, skyState.loggListe, gravsteiner);
   if (skyMs > lokaltMs) {
     try {
-      localStorage.setItem(LAGER, JSON.stringify(sky.state));
+      localStorage.setItem(LAGER, JSON.stringify(skyState));
       S = last();
       if (window.__FB) window.__FB.S = S;
     } catch (e) {}
-  } else {
-    Sky.lagreOpp(S);
   }
+  // Loggen settes ETTER at innstillingene er avgjort, uansett hvem som vant.
+  S.loggListe = flettet;
+  S.loggSlettet = gravsteiner;
+  lagre();                 // skriv det flettede lokalt (og stempl det, hvis det endret seg)
+  Sky.skyvNaa(S);          // og opp, så begge enhetene ender likt
   render();
 }
 
@@ -1912,5 +2203,8 @@ if (typeof Sky !== 'undefined' && Sky.klar()) {
   Sky.paaEndring(() => { render(); if (Sky.bruker()) synkVedInnlogging(); });
 }
 render();
-window.__FB = { S, render };
+/* Testkroken. `flettLogg` er eksponert fordi den er ren og fordi den er den
+   viktigste funksjonen i appen å ha dekket: det er den som gjør at bakeloggen
+   ikke kan forsvinne i en synk. */
+window.__FB = { S, render, oppdater, flettLogg, oppskriftAvtrykk };
 })();
