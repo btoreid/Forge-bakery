@@ -125,6 +125,16 @@ en rad over på en annen bruker. SQL-en står i `SUPABASE.md`.
 standardgrenen, så på utviklingsgrenen ville den aldri kjørt. Husk det hvis pingen skal
 endres — en endring på featuregrenen får ingen effekt.
 
+### Regresjonstester finnes nå — kjør dem før du sier deg ferdig
+
+`tester/` har sju Playwright-suiter som dekker alt levert 30.07. `cd tester &&
+npm install` én gang, så `node kjor-alle.js` (~3 min) — den starter serverne selv.
+Se `tester/LES MEG.md`, særlig avsnittet om hvorfor 8124-serveren hermer GitHub
+Pages: uten `max-age`+ETag ville cache-testen vært grønn av feil grunn.
+
+Testene rører ikke appen. Den lastes fortsatt uten byggverktøy og uten
+`node_modules` — npm-stoffet ligger isolert i `tester/`.
+
 ### Åpne V2-punkter
 
 Ingen kjente åpne punkter. Neste runde avventer Bjørns tilbakemelding.

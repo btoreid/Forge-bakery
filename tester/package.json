@@ -1,0 +1,11 @@
+{
+  "name": "forge-bakery-tester",
+  "private": true,
+  "description": "Playwright-tester for V2. Ligger for seg selv: selve appen skal fortsatt kunne kjøres uten byggverktøy og uten node_modules.",
+  "scripts": {
+    "test": "node kjor-alle.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

@@ -1,0 +1,126 @@
+/* Loggen: fullskjermbilder + rediger/slett poster. */
+const { chromium } = require('playwright');
+require('fs').mkdirSync(__dirname + '/skjermbilder', { recursive: true });
+const fs = require('fs');
+const D = __dirname + '/skjermbilder/';
+let feil = 0;
+const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' — ' + e : '')); if (!s) feil++; };
+(async () => {
+  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const errs = []; page.on('pageerror', e => errs.push(String(e)));
+  await page.goto('http://localhost:8123/');
+  await page.waitForTimeout(400);
+  // Testbilder i samme størrelsesorden som ekte kamerabilder etter nedskalering
+  // (480 px). Et 64 px-bilde ville ikke blitt skalert opp — contain skalerer ned,
+  // ikke opp — og testen på «vises stort» ville vært meningsløs.
+  for (const [navn, farge] of [['bilde-a.png', '#c67139'], ['bilde-b.png', '#7a8a5e']]) {
+    const data = await page.evaluate(f => {
+      const c = document.createElement('canvas'); c.width = 640; c.height = 480;
+      const x = c.getContext('2d'); x.fillStyle = f; x.fillRect(0, 0, 640, 480);
+      return c.toDataURL('image/png');
+    }, farge);
+    fs.writeFileSync(D + navn, Buffer.from(data.split(',')[1], 'base64'));
+  }
+  await page.click('#bunnmeny button:has-text("Logg")');
+  await page.waitForTimeout(300);
+
+  console.log('— Lagre to bak, ett med to bilder —');
+  for (const f of ['bilde-a.png', 'bilde-b.png']) {
+    const [v] = await Promise.all([page.waitForEvent('filechooser'), page.click('button[aria-label="Legg til bilde"]')]);
+    await v.setFiles(D + f);
+    await page.waitForTimeout(400);
+  }
+  await page.fill('input[placeholder*="Halvgrovt"]', 'Bak med bilder');
+  await page.click('button:has-text("Lagre baket")');
+  await page.waitForTimeout(300);
+  await page.fill('input[placeholder*="Halvgrovt"]', 'Bak uten bilder');
+  await page.click('button:has-text("Lagre baket")');
+  await page.waitForTimeout(300);
+  ok('to poster i loggen', await page.evaluate(() => window.__FB.S.loggListe.length) === 2);
+  ok('nyeste øverst', (await page.locator('.kort:has-text("Bak uten bilder")').count()) === 1);
+  ok('hver post har id', await page.evaluate(() => window.__FB.S.loggListe.every(b => !!b.id)));
+
+  console.log('— Fullskjermvisning —');
+  ok('miniatyrene er knapper', await page.locator('.logg-bilde').count() === 2);
+  await page.locator('.logg-bilde').first().click();
+  await page.waitForTimeout(300);
+  ok('bildevisning åpnet', await page.locator('#bildevis').count() === 1);
+  const bredde = await page.locator('#bildevis img').evaluate(e => e.getBoundingClientRect().width);
+  ok('bildet fyller skjermen', bredde > 300, Math.round(bredde) + ' px av 390');
+  ok('viser navn og teller', (await page.locator('.bv-tekst').innerText()).includes('1 av 2'), await page.locator('.bv-tekst').innerText());
+  ok('ligger over bunnmenyen', await page.locator('#bildevis').evaluate(e => +getComputedStyle(e).zIndex) > 30);
+  await page.screenshot({ path: D + 'logg-bildevis.png' });
+  await page.click('.bv-pil.hoyre');
+  await page.waitForTimeout(250);
+  ok('pil bytter til bilde 2', (await page.locator('.bv-tekst').innerText()).includes('2 av 2'));
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(250);
+  ok('piltast blar tilbake', (await page.locator('.bv-tekst').innerText()).includes('1 av 2'));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(250);
+  ok('Esc lukker', await page.locator('#bildevis').count() === 0);
+  // trykk på selve bildet skal IKKE lukke; trykk utenfor skal
+  await page.locator('.logg-bilde').first().click();
+  await page.waitForTimeout(250);
+  await page.locator('#bildevis img').click();
+  await page.waitForTimeout(250);
+  ok('trykk på bildet lukker ikke', await page.locator('#bildevis').count() === 1);
+  await page.locator('#bildevis').click({ position: { x: 10, y: 10 } });
+  await page.waitForTimeout(250);
+  ok('trykk utenfor lukker', await page.locator('#bildevis').count() === 0);
+
+  console.log('— Redigere —');
+  await page.locator('.kort:has-text("Bak med bilder") button:has-text("Rediger")').click();
+  await page.waitForTimeout(300);
+  ok('redigeringsmodus åpnet', await page.locator('.kort:has-text("Redigerer")').count() === 1);
+  await page.fill('input[data-fokus="lgnavn"]', 'Omdøpt bak');
+  await page.waitForTimeout(300);
+  ok('navnet endret i state', await page.evaluate(() => window.__FB.S.loggListe.some(b => b.navn === 'Omdøpt bak')));
+  await page.fill('textarea[data-fokus="lgnotat"]', 'For tett krumme — mer vann neste gang');
+  await page.waitForTimeout(300);
+  ok('notat lagret', await page.evaluate(() => window.__FB.S.loggListe.some(b => (b.notat || '').includes('mer vann'))));
+  const karFoer = await page.evaluate(() => window.__FB.S.loggListe.find(b => b.navn === 'Omdøpt bak').kar);
+  await page.locator('.kort:has-text("Redigerer") button[aria-label="Høyere karakter"]').click();
+  await page.waitForTimeout(300);
+  ok('karakter kan endres', await page.evaluate(() => window.__FB.S.loggListe.find(b => b.navn === 'Omdøpt bak').kar) === karFoer + 1);
+  // fjern ett bilde
+  await page.locator('.kort:has-text("Redigerer") button[aria-label="Fjern bilde 1"]').click();
+  await page.waitForTimeout(300);
+  ok('bilde fjernet fra posten', await page.evaluate(() => window.__FB.S.loggListe.find(b => b.navn === 'Omdøpt bak').bilder.length) === 1);
+  await page.screenshot({ path: D + 'logg-rediger.png' });
+  await page.locator('.kort:has-text("Redigerer") button:has-text("Ferdig")').click();
+  await page.waitForTimeout(300);
+  ok('redigering lukket', await page.locator('.kort:has-text("Redigerer")').count() === 0);
+  ok('notatet vises på kortet', (await page.locator('.kort:has-text("Omdøpt bak")').innerText()).includes('mer vann'));
+  ok('måletall urørt', (await page.locator('.kort:has-text("Omdøpt bak")').innerText()).includes('% grovt'));
+
+  console.log('— Slette —');
+  await page.locator('.kort:has-text("Omdøpt bak") button:has-text("Slett")').click();
+  await page.waitForTimeout(300);
+  ok('bekreftelse vises', await page.locator('.kort:has-text("Slette «Omdøpt bak»?")').count() === 1);
+  ok('nevner bildet', (await page.locator('.kort:has-text("Slette «Omdøpt bak»?")').innerText()).includes('1 bilde'));
+  await page.click('button:has-text("Avbryt")');
+  await page.waitForTimeout(300);
+  ok('avbryt beholder posten', await page.evaluate(() => window.__FB.S.loggListe.length) === 2);
+  // slett den ØVERSTE (nyeste) og sjekk at riktig post forsvinner — indeksfella
+  await page.locator('.kort:has-text("Bak uten bilder") button:has-text("Slett")').click();
+  await page.waitForTimeout(250);
+  await page.click('button:has-text("Ja, slett")');
+  await page.waitForTimeout(300);
+  const igjen = await page.evaluate(() => window.__FB.S.loggListe.map(b => b.navn));
+  ok('riktig post slettet', igjen.length === 1 && igjen[0] === 'Omdøpt bak', JSON.stringify(igjen));
+
+  // overlever omlasting
+  await page.reload();
+  await page.waitForTimeout(500);
+  await page.click('#bunnmeny button:has-text("Logg")');
+  await page.waitForTimeout(300);
+  ok('endringene overlever omlasting', (await page.locator('.kort:has-text("Omdøpt bak")').count()) === 1);
+  ok('bildet også', await page.locator('.logg-bilde').count() === 1);
+
+  ok('ingen JS-feil', errs.length === 0, errs.join(' | '));
+  await browser.close();
+  console.log(feil === 0 ? '\nALLE TESTER GRØNNE' : '\n' + feil + ' TESTER RØDE');
+  process.exit(feil === 0 ? 0 : 1);
+})();
