@@ -528,9 +528,12 @@ function tegnBunnlinje(r, K) {
     bl.insertBefore(stripe, bl.firstChild);
   }
   stripe.setAttribute('aria-expanded', S.regnskapAapen ? 'true' : 'false');
+  // Stripa viser bare det en baker trenger i et blikk — deigvekt, gjær, løft og
+  // total tid. «GD» (gjæringsdose) er tatt ut: det var ren sjargong, gjentok
+  // gjær-tallet rett ved siden av, og var med på å sprenge bredden så linja
+  // klippet på smal skjerm. Resten står i regnskapsarket som dras opp.
   stripe.replaceChildren(
     h('b', null, g0(r.totalVekt)), ' deig', sep(),
-    h('b', null, fmt(r.doseProfil.dose, 2)), ' GD', sep(),
     h('b', null, fmt(r.gjaerTotal, 2) + ' g'), ' gjær', sep(),
     h('b', null, String(r.loft.loft)), ' løft', sep(),
     h('b', null, fmt(K.totalT, 1) + ' t'), ' total',
@@ -573,7 +576,7 @@ function tegnBunnlinje(r, K) {
     ...avvik.map(rad => h('div', { class: 'ark-avvik' },
       h('b', null, rad.navn),
       h('span', null, rad.verdier.map(([lab, v]) => lab + ' ' + fmtDelta(v)).join(' · ')))),
-    avvik.length ? h('div', { style: 'font-size:.68rem;color:var(--color-neutral-500);margin-top:4px' },
+    avvik.length ? h('div', { style: 'font-size:.68rem;color:var(--color-neutral-600);margin-top:4px' },
       '± er endring mot samme brød uten tillegg. Detaljer i «Hva valgene koster» på Deig.') : null,
     // Gjæringskurven hører hjemme her: regnskapet sier hva deigen ER, grafen
     // sier hvordan den kommer dit. Samme funksjon som på Tid, i mini-format.
@@ -603,7 +606,7 @@ function regnskapGraf(r, K) {
   return h('div', { style: 'margin-top:12px' },
     h('div', { class: 'ark-tittel' }, 'Gjæringen over tid'),
     gjaeringsGraf(pts, r, bulkStart, S.tidModus === 'naa'),
-    h('div', { style: 'font-size:.68rem;color:var(--color-neutral-500);margin-top:2px' },
+    h('div', { style: 'font-size:.68rem;color:var(--color-neutral-600);margin-top:2px' },
       'Grønn kurve: andel av gjæringen som er gjort (høyre akse). Stiplet: deigtemperatur (venstre).'));
 }
 
@@ -662,7 +665,9 @@ function tegnBrodet(r, K) {
     stepperRad('Gram per brød', S.vekt, 'vekt', 100, 2000, 50),
     h('div', { style: 'margin-top:10px;font-size:.8rem;color:var(--color-neutral-700);font-variant-numeric:tabular-nums' },
       'Deigvekt ', h('b', null, g0(r.totalVekt)), ' · hver ca. ', h('b', null, g0(emneMasse)),
-      ' · Pyrex-gryta er 21,5 cm innvendig'),
+      // Pyrex-målet er bare relevant når man faktisk baker i Pyrexen — ellers er
+      // det irrelevant støy midt i et sentralt tall.
+      (r.prof && (r.prof.id === 'brod_glass_stal' || r.prof.id === 'brod_kloke')) ? ' · Pyrex-gryta er 21,5 cm innvendig' : ''),
     h('div', { style: 'margin-top:12px' },
       h('div', { class: 'felt-label' }, 'Kjøkkenvekta di viser'),
       h('div', { class: 'piller' }, ...[[1, 'hele gram'], [0.1, '0,1 g'], [0.01, '0,01 g']].map(([v, navn]) =>
@@ -689,10 +694,10 @@ function brodInfoBoks(bt, K) {
       h('span', { style: 'flex:0 0 18px;color:var(--color-neutral-500);font-variant-numeric:tabular-nums' }, String(j + 1)),
       h('span', { style: 'flex:1' }, s.navn),
       h('span', { style: 'color:var(--color-neutral-600);font-variant-numeric:tabular-nums;white-space:nowrap' }, fmtTimer(s.varighet / 60)))));
-    boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-500);margin-top:6px' },
+    boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-600);margin-top:6px' },
       'Tidene følger valgene dine — hele kjeden med klokkeslett ligger under Prosess.'));
   } else {
-    boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-500);margin-top:8px' },
+    boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-600);margin-top:8px' },
       'Velg denne baksten for å se hele stegkjeden med tider.'));
   }
   return boks;
@@ -787,7 +792,7 @@ function tegnUtstyrValg(r) {
     boks.appendChild(h('div', { class: 'konsekvens' }, paa
       ? [h('b', null, 'Steker på ' + grunn.varm.inn + ' °C'), ' i stedet for ' + grunn.inn + ' °C, ned til ' + grunn.varm.ned + ' °C. Uten oppvarmingssjokket er det ikke 220-gradersgrensen som setter taket lenger, så oppsettet kan kjøres som en støpejernsgryte — mer bunnvarme og bedre ovnsløft. Deigen ligger på stålet og rører aldri glasset.']
       : [h('b', null, 'Steker på ' + grunn.inn + ' °C.'), ' Taket er glassets termiske sprang på 220 °C: et romtemperert glass inn i en 260-graders ovn er 240 og kan sprekke. Lar du glasset stå i ovnen fra kald start, forsvinner den grensen — kryss av over.']));
-    if (paa) boks.appendChild(h('div', { class: 'varsel' },
+    if (paa) boks.appendChild(h('div', { class: 'varsel fare' },
       h('b', null, 'To ting glasset ikke tåler: '), 'å settes tilbake i en varm ovn etter at det er blitt kaldt, og å kjøles raskt — legg det aldri i vann eller på en våt benk når du tar det av etter 20 minutter. La det kjøle i luft, eller sett det rett inn igjen mens det er varmt.'));
   }
   return boks;
@@ -946,7 +951,7 @@ function tegnDeigen(r) {
             const liste = (gyldigOverstyring(S.melOverstyr) || r.melListe).filter((_, j) => j !== i);
             S.melOverstyr = liste.length ? liste : null;
             oppdater();
-          } }, '✕') : null),
+          } }, '×') : null),
       // Gram er redigerbart. Har du 500 g igjen av en melsort, skriver du 500 —
       // i stedet for å regne ut hvilken andel det blir. Selve omregningen ligger
       // i engine.js (settMelGram), som itererer fordi melmengden avhenger av
@@ -995,7 +1000,7 @@ function tegnDeigen(r) {
     if (ma.trengerSyre) raad.push('Bruk surdeig eller 1–2 % eddik mot rugens amylase.');
     if (ma.maaIForm) raad.push('Bak i FORM — dette emnet holder ikke fasongen fritt.');
     raad.push('Reduser hevemålet og la brødet hvile 12–24 t før skjæring.');
-    melBoks.appendChild(h('div', { class: 'varsel', style: 'margin-top:10px;border-left:3px solid var(--color-danger)' },
+    melBoks.appendChild(h('div', { class: 'varsel fare' },
       h('div', { style: 'margin-bottom:6px' }, h('b', null, 'Melblandingen er utenfor det som gir et trygt brød.')),
       ...rader,
       h('div', { style: 'margin-top:6px;font-size:.82rem;color:var(--color-neutral-700)' }, raad.join(' '))));
@@ -1018,7 +1023,7 @@ function tegnDeigen(r) {
       const f = FLOURS.find(x => x.id === m.id);
       return f && f.prisAnslag && (m.gram || 0) > 0;
     });
-    melBoks.appendChild(h('div', { style: 'font-size:.68rem;color:var(--color-neutral-500);margin-top:8px;line-height:1.45' },
+    melBoks.appendChild(h('div', { style: 'font-size:.68rem;color:var(--color-neutral-600);margin-top:8px;line-height:1.45' },
       'Kiloprisene er hentet ' + PRIS_HENTET + ' fra ' + PRIS_KILDE + '.' +
       (anslag.length
         ? ' ' + anslag.map(m => m.navn).join(', ') + (anslag.length > 1 ? ' er anslag' : ' er et anslag') +
@@ -1075,7 +1080,7 @@ function tegnDeigen(r) {
       h('div', { style: 'font-size:.78rem;color:var(--color-neutral-600);margin-top:6px;font-variant-numeric:tabular-nums' }, vannKonsekvens(r)),
       infoUtfelling('hydrering'));
     vk.className = 'kort sone-' + lab0.sone;
-    if (S.hyd > tak) vk.appendChild(h('div', { class: 'varsel' },
+    if (S.hyd > tak) vk.appendChild(h('div', { class: 'varsel fare' },
       'Melblandingen din (vektet styrke ' + fmt(r.styrkeVektet, 1) + ') tåler anslagsvis ' + tak + ' % før deigen flyter ut i stedet for å reise seg. Du ligger ' + (S.hyd - tak) + ' pp over — bruk form, eller bytt inn sterkere mel.'));
     wrap.appendChild(vk);
   }
@@ -1520,7 +1525,7 @@ function tegnAutolyse(r) {
   if (paa && S.ff) boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
     'Du har både forferment og autolyse på, og det henger sammen: forfermenten modnes for seg og gir smak, mens autolysen gjelder ',
     h('b', null, 'resten'), ' av melet og vannet og bygger gluten uten at gjæringen starter. Bland forfermenten inn først når autolysen er ferdig, sammen med salt og gjær. Det er den klassiske baguettemetoden.'));
-  if (min >= 180) boks.appendChild(h('div', { class: 'varsel' },
+  if (min >= 180) boks.appendChild(h('div', { class: 'varsel fare' },
     'Over ~3 timer begynner proteasene å bryte ned mer enn de bygger, og deigen blir slapp og klissete. Med gjærdeig er 1–3 timer trygt — surdeig tåler langt mindre fordi lav pH vekker proteasene.'));
   return boks;
 }
@@ -1535,9 +1540,9 @@ function tegnFfTemp(r, f) {
   const kald = f.temp <= 12;
   boks.appendChild(h('div', { class: 'piller', style: 'margin-top:4px' },
     h('button', { class: kald ? '' : 'paa', onClick: () => { S.ffTemp = null; oppdater(); } },
-      'I rommet ' + fmt(S.romTemp || 22, 0) + '°'),
+      'I rommet ' + fmt(S.romTemp || 22, 0) + ' °C'),
     h('button', { class: kald ? 'paa' : '', onClick: () => { S.ffTemp = S.kjolskapTemp || 4; oppdater(); } },
-      'I kjøleskapet ' + fmt(S.kjolskapTemp || 4, 0) + '°')));
+      'I kjøleskapet ' + fmt(S.kjolskapTemp || 4, 0) + ' °C')));
   /* Det er ROMMET man vet temperaturen på, ikke forfermenten.
      Feltet het «Temperatur på forfermenten», og det er en temperatur ingen har
      målt: forfermenten holder den temperaturen omgivelsene gir den. Står den i
@@ -1577,7 +1582,7 @@ function tegnFfTemp(r, f) {
   if (f.gjaerPaaTaket) {
     const onsketFersk = gjaerKonverter(f.gjaerPctOnsket, r.gjaerType, 'fersk');
     const takFersk = gjaerKonverter(f.gjaerTakPct, r.gjaerType, 'fersk');
-    const v = h('div', { class: 'varsel' },
+    const v = h('div', { class: 'varsel fare' },
       h('b', null, 'Denne kombinasjonen går ikke opp. '),
       'For å rekke samme modning på ' + fmtTimer(f.timer) + ' ved ' + grader(f.temp, 0) +
       ' måtte forfermenten hatt ' + fmt(onsketFersk, 1) + ' % fersk gjær på sitt eget mel. ' +
@@ -1588,7 +1593,7 @@ function tegnFfTemp(r, f) {
       'Gi den ' + fmtTimer(ekv) + ' i stedet — da rekker den'));
     v.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:6px;width:100%;font-size:.8rem',
       onClick: () => { S.ffTemp = null; oppdater(); } },
-      'Eller sett den tilbake til planens ' + fmt(f.standardTemp, 0) + '°'));
+      'Eller sett den tilbake til planens ' + fmt(f.standardTemp, 0) + ' °C'));
     boks.appendChild(v);
   }
   return boks;
@@ -1656,7 +1661,7 @@ function tegnDoseRespons(r) {
   rader.forEach(rad => boks.appendChild(h('div', { style: 'margin-top:10px' },
     h('div', { style: 'font-weight:700;font-size:.86rem;margin-bottom:4px' }, rad.navn),
     ...rad.verdier.map(([lab, v, skala]) => deltaRad(lab, v, skala)),
-    h('div', { style: 'font-size:.64rem;color:var(--color-neutral-500);margin-top:4px' }, 'Kilde: ' + rad.kilde))));
+    h('div', { style: 'font-size:.64rem;color:var(--color-neutral-600);margin-top:4px' }, 'Kilde: ' + rad.kilde))));
   return boks;
 }
 /* Divergerende søyle: 0 i midten, pluss mot høyre, minus mot venstre. Grønn når
@@ -1718,7 +1723,7 @@ function tegnHeveplan(r) {
        bare et annet brød. */
     const paaTaket = r.gjaerTorr >= GJAER_TAK_TORR - 0.001;
     const sumT = trinn.reduce((s2, t) => s2 + (t.timer || 0), 0);
-    if (paaTaket) boks.appendChild(h('div', { class: 'varsel' },
+    if (paaTaket) boks.appendChild(h('div', { class: 'varsel fare' },
       h('b', null, 'For kort for gjæren. '),
       'Planen din gir ' + fmtTimer(sumT) + ' heving, og selv med gjæren på taket (' +
       fmt(GJAER_TAK_TORR, 2) + ' % tørrgjær) rekker ikke deigen måldosen. Over dette taket får du gjærsmak og dårligere løft i stedet for mer heving. Brødet blir bakt, men tettere og mindre smakfullt enn planen sikter mot — gi den en time eller to til, eller sett trinnene varmere.'));
@@ -1748,8 +1753,8 @@ function tegnHeveplan(r) {
         trinnFelt('Miljø', tr.miljo, '°C', v => redigerTrinn(i, 'miljo', v))),
       // Hurtigvalg for hvor deigen står: kjøleskapet eller rommet ditt.
       h('div', { class: 'piller', style: 'margin-top:6px' },
-        h('button', { class: Math.abs(tr.miljo - kjt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', kjt) }, 'Kjøleskapet ' + fmt(kjt, 0) + '°'),
-        h('button', { class: Math.abs(tr.miljo - rt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', rt) }, 'Rommet ditt ' + fmt(rt, 0) + '°')),
+        h('button', { class: Math.abs(tr.miljo - kjt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', kjt) }, 'Kjøleskapet ' + fmt(kjt, 0) + ' °C'),
+        h('button', { class: Math.abs(tr.miljo - rt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', rt) }, 'Rommet ditt ' + fmt(rt, 0) + ' °C')),
       // Eksplisitt utbakt-toggle: styrer om emnet er formet (kjøles som ett emne,
       // uten lokk) — en modellforskjell som ikke kan avledes av temperaturen alene.
       h('label', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.78rem;color:var(--color-neutral-700);cursor:pointer' },
@@ -1983,7 +1988,7 @@ function tegnTid(r, K) {
        Regnestykket kan lande på 1 °C eller lavere, og da er tallet ubrukelig
        som instruksjon. Da skal appen si hva som FAKTISK skjer, og hva man kan
        gjøre med det — ikke be om vann som ikke finnes. */
-    r.vannForKaldt ? h('div', { class: 'varsel' },
+    r.vannForKaldt ? h('div', { class: 'varsel fare' },
       h('div', { style: 'font-weight:800;margin-bottom:2px' },
         'Vannet må være kaldere enn du får det'),
       h('div', { style: 'font-size:.8rem;line-height:1.45' },
@@ -2163,7 +2168,7 @@ function tegnKalibrering(r) {
     boks.appendChild(h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:8px' },
       'Fyll inn start og de to første fartene, så regner appen ut friksjonen. Høy fart er valgfri — den er der for å vise deg forskjellen.'));
   }
-  if (midRate != null && midRate <= 0) boks.appendChild(h('div', { class: 'varsel' },
+  if (midRate != null && midRate <= 0) boks.appendChild(h('div', { class: 'varsel fare' },
     'Temperaturen gikk ikke opp mellom lav og middels. Enten gikk det for kort tid, eller så er kjøkkenet kaldere enn deigen — mål på nytt med litt lengre drag.'));
   boks.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:6px;font-size:.78rem',
     onClick: () => { S.friksjonKalibrert = true; oppdater(); } }, 'Ikke nå — bruk tabellverdien'));
@@ -2750,7 +2755,7 @@ function loggRediger(b, i) {
   boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:12px' },
     h('button', { class: 'btn btn-primary', style: 'flex:1;font-size:.82rem', onClick: () => { S.lgRediger = null; oppdater(); } }, 'Ferdig'),
     h('button', { class: 'btn', style: 'flex:0 0 auto;font-size:.82rem;color:var(--color-danger)', onClick: () => { S.lgSlett = b.id; S.lgRediger = null; oppdater(); } }, 'Slett')));
-  boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-500);margin-top:8px' },
+  boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-600);margin-top:8px' },
     'Endringene lagres mens du skriver. Måletallene (dose, hydrering, løft) kan ikke endres — de er hentet fra baket slik det faktisk var.'));
   return boks;
 }
@@ -2961,6 +2966,13 @@ async function seEtterOppdatering(e) {
   location.reload();
 }
 function tilbakeknapp() { return h('button', { class: 'btn-ghost', onClick: () => { S.oppslag = 'meny'; oppdater(); } }, '‹ Oppslag'); }
+/* Tom-treff-tilstand for Oppslag-søkene. Uten den sto brukeren igjen med et
+   søkefelt over et helt tomt område når søket ikke traff noe — det leser som en
+   feil, ikke som «ingen treff». */
+function tomTreff(sok) {
+  return h('div', { class: 'tomkort', style: 'margin-top:10px;text-align:center;color:var(--color-neutral-600);font-size:.86rem' },
+    'Ingen treff på «' + sok + '».');
+}
 
 function oppslagMel() {
   const wrap = h('div', null, tilbakeknapp());
@@ -3011,15 +3023,18 @@ function oppslagMel() {
       wrap.appendChild(kortEl);
     });
   });
+  if (sok && !Object.keys(grupper).length) wrap.appendChild(tomTreff(S.oppslagSok));
   return wrap;
 }
 function oppslagTeknikk() {
   const wrap = h('div', null, tilbakeknapp());
   wrap.appendChild(h('input', { class: 'sok', 'data-fokus': 'sok', placeholder: 'Søk fagstoff…', value: S.oppslagSok, oninput: e => { S.oppslagSok = e.target.value; render(); } }));
   const sok = (S.oppslagSok || '').toLowerCase();
+  let antTreff = 0;
   TIPS.forEach(t => {
     const tekst = JSON.stringify(t).toLowerCase();
     if (sok && !tekst.includes(sok)) return;
+    antTreff++;
     const motsier = (t.tittel || '').includes('⚠') || (t.ikon === '⚠');
     const boks = h('details', { class: 'kort', style: 'padding:0' });
     boks.appendChild(h('summary', { style: 'padding:14px 16px;cursor:pointer;font-weight:700;font-size:.9rem;list-style:none;display:flex;gap:8px;align-items:center' },
@@ -3034,6 +3049,7 @@ function oppslagTeknikk() {
     boks.appendChild(kropp);
     wrap.appendChild(boks);
   });
+  if (sok && !antTreff) wrap.appendChild(tomTreff(S.oppslagSok));
   return wrap;
 }
 /* Favoritter først. Rekkefølgen er den eneste måten en favoritt faktisk sparer
@@ -3112,6 +3128,7 @@ function oppslagOrdliste() {
               onClick: () => { S.oppslagSok = ord; oppdater(); } }, ord)))) : null));
     });
   });
+  if (sok && !Object.keys(grupper).length) wrap.appendChild(tomTreff(S.oppslagSok));
   return wrap;
 }
 
@@ -3137,7 +3154,7 @@ function tegnKonto() {
     boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
       h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: async () => { await Sky.skyvNaa(S); render(); } }, 'Synk nå'),
       h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: loggUtTrygt }, 'Logg ut')));
-    if (skyForm.utFeil) boks.appendChild(h('div', { class: 'varsel' },
+    if (skyForm.utFeil) boks.appendChild(h('div', { class: 'varsel fare' },
       h('b', null, 'Fikk ikke lagret loggen i skyen. '),
       'Du er fortsatt innlogget, og ingenting er slettet. ' + skyForm.utFeil +
       ' Prøv «Synk nå» når du har nett igjen, så kan du logge ut trygt.'));
@@ -3163,7 +3180,7 @@ function tegnKonto() {
   boks.appendChild(h('button', { class: 'btn btn-primary btn-full', disabled: skyForm.jobber ? '' : null,
     onClick: () => skySend(erNy) }, skyForm.jobber ? 'Vent …' : (erNy ? 'Opprett konto' : 'Logg inn')));
   if (!erNy) boks.appendChild(h('button', { class: 'btn-ghost', style: 'font-size:.78rem', onClick: skyGlemt }, 'Glemt passord?'));
-  if (skyForm.feil) boks.appendChild(h('div', { class: 'varsel', style: 'border-color:var(--color-danger)' }, skyForm.feil));
+  if (skyForm.feil) boks.appendChild(h('div', { class: 'varsel fare' }, skyForm.feil));
   if (skyForm.melding) boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' }, skyForm.melding));
   return boks;
 }

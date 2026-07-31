@@ -254,10 +254,17 @@ input[type=range] { accent-color: var(--color-accent); }
 .valgkort.paa { background: var(--color-accent-100); border-color: var(--color-accent-300); }
 .valgkort .tittel { font-family: var(--font-heading); font-weight: 400; font-size: 1.02rem; }
 .valgkort .undertittel { display: block; font-size: .78rem; color: var(--color-neutral-600); margin-top: 2px; }
-.valgkort .badge {
-  margin-left: auto; flex: 0 0 auto; font-size: .66rem; font-weight: 800;
+/* Base-merkelapp. Sto tidligere bare som `.valgkort .badge`, så de tre bruken
+   utenfor et valgkort (logg-karakteren «8 / 10», «planen din», «valgt nå»)
+   rendret som naken tekst uten bakgrunn. Denne gir dem pille-utseendet; kortet
+   overstyrer med margin-left under. */
+.badge {
+  display: inline-block; font-size: .68rem; font-weight: 800;
   padding: 4px 9px; border-radius: 999px; white-space: nowrap;
   background: var(--color-accent-2-100); color: var(--color-accent-2-700);
+}
+.valgkort .badge {
+  margin-left: auto; flex: 0 0 auto; font-size: .66rem;
 }
 
 /* ---------- Rutenett 2×2 ---------- */
@@ -356,6 +363,12 @@ input[type=range].skyver { width: 100%; margin: 12px 0 6px; height: 30px; }
 .seksjonstittel { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--color-neutral-600); font-weight: 800; margin: 14px 2px 8px; }
 .pille { display: inline-block; font-size: .68rem; font-weight: 800; padding: 3px 8px; border-radius: 999px; }
 .varsel { background: #f7e9d9; border: 1px solid var(--color-accent-200); color: var(--color-accent-900); border-radius: var(--radius-md); padding: 10px 12px; font-size: .82rem; line-height: 1.45; margin-top: 10px; }
+/* `.varsel` er NØYTRAL info (terrakotta). `.fare` er den ekte problem-tilstanden
+   og bruker samme røde sone-språk som resten av appen (.kort.sone-rod, .tillegg-
+   rad.paa.rod) — som BAKGRUNN, ikke som kantstripe. Kantstripa ble prøvd og
+   forkastet ett annet sted i denne fila; den skal ikke snike seg inn her. Slik
+   kan brukeren skanne etter det som faktisk krever handling. */
+.varsel.fare { background: #f9e5dd; border-color: #e3b3a8; color: var(--color-accent-900); }
 .hjelpetekst { font-size: .8rem; color: var(--color-neutral-700); line-height: 1.55; }
 .sok { width: 100%; min-height: 44px; border-radius: 999px; border: 1px solid var(--color-neutral-300); padding: 10px 16px; font: inherit; background: #fff; margin-bottom: 10px; }
 
@@ -625,7 +638,12 @@ svg.brodsvg .fyll { fill: var(--color-accent-200); }
   flex: 0 0 30px; width: 30px; height: 30px; border-radius: 999px; cursor: pointer;
   border: 1px solid var(--color-neutral-300); background: #fff;
   color: var(--color-neutral-600); font-size: .8rem; line-height: 1; margin-left: 4px;
+  position: relative;
 }
+/* Utvider treffflaten til 44px uten å endre den synlige knappen — samme grep som
+   .info-knapp/.info-ring. Fjern-mel sitter i en primær flyt man justerer med
+   melete fingre, så 30px var for lite. */
+.m-fjern::after { content: ''; position: absolute; inset: -7px; }
 .melvelger { max-height: 260px; overflow-y: auto; margin-top: 4px; }
 .melvelger-rad {
   display: flex; align-items: center; gap: 10px; width: 100%; cursor: pointer;
