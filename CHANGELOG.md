@@ -7,6 +7,46 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 31.07.2026 (natt, aller sist) — De ti anslagene er nede i tre
+
+Bjørn: «melprisene har du jo akkurat sjekket, så det finner du vel ut av selv?»
+
+Rimelig innvending. Ti varer ble stående som `prisAnslag:true` fordi de ikke dukket opp
+i første søkerunde — men de fantes, de lå bare utenfor dagligvarekanalen. Sju er nå
+verifisert:
+
+| vare | anslag | funnet | kilde |
+|---|---|---|---|
+| Sammalt rug fin | 17,50 | **16,40** | Møllerens 1 kg, Oda |
+| Hvetekli | 28,00 | **36,75** | Kruskakli hvete 400 g, Oda |
+| Havregryn | 25,00 | **24,45** | Bjørn Lettkokte 1,1 kg, Oda |
+| Ruggryn / rugknekk | 26,00 | **78,00** | Skærtoft rugkjerner knekket 500 g |
+| Byggflak | 30,00 | **75,00** | Urtekram byggflak 400 g |
+| Enkorn | 68,00 | **85,00** | Holli Mølle fin sammalt 1 kg |
+| Kikertmel | 101,00 | **109,00** | Biogan øko 1 kg |
+
+**De to store bommene var rugknekk og byggflak** — begge tre ganger for lave. Grunnen
+til at de ikke ble funnet først er også grunnen til at anslaget var så galt: de føres
+ikke i vanlig dagligvare. De ligger i helsekostleddet, og der koster spesialkorn 70–80
+kr/kg, ikke 26. Å lete bare i dagligvare og så gjette resten er å systematisk
+undervurdere nettopp de dyre ingrediensene.
+
+**Tre står igjen, og de er anslag av natur:**
+
+- **«Sterkt hvetemel / manitoba (W300+)»** — det finnes ingen norsk forbrukervare i
+  klassen. Møllerens og Regal lager den ikke. Realistisk vei er Caputo Manitoba (egen
+  rad, verifisert) eller en 25 kg-sekk fra spesialforhandler.
+- **«Knekt hvete»** — selges ikke for seg i dagligvare. Priset som Møllerens hvete
+  helkorn, som er samme korn.
+- **«Annet mel»** — en plassholder for noe som ikke står i lista. Den *kan* ikke ha en
+  observert pris; det er hele poenget med den.
+
+Begrunnelsen står i `data.js` ved siden av tallene, ikke bare her — ellers ser det ut
+som latskap ved neste gjennomlesning. To nye sjekker i `test-r5.js` vokter at antallet
+anslag ikke sniker seg oppover igjen, og at alle frøprisene er verifiserte.
+
+---
+
 ## 31.07.2026 (natt, sist) — Opprydding, og en oppdagelse om V1
 
 ### Grenene er ryddet

@@ -32,6 +32,19 @@
                  Der prisen IKKE lot seg verifisere, står `prisAnslag:true` på
                  raden. Appen viser det. Ferskvare: er tallene mer enn et år
                  gamle, stemmer ikke kostnadsregnskapet lenger.
+
+                 TRE RADER STÅR IGJEN SOM ANSLAG, og de er det av natur — ikke
+                 fordi ingen har lett:
+                   «Sterkt hvetemel / manitoba (W300+)» — det finnes ingen norsk
+                     forbrukervare i denne klassen. Møllerens og Regal lager den
+                     ikke. Den realistiske veien er Caputo Manitoba (som ligger
+                     som egen rad, verifisert) eller en 25 kg-sekk fra en
+                     spesialforhandler. Tallet er satt nær Caputo.
+                   «Knekt hvete» — selges ikke for seg i vanlig dagligvare.
+                     Priset som Møllerens hvete helkorn, som er samme korn.
+                   «Annet mel» — en plassholder for noe som ikke står i lista.
+                     Den KAN ikke ha en observert pris; det er hele poenget
+                     med den.
      absorpsjon  ⚠ APPENS EGEN ARBEIDSVERDI — ikke en publisert måling. Ingen
                  norsk mølle publiserer farinografopptak for forbrukermel.
                  Verdiene er satt relativt til siktet hvete = 1,00 og er
@@ -55,7 +68,7 @@
    fordi appen skal kunne SI det: en kostnad uten dato er en påstand uten
    holdbarhet, og matvarepriser flytter seg mer enn de fleste tror. */
 const PRIS_HENTET = '31. juli 2026';
-const PRIS_KILDE = 'Oda.no (kilopris per vare), supplert med Meny for 2 kg-posene av siktet hvetemel';
+const PRIS_KILDE = 'Oda.no (kilopris per vare), Meny for 2 kg-posene av siktet hvetemel, og helsekostleddet for de kornslagene dagligvare ikke fører';
 
 const FLOURS = [
   // Siktet hvete
@@ -65,7 +78,7 @@ const FLOURS = [
     notat:'78 % utmaling. Tåler mye juling i maskinen og er tilgivende under heving, men svakere enn Regal standard. Ikke sterk nok alene til 80 %+ ciabatta.' },
   { id:'regal_relax',     navn:'Regal Hvetemel relax',             gruppe:'Siktet hvete', protein:12.0, absorpsjon:1.00, styrke:'middels',       maxPct:100, kr:17, grov:0,
     notat:'Uten askorbinsyre. Velg denne når du VIL ha ubehandlet mel — men til en deig med 30 % enkorn gir du fra deg strammingen du trenger.' },
-  { id:'hvetemel_sterkt', navn:'Sterkt hvetemel / manitoba (W300+)', gruppe:'Siktet hvete', protein:14.0, absorpsjon:1.04, styrke:'sterk',        maxPct:100, kr:45, prisAnslag:true, grov:0,
+  { id:'hvetemel_sterkt', navn:'Sterkt hvetemel / manitoba (W300+)', gruppe:'Siktet hvete', protein:14.0, absorpsjon:1.04, styrke:'sterk',        maxPct:100, kr:62, prisAnslag:true, grov:0,
     notat:'Caputo Cuoco, Manitoba Oro o.l. Eneste trygge valg for ciabatta over 80 %. Kan brukes 20–40 % for å forsterke svakt norsk mel.' },
   { id:'hvetemel_stein',  navn:'Steinmalt hvetemel (Holli/Kvelde)', gruppe:'Siktet hvete', protein:12.5, absorpsjon:1.02, styrke:'middels',       maxPct:100, kr:47, grov:0,
     notat:'Smaker mye mer, men tåler mindre elting og kortere bulk. Halver eltetiden, forleng autolysen.' },
@@ -97,7 +110,7 @@ const FLOURS = [
   // Rug
   { id:'rug_siktet',      navn:'Rugmel siktet',                     gruppe:'Rug',          protein:6.5,  absorpsjon:1.08, styrke:'ingen',         maxPct:25,  kr:19.9, grov:1,
     notat:'Ingen glutennettverk. Absorpsjonen er tidsavhengig — deigen strammer seg etter elting.' },
-  { id:'samalt_rug',      navn:'Sammalt rug fin',                   gruppe:'Rug',          protein:9.2,  absorpsjon:1.15, styrke:'ingen',         maxPct:25,  kr:17.5, prisAnslag:true, grov:1,
+  { id:'samalt_rug',      navn:'Sammalt rug fin',                   gruppe:'Rug',          protein:9.2,  absorpsjon:1.15, styrke:'ingen',         maxPct:25,  kr:16.4, grov:1,
     notat:'Over 20 % uten surdeig blir klissete. 10–15 % er sweet spot i et hvetebrød.' },
   { id:'samalt_rug_grov', navn:'Sammalt rug grov',                  gruppe:'Rug',          protein:9.1,  absorpsjon:1.20, styrke:'ingen',         maxPct:25,  kr:16.7, grov:1,
     notat:'Over 40 % må i form. La brødet hvile 12–24 t før skjæring.' },
@@ -105,7 +118,7 @@ const FLOURS = [
     notat:'Den mest aromatiske rugen — røykaktig, dyp og kompleks, med mer aroma per prosentpoeng enn vanlig rug. Samme amylase- og pentosanproblematikk, så behandle den som rug og ikke som hvete. Fås fra Holli, Sigdal og Norsk Urkorn, kun nett.' },
 
   // Urkorn
-  { id:'enkorn',          navn:'Enkorn (einkorn)',                  gruppe:'Urkorn',       protein:13.0, absorpsjon:0.90, styrke:'svært svak',    maxPct:35,  kr:68, prisAnslag:true, grov:1,
+  { id:'enkorn',          navn:'Enkorn (einkorn)',                  gruppe:'Urkorn',       protein:13.0, absorpsjon:0.90, styrke:'svært svak',    maxPct:35,  kr:85, grov:1,
     notat:'LAVEST absorpsjon av alt melet her (−6 prosentpoeng målt mot brødhvete). Diploid, nesten ingen HMW-glutenin. Topper ca. 30 % tidligere enn hvete og KOLLAPSER så. Elt maks 3–4 min. Undergjær med vilje. 9–11× karotenoid = gyllen krumme.' },
   { id:'emmer',           navn:'Emmer siktet',                      gruppe:'Urkorn',       protein:12.7, absorpsjon:0.97, styrke:'svak',          maxPct:40,  kr:64.9, grov:0,
     notat:'«Spelt med mer protein». Svært kort farinografstabilitet. Ikke kutt vannet like hardt som ved enkorn.' },
@@ -121,7 +134,7 @@ const FLOURS = [
     notat:'Høy betaglukan — svært tørst og ikke-lineær. Aktivt ødeleggende for gluten.' },
   { id:'durum',           navn:'Durummel',                          gruppe:'Andre korn',   protein:13.0, absorpsjon:1.02, styrke:'middels',       maxPct:40,  kr:66.4, grov:0,
     notat:'Sterkt, men lite ekstensibelt (høy P/L). Bland, ikke bruk alene.' },
-  { id:'kikertmel',       navn:'Kikertmel',                         gruppe:'Andre korn',   protein:19.0, absorpsjon:1.04, styrke:'ingen',         maxPct:20,  kr:101, prisAnslag:true, grov:1,
+  { id:'kikertmel',       navn:'Kikertmel',                         gruppe:'Andre korn',   protein:19.0, absorpsjon:1.04, styrke:'ingen',         maxPct:20,  kr:109, grov:1,
     notat:'Overraskende nyttig i små doser: målt GA 10 % kikertmel HØYERE deigstabilitet enn kontrollen — først fra 20 % falt den. Gir fyldig nøtteaktig-smøraktig dybde og pen gul krumme. Rå smaker den bønneaktig og litt bitter, men det mildner betydelig ved steking. Merk at de 19 g protein ikke er glutendannende i det hele tatt.' },
   { id:'bokhvete',        navn:'Bokhvetemel',                       gruppe:'Andre korn',   protein:11.7, absorpsjon:0.97, styrke:'ingen',         maxPct:20,  kr:159.8, grov:1,
     notat:'Ikke et korn i det hele tatt, men en frøplante i syrefamilien. Vannopptaket er MÅLT LAVERE enn siktet hvetemel — farinografopptaket sank fra 54,8 til 52,6 % ved innblanding, noe som overrasker de fleste. Kraftig jordaktig og nøtteaktig smak, men med en bitter ettersmak som bygger seg: 10 % er deilig og rustikk, 25 % smaker medisinsk.' },
@@ -160,11 +173,11 @@ const SOAKERS = [
   { id:'linfro_malt',navn:'Linfrø malt',    kaldt:300, varmt:320, type:'kaldt', behandling:'bloet', korn:false, kr:48.6, notat:'(est) Geléer aggressivt. Kalibrer selv — spennet er 250–350.' },
   { id:'sesam',     navn:'Sesamfrø',        kaldt:58,  varmt:68,  type:'kaldt', behandling:'rist',  korn:false, kr:93, notat:'Ristes oftere enn den bløtlegges.' },
   { id:'gresskar',  navn:'Gresskarkjerner', kaldt:38,  varmt:48,  type:'kaldt', behandling:'rist',  korn:false, kr:123, notat:'Lavest absorpsjon av alle vanlige frø.' },
-  { id:'havregryn', navn:'Havregryn',       kaldt:90,  varmt:206, type:'begge', behandling:'skald', korn:true,  kr:25, prisAnslag:true, notat:'Størst forskjell kaldt/varmt av alt (+116 g). Slipper fuktighet som damp under steking.' },
-  { id:'ruggryn',   navn:'Ruggryn / rugknekk', kaldt:65, varmt:154, type:'varmt', behandling:'skald', korn:true, kr:26, prisAnslag:true, notat:'MÅ skåldes. Kaldbløtlagt rugknekk blir grus i brødet.' },
-  { id:'knekt_hvete',navn:'Knekt hvete',    kaldt:178, varmt:225, type:'varmt', behandling:'skald', korn:true,  kr:20, prisAnslag:true, notat:'' },
-  { id:'hvetekli',  navn:'Hvetekli',        kaldt:96,  varmt:168, type:'begge', behandling:'bloet', korn:true,  kr:28, prisAnslag:true, notat:'Gråsone: oppfører seg nesten som mel. Vurder å telle den i melmengden.' },
-  { id:'byggflak',  navn:'Byggflak',        kaldt:125, varmt:200, type:'varmt', behandling:'skald', korn:true,  kr:30, prisAnslag:true, notat:'' },
+  { id:'havregryn', navn:'Havregryn',       kaldt:90,  varmt:206, type:'begge', behandling:'skald', korn:true,  kr:24.45, notat:'Størst forskjell kaldt/varmt av alt (+116 g). Slipper fuktighet som damp under steking.' },
+  { id:'ruggryn',   navn:'Ruggryn / rugknekk', kaldt:65, varmt:154, type:'varmt', behandling:'skald', korn:true, kr:78, notat:'MÅ skåldes. Kaldbløtlagt rugknekk blir grus i brødet.' },
+  { id:'knekt_hvete',navn:'Knekt hvete',    kaldt:178, varmt:225, type:'varmt', behandling:'skald', korn:true,  kr:23.1, prisAnslag:true, notat:'' },
+  { id:'hvetekli',  navn:'Hvetekli',        kaldt:96,  varmt:168, type:'begge', behandling:'bloet', korn:true,  kr:36.75, notat:'Gråsone: oppfører seg nesten som mel. Vurder å telle den i melmengden.' },
+  { id:'byggflak',  navn:'Byggflak',        kaldt:125, varmt:200, type:'varmt', behandling:'skald', korn:true,  kr:75, notat:'' },
   { id:'chia',      navn:'Chiafrø',         kaldt:237, varmt:276, type:'kaldt', behandling:'bloet', korn:false, kr:127.7, notat:'Ignorer «10–12× egen vekt» — det er svellevolum, ikke det deigen faktisk mister.' }
 ];
 

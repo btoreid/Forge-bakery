@@ -605,10 +605,17 @@ og er derfor sammenlignbar på tvers av pakningsstørrelser — en 1 kg-boks og 
 er ikke samme vare. For siktet hvetemel er 2 kg-posen brukt (Meny), fordi Odas 1 kg-boks
 på 21,90 ikke er det folk kjøper.
 
-**Ti varer lot seg ikke verifisere** og står med `prisAnslag:true`: sterkt
-hvetemel/manitoba (generisk), enkorn, kikertmel, havregryn, ruggryn, knekt hvete,
-hvetekli, byggflak, «annet mel» og sammalt rug fin. De er satt ut fra nabovarer i samme
-gruppe. Appen navngir dem i melkortet i stedet for å late som at alt er like godt kjent.
+**Ti varer lot seg ikke verifisere i første runde. Sju er nå funnet** — de lå utenfor
+dagligvarekanalen, ikke utenfor markedet. To av anslagene var tre ganger for lave:
+ruggryn (26 → 78) og byggflak (30 → 75). Det er en systematisk feil, ikke uflaks: leter
+man bare i dagligvare og gjetter resten, undervurderer man nettopp de kornslagene som
+bare finnes i helsekostleddet, og der koster spesialkorn 70–80 kr/kg.
+
+**Tre står igjen, og de er anslag av natur:** «sterkt hvetemel/manitoba» (ingen norsk
+forbrukervare i klassen), «knekt hvete» (selges ikke for seg — priset som helkornshvete,
+samme korn) og «annet mel» (en plassholder som per definisjon ikke kan ha en observert
+pris). Begrunnelsen står ved siden av tallene i `data.js`. Appen navngir dem i melkortet
+i stedet for å late som at alt er like godt kjent.
 
 `PRIS_HENTET` og `PRIS_KILDE` ligger i `data.js` og vises i UI-et. **Disse råtner** —
 matvarepriser flytter seg mer enn de fleste tror. Er datoen mer enn et år gammel,

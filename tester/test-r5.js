@@ -253,6 +253,19 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   ok('kostnaden per brød er i et rimelig leie', pris.perBrod > 4 && pris.perBrod < 40,
     pris.perBrod.toFixed(1) + ' kr');
 
+  /* Anslagene skal være FÅ, og de som står igjen skal stå der av en grunn.
+     Ti varer var uverifiserte i første runde. Tre står igjen, og alle tre er
+     anslag av natur: «sterkt hvetemel» finnes ikke som norsk forbrukervare,
+     «knekt hvete» selges ikke for seg, og «annet mel» er en plassholder som
+     ikke KAN ha en observert pris. Vokter mot at lista sniker seg oppover. */
+  const anslag = await page.evaluate(() => FLOURS.concat(SOAKERS)
+    .filter(f => f.prisAnslag).map(f => f.navn));
+  ok('høyst tre priser står som anslag', anslag.length <= 3, anslag.join(', ') || 'ingen');
+  /* Frøene er alle verifisert. «Knekt hvete» er det ene kornet som ikke er det,
+     fordi det ikke selges for seg i dagligvare — priset som helkornshvete. */
+  ok('alle frøprisene er verifisert',
+    !(await page.evaluate(() => SOAKERS.some(f => !f.korn && f.prisAnslag))));
+
   /* Skjermbilder — «rendrer uten feil» er ikke det samme som «ser riktig ut». */
   await page.evaluate(async () => {
     const FB = window.__FB, S = FB.S;
