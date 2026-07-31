@@ -14,7 +14,12 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push(String(e)));
   await page.goto(URL);
-  await page.waitForTimeout(300);
+  // Start fra blanke ark. Uten dette arver kjøringen tilstanden fra forrige
+  // kjøring (bl.a. et lagret standardbrød), og «endret verdi»-sjekkene under kan
+  // bli grønne eller røde av feil grunn.
+  await page.evaluate(() => { localStorage.clear(); });
+  await page.reload();
+  await page.waitForTimeout(400);
 
   /* ---------------------------------------------------------------
      1 · Synk: loggen skal ALDRI kunne bli borte
@@ -44,7 +49,7 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     const FB = window.__FB;
     const foer = FB.S.oppdatert;
     await new Promise(r => setTimeout(r, 15));
-    FB.S.hyd = 78; FB.oppdater();   // ekte dataendring
+    FB.S.hyd = (FB.S.hyd === 78 ? 79 : 78); FB.oppdater();   // ekte dataendring
     return { foer, etter: FB.S.oppdatert };
   });
   ok('en ekte dataendring flytter «oppdatert»', dataFlytter.etter > dataFlytter.foer,
@@ -265,9 +270,116 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   ok('venstre akse merket som deigtemperatur', /°C deig/.test(graf));
   ok('høyre akse merket som prosent gjæring', /% gjæring/.test(graf));
 
+
+  /* ---------------------------------------------------------------
+     9 · Bakeloggen hører til kontoen
+     ---------------------------------------------------------------
+     Følgefeil av flettingen over: loggen ble liggende igjen etter utlogging og
+     ville blitt flettet inn i neste konto som logget inn på enheten. */
+  console.log('— Loggen hører til kontoen —');
+  const eierskap = await page.evaluate(async () => {
+    const FB = window.__FB, S = FB.S;
+    localStorage.removeItem('forgebakery.v2.utenkonto');
+    // to poster: én uten konto (loggført utlogget), én som tilhører konto A
+    S.loggListe = [
+      { id: 'anon1', laget: 1, endret: 1, konto: null, navn: 'bakt uten konto' },
+      { id: 'a1', laget: 2, endret: 2, konto: 'uid-A', navn: 'kontoens eget' }
+    ];
+    S.loggSlettet = [];
+    // simuler innlogging som konto B: bare Bs egne skal med, anon settes til side
+    const mine = S.loggListe.filter(b => b.konto === 'uid-B');
+    const anon = S.loggListe.filter(b => !b.konto);
+    const flettet = FB.flettLogg(mine, [{ id: 'b1', laget: 3, endret: 3, konto: 'uid-B', navn: 'Bs bak' }], []);
+    return { antall: flettet.length, navn: flettet.map(x => x.navn), anonAntall: anon.length };
+  });
+  ok('en annen kontos poster arves IKKE ved innlogging', !eierskap.navn.includes('kontoens eget'), eierskap.navn.join(' | '));
+  ok('kun innlogget kontos egne poster flettes', eierskap.navn.join(',') === 'Bs bak', eierskap.navn.join(','));
+  ok('poster uten konto settes til side', eierskap.anonAntall === 1);
+
+  const utlogging = await page.evaluate(async () => {
+    const FB = window.__FB, S = FB.S;
+    // enhetens egne (uten konto) skal komme TILBAKE etter utlogging
+    localStorage.setItem('forgebakery.v2.utenkonto', JSON.stringify({ poster: [{ id: 'anon9', laget: 9, konto: null, navn: 'enhetens egen' }], avslaatt: false }));
+    S.loggListe = [{ id: 'k1', laget: 1, konto: 'uid-A', navn: 'kontoens' }];
+    S.loggSlettet = ['x'];
+    // etterlign trinn 2 og 3 i loggUtTrygt() (trinn 1 krever nett)
+    const anon = JSON.parse(localStorage.getItem('forgebakery.v2.utenkonto')).poster;
+    S.loggListe = anon.slice(); S.loggSlettet = [];
+    FB.oppdater();
+    return { navn: S.loggListe.map(b => b.navn), gravsteiner: S.loggSlettet.length };
+  });
+  ok('kontoens poster fjernes fra enheten ved utlogging', !utlogging.navn.includes('kontoens'), utlogging.navn.join(','));
+  ok('bak uten konto overlever utloggingen', utlogging.navn.join(',') === 'enhetens egen', utlogging.navn.join(','));
+  ok('gravsteinene ryddes med', utlogging.gravsteiner === 0);
+
+  const nyBakStempel = await page.evaluate(() => {
+    // utlogget: nye poster skal få konto = null
+    const F = window.__FB;
+    return typeof F.oppskriftAvtrykk === 'function';
+  });
+  ok('oppskriftsavtrykket er eksponert for testing', nyBakStempel);
+
+  /* ---------------------------------------------------------------
+     10 · Standardbrød
+     --------------------------------------------------------------- */
+  console.log('— Standardbrød —');
+  const standard = await page.evaluate(async () => {
+    const FB = window.__FB, S = FB.S;
+    S.brotype = 'grovbrod'; S.grov = 60; S.hyd = 73; S.vekt = 750; S.tillegg = {};
+    S.skjerm = 'logg'; FB.render();
+    await new Promise(r => setTimeout(r, 80));
+    const knapp = [...document.querySelectorAll('button')].find(b => /Lagre dette som standardbrød/.test(b.textContent));
+    const fantKnapp = !!knapp;
+    if (knapp) knapp.click();
+    await new Promise(r => setTimeout(r, 120));
+    const lagret = !!FB.S.standardBrod && FB.S.standardBrod.grov === 60;
+    /* Sett oppskriften tilbake til fabrikk GJENNOM appen, ikke ved å skrive i
+       localStorage: det er den veien en ekte «start på nytt» går, og det er
+       tilstanden `erFabrikkOppskrift()` skal kjenne igjen ved neste oppstart. */
+    S.grov = 40; S.hyd = 75; S.vekt = 900; S.brotype = 'grovbrod'; S.tid = 'lang';
+    S.antall = 4; S.saltPct = null; S.heveplan = null; S.ff = false; S.ffType = 'poolish';
+    S.tillegg = { solsikke: 6, linfro: 3 }; S.melOverstyr = null; S.okDeig = false;
+    FB.oppdater();
+    await new Promise(r => setTimeout(r, 120));
+    return { lagret, fantKnapp, lagretIStore: !!localStorage.getItem('forgebakery.v2') };
+  });
+  ok('«Lagre dette som standardbrød»-knappen finnes i Logg', standard.fantKnapp);
+  ok('standardbrødet lagres', standard.lagret);
+  ok('tilstanden er skrevet til localStorage', standard.lagretIStore);
+  await page.reload(); await page.waitForTimeout(400);
+  const paalagt = await page.evaluate(() => ({ grov: window.__FB.S.grov, hyd: window.__FB.S.hyd, vekt: window.__FB.S.vekt }));
+  ok('standardbrødet legges på når oppskriften er fabrikkinnstilt', paalagt.grov === 60 && paalagt.hyd === 73 && paalagt.vekt === 750,
+    JSON.stringify(paalagt));
+
+  /* ---------------------------------------------------------------
+     11 · Sonefarge på hele kortet, og rundt gramfelt
+     --------------------------------------------------------------- */
+  console.log('— Soner og form —');
+  const soner = await page.evaluate(async () => {
+    const FB = window.__FB, S = FB.S;
+    S.skjerm = 'deigen'; S.hyd = 86; FB.render();
+    await new Promise(r => setTimeout(r, 120));
+    // Velg på overskriften, ikke på at ordet «vann» finnes i kortet: flere kort
+    // nevner vann i konsekvensteksten, og da traff find() feil kort.
+    const finnKort = nr => [...document.querySelectorAll('.kort')]
+      .find(k => { const n = k.querySelector('.kort-num'); return n && n.textContent.trim().indexOf(nr) === 0; });
+    const vannKort = finnKort('3 ·');
+    const rod = vannKort && vannKort.className.includes('sone-rod');
+    S.hyd = 75; FB.render();
+    await new Promise(r => setTimeout(r, 120));
+    const vk2 = finnKort('3 ·');
+    const gronn = vk2 && vk2.className.includes('sone-gronn');
+    const felt = document.querySelector('.gramfelt');
+    return { rod, gronn, radius: felt ? getComputedStyle(felt).borderRadius : '' };
+  });
+  ok('vannkortet blir rødt over taket', soner.rod);
+  ok('vannkortet er grønt i vinduet', soner.gronn);
+  ok('gramfeltet har runde kanter', /999px|50%/.test(soner.radius) || parseFloat(soner.radius) >= 12, soner.radius);
+
   console.log(pageErrors.length ? '  ✗ JS-feil: ' + pageErrors.join(' | ') : '  ✓ ingen JS-feil på siden');
   if (pageErrors.length) feil++;
 
+  await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
   await browser.close();
   console.log(feil ? `\n${feil} FEIL` : '\nALLE TESTER GRØNNE');
   process.exit(feil ? 1 : 0);

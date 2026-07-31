@@ -439,10 +439,20 @@ svg.kornsvg .s2 { fill: none; stroke: var(--kk); stroke-width: 1; stroke-linecap
 .tillegg-hake.paa { background: var(--color-accent-2-500); border-color: transparent; color: #fff; }
 
 /* Utenfor anbefalt sone: gul over anbefalingen, rød nær maksgrensen */
-.tillegg-rad.paa.gul { background: #f6ecd2; }
+/* Sonefargen skal bære hele raden, ikke bare merkelappen: er du over anbefalt,
+   er det radens tilstand, ikke en fotnote. Venstrekanten gir styrken en retning
+   uten at teksten mister kontrast. */
+.tillegg-rad.paa { border-left: 4px solid var(--color-accent-2-500); }
+.tillegg-rad.paa.gul { background: #f6ecd2; border-left-color: #b98a1f; }
 .tillegg-rad.paa.gul .tillegg-hake.paa { background: #b98a1f; }
-.tillegg-rad.paa.rod { background: #f6ddd6; }
+.tillegg-rad.paa.rod { background: #f6ddd6; border-left-color: var(--color-danger); }
 .tillegg-rad.paa.rod .tillegg-hake.paa { background: var(--color-danger); }
+
+/* Samme sonespråk på kortene som har et anbefalt nivå (vann, salt). Kortet får
+   fargen, ikke bare pillen oppe i hjørnet. */
+.kort.sone-gronn { background: linear-gradient(#fff, #fff) padding-box, var(--color-accent-2-200) border-box; border-left: 5px solid var(--color-accent-2-500); }
+.kort.sone-gul   { background: #fdf7e9; border-left: 5px solid #b98a1f; }
+.kort.sone-rod   { background: #fbeee9; border-left: 5px solid var(--color-danger); }
 
 /* ---------- Litt luft mellom plankortene på Tid ---------- */
 .plan-valg { margin-bottom: 8px; }
@@ -479,8 +489,8 @@ svg.brodsvg .fyll { fill: var(--color-accent-200); }
    felt. Pilene fra type=number tar plass og gir ingenting på mobil. */
 .gramfelt {
   font: inherit; font-weight: 800; font-size: 1.05rem; font-variant-numeric: tabular-nums;
-  text-align: right; width: 5.2em; padding: 4px 6px; color: inherit;
-  border: 1px solid var(--color-neutral-300); border-radius: var(--radius-sm);
+  text-align: right; width: 5.2em; padding: 6px 10px; color: inherit;
+  border: 1px solid var(--color-neutral-300); border-radius: 999px;
   background: #fff; -moz-appearance: textfield;
 }
 .gramfelt:focus { outline: 2px solid var(--color-accent-500); outline-offset: 1px; border-color: transparent; }

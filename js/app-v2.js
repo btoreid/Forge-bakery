@@ -29,9 +29,20 @@ const STANDARD = {
   loggSlettet: [],
   favoritter: [], oppslag: 'meny', oppslagSok: '',
   melOverstyr: null,          // brukerens egen melblanding; null = følg grovheten
+  standardBrod: null,         // oppskriften appen åpner på når ingenting er påbegynt
+  okDeig: false,              // kompenser tilleggenes plass ved å øke deigvekten
   brodInfo: null,             // hvilken brødtype som har ⓘ-utfellingen åpen
   kompVist: false             // kompensasjonspanelet er åpnet av en endring
 };
+/* Er oppskriften fortsatt akkurat som den kom fra fabrikken? Brukes til å avgjøre
+   om standardbrødet kan legges på uten å overkjøre noe brukeren har begynt på.
+   Sammenligner bare oppskriftsfeltene — skjerm, utstyr og logg er uvedkommende. */
+const FABRIKK_FELT = ['brotype', 'grov', 'hyd', 'tid', 'ff', 'ffType', 'tillegg', 'antall',
+  'vekt', 'saltPct', 'heveplan', 'melOverstyr', 'okDeig'];
+function erFabrikkOppskrift(s) {
+  return FABRIKK_FELT.every(k => JSON.stringify(s[k]) === JSON.stringify(STANDARD[k]));
+}
+
 let S = last();
 
 function nyStandard() {
@@ -58,6 +69,12 @@ function last() {
   s.favoritter = s.favoritter.filter(x => typeof x === 'string')
     .map(x => x.indexOf(':') > 0 ? x : 'mel:' + x);
   if (s.melOverstyr != null && !Array.isArray(s.melOverstyr)) s.melOverstyr = null;
+  /* Standardbrødet legges på når oppskriften ennå er fabrikkinnstillingen —
+     altså «dersom det ikke ligger noe annet der fra før av». Har man begynt på
+     noe, skal appen ikke overkjøre det. */
+  if (s.standardBrod && typeof s.standardBrod === 'object' && erFabrikkOppskrift(s)) {
+    Object.keys(s.standardBrod).forEach(k => { s[k] = s.standardBrod[k]; });
+  }
   // Hver loggpost trenger en stabil id, ellers ville rediger/slett pekt på
   // posisjon — og posisjon flytter seg når noe slettes eller når skyen synker
   // inn en annen liste. Eldre poster (lagret før id-en fantes) får en her.
@@ -676,6 +693,7 @@ function tegnDeigen(r) {
       merkeEl.textContent = m.merke;
       merkeEl.setAttribute('style', 'background:' + m.bg + ';color:' + m.farge);
       guideEl.textContent = vannGuide(v);
+      if (vk) vk.className = 'kort sone-' + m.sone;
     };
     const vk = kort('3 · Vann', 'hydrering',
       h('div', { class: 'skyver-topp' }, verdiEl, merkeEl),
@@ -694,6 +712,7 @@ function tegnDeigen(r) {
       guideEl,
       h('div', { style: 'font-size:.78rem;color:var(--color-neutral-600);margin-top:6px;font-variant-numeric:tabular-nums' }, vannKonsekvens(r)),
       infoUtfelling('hydrering'));
+    vk.className = 'kort sone-' + lab0.sone;
     if (S.hyd > tak) vk.appendChild(h('div', { class: 'varsel' },
       'Melblandingen din (vektet styrke ' + fmt(r.styrkeVektet, 1) + ') tåler anslagsvis ' + tak + ' % før deigen flyter ut i stedet for å reise seg. Du ligger ' + (S.hyd - tak) + ' pp over — bruk form, eller bytt inn sterkere mel.'));
     wrap.appendChild(vk);
@@ -712,7 +731,7 @@ function tegnDeigen(r) {
     const saltVerdiEl = h('span', { class: 'skyver-verdi' }, fmt(saltN, 1) + ' %');
     const sm0 = saltMerke(saltN);
     const saltMerkeEl = h('span', { class: 'skyver-klasse', style: 'background:' + sm0.bg + ';color:' + sm0.farge }, sm0.merke);
-    wrap.appendChild(kort('7 · Salt', 'saltPct',
+    const saltKort = kort('7 · Salt', 'saltPct',
       h('div', { class: 'skyver-topp' }, saltVerdiEl, saltMerkeEl),
       h('input', { type: 'range', class: 'skyver', min: 1.4, max: 2.4, step: 0.1, value: saltN,
         oninput: e => {
@@ -721,11 +740,14 @@ function tegnDeigen(r) {
           const m = saltMerke(v);
           saltMerkeEl.textContent = m.merke;
           saltMerkeEl.setAttribute('style', 'background:' + m.bg + ';color:' + m.farge);
+          saltKort.className = 'kort sone-' + m.sone;
         },
         onchange: e => { S.saltPct = +e.target.value; oppdater(); } }),
       h('div', { class: 'konsekvens' }, g0(r.salt) + ' salt. Salt strammer glutenet og bremser gjæren; 1,8–2,0 % er sonen.'),
       anbefaltKnapp(saltN, 1.8, v => { S.saltPct = v; oppdater(); }, ' %'),
-      infoUtfelling('saltPct')));
+      infoUtfelling('saltPct'));
+    saltKort.className = 'kort sone-' + sm0.sone;
+    wrap.appendChild(saltKort);
   }
 
   // 8 · Forferment
@@ -1104,17 +1126,20 @@ function grovKonsekvens(r) {
   return 'Ekstra grovt. Bare ' + fmt(100 - g, 0) + ' % siktet mel å bygge nettverk av: formbrød, tett og saftig krumme framfor hull.';
 }
 /* Saltsonen er 1,8–2,0 % (samme tall som konsekvensteksten under skyveren). */
+/* `sone` er grønn/gul/rød og brukes til å farge HELE kortet, ikke bare pillen.
+   Merkelappen alene var for svakt signal — er du over anbefalt nivå, er det
+   kortets tilstand. */
 function saltMerke(v) {
-  if (v >= 1.8 && v <= 2.0) return { merke: 'I SONEN', bg: 'var(--color-accent-2-100)', farge: 'var(--color-accent-2-700)' };
-  if (v >= 1.6 && v <= 2.2) return { merke: 'UTENFOR SONEN', bg: '#f6ecd2', farge: '#7a5a12' };
-  return { merke: 'LANGT UTENFOR', bg: '#f6ddd6', farge: 'var(--color-danger)' };
+  if (v >= 1.8 && v <= 2.0) return { merke: 'I SONEN', sone: 'gronn', bg: 'var(--color-accent-2-100)', farge: 'var(--color-accent-2-700)' };
+  if (v >= 1.6 && v <= 2.2) return { merke: 'UTENFOR SONEN', sone: 'gul', bg: '#f6ecd2', farge: '#7a5a12' };
+  return { merke: 'LANGT UTENFOR', sone: 'rod', bg: '#f6ddd6', farge: 'var(--color-danger)' };
 }
 function vannMerke(hyd) {
-  if (hyd <= 68) return { merke: 'STRAMT', bg: 'var(--color-neutral-200)', farge: 'var(--color-neutral-700)' };
-  if (hyd <= 71) return { merke: 'TRYGT', bg: 'var(--color-accent-2-100)', farge: 'var(--color-accent-2-700)' };
-  if (hyd <= 77) return { merke: 'I VINDUET', bg: 'var(--color-accent-2-200)', farge: 'var(--color-accent-2-900)' };
-  if (hyd <= 82) return { merke: 'LØST', bg: 'var(--color-accent-200)', farge: 'var(--color-accent-900)' };
-  return { merke: 'OVER TAKET', bg: 'var(--color-accent-300)', farge: 'var(--color-accent-900)' };
+  if (hyd <= 68) return { merke: 'STRAMT', sone: 'gul', bg: 'var(--color-neutral-200)', farge: 'var(--color-neutral-700)' };
+  if (hyd <= 71) return { merke: 'TRYGT', sone: 'gronn', bg: 'var(--color-accent-2-100)', farge: 'var(--color-accent-2-700)' };
+  if (hyd <= 77) return { merke: 'I VINDUET', sone: 'gronn', bg: 'var(--color-accent-2-200)', farge: 'var(--color-accent-2-900)' };
+  if (hyd <= 82) return { merke: 'LØST', sone: 'gul', bg: 'var(--color-accent-200)', farge: 'var(--color-accent-900)' };
+  return { merke: 'OVER TAKET', sone: 'rod', bg: 'var(--color-accent-300)', farge: 'var(--color-accent-900)' };
 }
 function vannGuide(hyd) {
   if (hyd <= 68) return 'Stramt: fast deig som er lett å håndtere og forme, men tettere krumme med mindre uregelmessige hull. Trygt for nybegynnere og grovt mel.';
@@ -1574,6 +1599,16 @@ function tegnLogg(r) {
   ].forEach(([k, v]) => auto.appendChild(h('div', { class: 'tallrad' }, h('span', null, k), h('b', null, v))));
   form.appendChild(auto);
   form.appendChild(h('button', { class: 'btn btn-primary btn-full', style: 'margin-top:12px', onClick: () => lagreBak(r) }, 'Lagre baket'));
+  /* Standardbrødet: oppskriften appen åpner på når det ikke ligger noe påbegynt
+     der fra før. Samme avtrykk som loggposten bruker, så de kan ikke drifte. */
+  const erStandard = S.standardBrod && JSON.stringify(S.standardBrod) === JSON.stringify(oppskriftAvtrykk());
+  form.appendChild(h('button', { class: 'btn btn-full', style: 'margin-top:8px;font-size:.82rem',
+    onClick: () => { S.standardBrod = erStandard ? null : oppskriftAvtrykk(); oppdater(); } },
+    erStandard ? '✓ Dette er standardbrødet ditt — trykk for å fjerne' : 'Lagre dette som standardbrød'));
+  form.appendChild(h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:6px;line-height:1.45' },
+    S.standardBrod
+      ? 'Appen åpner på dette brødet når du starter på nytt uten noe påbegynt.'
+      : 'Da åpner appen på dette brødet neste gang du starter uten noe påbegynt fra før.'));
   wrap.appendChild(form);
 
   if (!S.loggListe.length) {
@@ -1585,6 +1620,10 @@ function tegnLogg(r) {
     // ville gitt feil rad ved rediger/slett.
     for (let i = S.loggListe.length - 1; i >= 0; i--) wrap.appendChild(loggPost(S.loggListe[i], i));
   }
+  // NB: tegnUtenKonto() returnerer null når man er utlogget eller bøtta er tom,
+  // og appendChild(null) kaster. h() tåler null-barn; appendChild gjør det ikke.
+  const utenKonto = tegnUtenKonto();
+  if (utenKonto) wrap.appendChild(utenKonto);
   const konto = tegnKonto();
   if (konto) wrap.appendChild(konto);
   wrap.appendChild(tegnBackup());
@@ -1608,6 +1647,9 @@ function lagreBak(r) {
   S.loggListe = S.loggListe.concat([{
     id: 'b' + naa,
     laget: naa, endret: naa,
+    // Hvem baket dette. `null` = loggført uten konto, og de postene hører til
+    // ENHETEN, ikke til den første som måtte logge inn på den etterpå.
+    konto: naaKonto(),
     navn: S.lgNavn || ('Bak #' + (S.loggListe.length + 1)),
     kar: S.lgKar, dato: new Date().toLocaleDateString('nb-NO'),
     grov: fmt(r.brodskala.pct, 0), hyd: fmt(r.hyd * 100, 0), loft: r.loft.loft, dose: fmt(r.doseProfil.dose, 2),
@@ -1808,6 +1850,38 @@ function leggTilBilde(fil, loggIdx) {
 /* Sikkerhetskopi — alt ligger kun i nettleserens localStorage. Til ekte
    innlogging/sky trengs en backend; inntil den beslutningen er tatt er dette
    vernet mot tap: last ned alt som JSON, hent inn igjen hvor som helst. */
+/* «Du har N bak loggført uten konto — ta dem med inn?»
+   Vises bare når man ER innlogget og det faktisk ligger noe i enhetsbøtta. Sier
+   man nei, blir de liggende der og dukker opp igjen når man logger ut — de er
+   ikke slettet, bare holdt utenfor kontoen. */
+function tegnUtenKonto() {
+  const uid = naaKonto();
+  if (!uid) return null;
+  const anon = lesAnon();
+  if (!anon.poster.length || anon.avslaatt) return null;
+  const n = anon.poster.length;
+  const boks = h('div', { class: 'varsel' },
+    h('div', { style: 'font-weight:800;margin-bottom:4px' },
+      n + (n === 1 ? ' bak er loggført uten konto' : ' bak er loggført uten konto')),
+    h('div', { style: 'font-size:.8rem;line-height:1.45' },
+      'De ligger på denne enheten, ikke i kontoen din. Vil du ta dem med inn i ' +
+      (Sky.status().epost || 'kontoen') + '? Sier du nei, blir de liggende her og dukker opp igjen når du logger ut.'));
+  boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
+    h('button', { class: 'btn btn-primary', style: 'flex:1;font-size:.82rem', onClick: () => {
+      const naa = Date.now();
+      const kjent = new Set((S.loggListe || []).map(b => b.id));
+      const tas = anon.poster.filter(b => !kjent.has(b.id)).map(b => ({ ...b, konto: uid, endret: naa }));
+      S.loggListe = flettLogg(S.loggListe || [], tas, S.loggSlettet || []);
+      skrivAnon({ poster: [], avslaatt: false });
+      oppdater();
+    } }, 'Ja, ta dem med'),
+    h('button', { class: 'btn', style: 'flex:1;font-size:.82rem', onClick: () => {
+      skrivAnon({ poster: anon.poster, avslaatt: true });
+      oppdater();
+    } }, 'Nei, hold dem utenfor')));
+  return boks;
+}
+
 function tegnBackup() {
   const inpFil = h('input', { type: 'file', accept: '.json,application/json', style: 'display:none',
     'aria-label': 'Velg sikkerhetskopi', onchange: e => hentInnKopi(e.target.files && e.target.files[0]) });
@@ -2074,7 +2148,13 @@ function tegnKonto() {
       'Bakeloggen, bildene og valgene dine lagres i skyen og følger deg til andre enheter. Appen virker som før uten nett — endringene sendes opp når du er tilkoblet igjen.'));
     boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
       h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: async () => { await Sky.skyvNaa(S); render(); } }, 'Synk nå'),
-      h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: async () => { await Sky.skyvNaa(S); await Sky.loggUt(); _harHentetNed = false; render(); } }, 'Logg ut')));
+      h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: loggUtTrygt }, 'Logg ut')));
+    if (skyForm.utFeil) boks.appendChild(h('div', { class: 'varsel' },
+      h('b', null, 'Fikk ikke lagret loggen i skyen. '),
+      'Du er fortsatt innlogget, og ingenting er slettet. ' + skyForm.utFeil +
+      ' Prøv «Synk nå» når du har nett igjen, så kan du logge ut trygt.'));
+    boks.appendChild(h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:8px;line-height:1.45' },
+      'Logger du ut, lastes bakeloggen opp og fjernes fra denne enheten. Da ser ingen bakene dine uten å logge inn. De hentes ned igjen neste gang du logger inn.'));
     return boks;
   }
   // Utlogget: registrer / logg inn
@@ -2129,6 +2209,42 @@ async function skyGlemt() {
    Sletting løses med gravsteiner (`loggSlettet`) i stedet for ved fravær. Uten
    dem ville en union gjenopplivet hver post man har slettet, hver gang den andre
    enheten synket. */
+/* ---------- Bakeloggen hører til kontoen ----------
+   Etter at loggen ble FLETTET i stedet for overskrevet (se over), fikk «lokalt
+   først» en bakside: loggen ble liggende igjen på enheten etter utlogging, og
+   ville blitt flettet inn i neste konto som logget inn der. Bakeloggen er
+   personlig; den skal ikke arves av den som låner telefonen.
+
+   Modellen er derfor to eierskap, ikke ett:
+     - post med `konto: <uid>`  → hører til den kontoen, bor i skyen
+     - post med `konto: null`   → loggført uten konto, hører til ENHETEN
+
+   Ved utlogging lastes kontoens poster opp, VERIFISERT, og fjernes så lokalt.
+   Postene uten konto legges tilbake, for de var aldri kontoens.
+
+   Ved innlogging flettes kontoens egne poster som før, mens poster uten konto
+   utløser et spørsmål. Å flette dem inn i stillhet ville lagt en fremmeds bak
+   inn i din logg på en delt enhet; å slette dem ville vært datatap. Å spørre er
+   det eneste som ikke er en av delene.                                        */
+const ANON_LAGER = 'forgebakery.v2.utenkonto';
+function naaKonto() {
+  const b = (typeof Sky !== 'undefined' && Sky.klar() && Sky.bruker()) || null;
+  return b ? b.id : null;
+}
+function lesAnon() {
+  try {
+    const o = JSON.parse(localStorage.getItem(ANON_LAGER) || 'null');
+    if (o && Array.isArray(o.poster)) return { poster: o.poster, avslaatt: !!o.avslaatt };
+  } catch (e) {}
+  return { poster: [], avslaatt: false };
+}
+function skrivAnon(o) {
+  try {
+    if (!o.poster.length) localStorage.removeItem(ANON_LAGER);
+    else localStorage.setItem(ANON_LAGER, JSON.stringify(o));
+  } catch (e) {}
+}
+
 function lagetMs(b) {
   if (b && isFinite(b.laget)) return +b.laget;
   const m = /^b(\d{10,})/.exec(String((b && b.id) || ''));   // id-ene er 'b' + Date.now()
@@ -2148,6 +2264,29 @@ function flettLogg(lokal, sky, slettet) {
   return [...kart.values()].filter(b => !doed.has(b.id)).sort((a, b) => lagetMs(a) - lagetMs(b));
 }
 
+/* Utlogging i tre trinn, i denne rekkefølgen, og bare hvis trinn 1 lykkes:
+     1. last opp — og VERIFISER at det gikk. Uten verifiseringen ville et
+        nettverksglipp betydd at loggen ble slettet lokalt uten å finnes noe
+        annet sted. Det er nøyaktig den feilen vi nettopp rettet, speilvendt.
+     2. fjern kontoens poster fra enheten
+     3. legg tilbake postene som ble loggført uten konto — de var aldri
+        kontoens, og skal overleve utloggingen                                */
+async function loggUtTrygt() {
+  skyForm.utFeil = null;
+  if ((S.loggListe || []).length || (S.loggSlettet || []).length) {
+    await Sky.skyvNaa(S);
+    const st = Sky.status();
+    if (st.tilstand === 'feil') { skyForm.utFeil = st.tekst || ''; render(); return; }
+  }
+  const anon = lesAnon();
+  S.loggListe = anon.poster.slice();
+  S.loggSlettet = [];
+  lagre();
+  await Sky.loggUt();
+  _harHentetNed = false;
+  render();
+}
+
 /* Ved innlogging: innstillingene følger nyeste tidsstempel, loggen flettes. */
 async function synkVedInnlogging() {
   if (_harHentetNed) return;
@@ -2160,10 +2299,20 @@ async function synkVedInnlogging() {
   if (!sky || !sky.state) { Sky.lagreOpp(S); render(); return; }   // ingenting oppe ennå — legg opp det lokale
   const skyMs = sky.oppdatert ? new Date(sky.oppdatert).getTime() : 0;
   const lokaltMs = S.oppdatert || 0;
-  const lokalLogg = S.loggListe || [];
+  const uid = naaKonto();
+  // Del de lokale postene på eierskap FØR noe flettes. Bare kontoens egne skal
+  // inn i kontoens logg; postene uten konto legges til side og spørres om.
+  const lokalt = S.loggListe || [];
+  const mine = lokalt.filter(b => b && b.konto && b.konto === uid);
+  const utenKonto = lokalt.filter(b => b && !b.konto);
+  if (utenKonto.length) {
+    const anon = lesAnon();
+    const kjent = new Set(anon.poster.map(b => b.id));
+    skrivAnon({ poster: anon.poster.concat(utenKonto.filter(b => !kjent.has(b.id))), avslaatt: anon.avslaatt });
+  }
   const skyState = sky.state || {};
   const gravsteiner = [...new Set([].concat(S.loggSlettet || [], skyState.loggSlettet || []))];
-  const flettet = flettLogg(lokalLogg, skyState.loggListe, gravsteiner);
+  const flettet = flettLogg(mine, skyState.loggListe, gravsteiner);
   if (skyMs > lokaltMs) {
     try {
       localStorage.setItem(LAGER, JSON.stringify(skyState));

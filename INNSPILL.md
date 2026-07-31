@@ -164,6 +164,43 @@ stegene — et steg uten varighet må ikke inn der, ellers forskyves alt som les
 > «ikonet til appen er litt dårlig. Brødbakeikonet. Prøv å lage et bedre ikon som er litt
 > kulere. Har du noen skills som kan gjøre det? Eller connections? MCP-greier?»
 
+### 18 · Bakeloggen må høre til kontoen — `levert` · bøtte: ui + infra
+
+> «Så vil fortsatt loggene bak være der. Den bør være koblet til at du er logget inn
+> eller ikke.»
+
+Riktig, og en følge av flettingen i #1: loggen ble liggende etter utlogging, og ville
+blitt flettet inn i neste konto som logget inn på enheten. Valgt løsning (bekreftet av
+Bjørn): **loggen fjernes fra enheten ved utlogging** (etter en verifisert opplasting),
+og **bak loggført uten konto utløser et spørsmål ved innlogging** i stedet for å bli
+flettet inn i stillhet.
+
+### 19 · Gramfeltet er for firkantet — `levert` · bøtte: ui
+
+> «loksen du har laget med gram er veldig firkantig. Kanskje du skal ha litt rundere
+> kanter av den?»
+
+### 20 · «Lagre dette som standardbrød» — `levert` · bøtte: ui
+
+> «lag en knapp som heter "Lagre dette som standardbrød" under loggingen, sånn at man har
+> det når man åpner appen som standard, dersom det ikke ligger noe annet der fra før av.»
+
+### 21 · Endret gram på mel: spør hva som skal gi etter — `åpen` · bøtte: ui
+
+> «nå er det sånn at man bare justerer en annen meltype dersom du endrer grammen. Men jeg
+> vil ha en pop-up boks som sier hva du vil gjøre når du har endret dette. Vil du redusere
+> vetemelet? Vil du øke vannmengden? Og så videre og så videre.»
+
+Endrer #6, som nettopp ble levert: i dag fordeles differansen stilltiende på de andre
+meltypene. Skal bli et valg — hvilken meltype som gir etter, eller om deigen skal vokse.
+
+### 22 · Sonefargen bør dekke hele boksen — `levert` · bøtte: ui
+
+> «bokser som har en anbefaling for nivå, kan du gjerne bruke mer av den fargen med
+> grønt, gult og rødt i hele boksen i stedet for bare små indikasjoner.»
+
+---
+
 Svar på spørsmålet: nei, ingen av de tilkoblede MCP-ene lager bilder (Coda, Drive, Slack,
 Trello, Grafana, GitHub, kalender, reise). Veien er `tester/lag-ikoner.js`, som tegner
 `icons/` i Chromium fra en SVG i repoet — altså håndtegnet SVG, så regenerering.
