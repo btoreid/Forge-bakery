@@ -43,6 +43,8 @@ const STANDARD = {
   ffTemp: null,               // forfermentens temperatur; null = planens forslag
   autolyseMin: 0,             // autolyse i minutter; 0 = av
   handlelisteOk: false,       // «dette må være i huset» er kvittert bort
+  krukkeStart: null,          // startnivået du merker av i målekrukka (valgfritt)
+  timere: [],                 // aktive baketimere [{id, navn, slutt, stegId, ringt}]
   friksjonKalibrert: false,   // kalibreringsboksen er besvart eller avvist
   kalib: {},                  // {foer, etter, min} — målingene fra kalibreringen
   kurvMaal: {},               // brukerens kurvstørrelser i cm, per form-id
@@ -128,7 +130,7 @@ function last() {
 const UI_FELT = ['skjerm', 'paramInfo', 'tilleggInfo', 'melInfo', 'meltallInfo', 'aktivSteg',
   'regnskapAapen', 'byttBekreft', 'lgRediger', 'lgSlett', 'bildeVis', 'oppslag', 'oppslagSok',
   'brodInfo', 'kompVist', 'melEndring', 'kompSporsmal', 'handlelisteOk', 'melVelger',
-  'visMaskiner', 'aktivSteg', 'aktivStegId',
+  'visMaskiner', 'aktivSteg', 'aktivStegId', 'krukkeStart', 'timere',
   /* Delte maskinmålinger er HENTET, ikke skrevet. De hører hjemme i den delte
      tabellen, ikke i din rad — teller de som data, ville hver nedlasting sett ut
      som en endring og stemplet `oppdatert` på nytt. */
@@ -528,9 +530,12 @@ function tegnBunnlinje(r, K) {
     bl.insertBefore(stripe, bl.firstChild);
   }
   stripe.setAttribute('aria-expanded', S.regnskapAapen ? 'true' : 'false');
+  // Stripa viser bare det en baker trenger i et blikk — deigvekt, gjær, løft og
+  // total tid. «GD» (gjæringsdose) er tatt ut: det var ren sjargong, gjentok
+  // gjær-tallet rett ved siden av, og var med på å sprenge bredden så linja
+  // klippet på smal skjerm. Resten står i regnskapsarket som dras opp.
   stripe.replaceChildren(
     h('b', null, g0(r.totalVekt)), ' deig', sep(),
-    h('b', null, fmt(r.doseProfil.dose, 2)), ' GD', sep(),
     h('b', null, fmt(r.gjaerTotal, 2) + ' g'), ' gjær', sep(),
     h('b', null, String(r.loft.loft)), ' løft', sep(),
     h('b', null, fmt(K.totalT, 1) + ' t'), ' total',
@@ -573,7 +578,7 @@ function tegnBunnlinje(r, K) {
     ...avvik.map(rad => h('div', { class: 'ark-avvik' },
       h('b', null, rad.navn),
       h('span', null, rad.verdier.map(([lab, v]) => lab + ' ' + fmtDelta(v)).join(' · ')))),
-    avvik.length ? h('div', { style: 'font-size:.68rem;color:var(--color-neutral-500);margin-top:4px' },
+    avvik.length ? h('div', { style: 'font-size:.68rem;color:var(--color-neutral-600);margin-top:4px' },
       '± er endring mot samme brød uten tillegg. Detaljer i «Hva valgene koster» på Deig.') : null,
     // Gjæringskurven hører hjemme her: regnskapet sier hva deigen ER, grafen
     // sier hvordan den kommer dit. Samme funksjon som på Tid, i mini-format.
@@ -603,7 +608,7 @@ function regnskapGraf(r, K) {
   return h('div', { style: 'margin-top:12px' },
     h('div', { class: 'ark-tittel' }, 'Gjæringen over tid'),
     gjaeringsGraf(pts, r, bulkStart, S.tidModus === 'naa'),
-    h('div', { style: 'font-size:.68rem;color:var(--color-neutral-500);margin-top:2px' },
+    h('div', { style: 'font-size:.68rem;color:var(--color-neutral-600);margin-top:2px' },
       'Grønn kurve: andel av gjæringen som er gjort (høyre akse). Stiplet: deigtemperatur (venstre).'));
 }
 
@@ -662,7 +667,9 @@ function tegnBrodet(r, K) {
     stepperRad('Gram per brød', S.vekt, 'vekt', 100, 2000, 50),
     h('div', { style: 'margin-top:10px;font-size:.8rem;color:var(--color-neutral-700);font-variant-numeric:tabular-nums' },
       'Deigvekt ', h('b', null, g0(r.totalVekt)), ' · hver ca. ', h('b', null, g0(emneMasse)),
-      ' · Pyrex-gryta er 21,5 cm innvendig'),
+      // Pyrex-målet er bare relevant når man faktisk baker i Pyrexen — ellers er
+      // det irrelevant støy midt i et sentralt tall.
+      (r.prof && (r.prof.id === 'brod_glass_stal' || r.prof.id === 'brod_kloke')) ? ' · Pyrex-gryta er 21,5 cm innvendig' : ''),
     h('div', { style: 'margin-top:12px' },
       h('div', { class: 'felt-label' }, 'Kjøkkenvekta di viser'),
       h('div', { class: 'piller' }, ...[[1, 'hele gram'], [0.1, '0,1 g'], [0.01, '0,01 g']].map(([v, navn]) =>
@@ -689,10 +696,10 @@ function brodInfoBoks(bt, K) {
       h('span', { style: 'flex:0 0 18px;color:var(--color-neutral-500);font-variant-numeric:tabular-nums' }, String(j + 1)),
       h('span', { style: 'flex:1' }, s.navn),
       h('span', { style: 'color:var(--color-neutral-600);font-variant-numeric:tabular-nums;white-space:nowrap' }, fmtTimer(s.varighet / 60)))));
-    boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-500);margin-top:6px' },
+    boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-600);margin-top:6px' },
       'Tidene følger valgene dine — hele kjeden med klokkeslett ligger under Prosess.'));
   } else {
-    boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-500);margin-top:8px' },
+    boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-600);margin-top:8px' },
       'Velg denne baksten for å se hele stegkjeden med tider.'));
   }
   return boks;
@@ -787,7 +794,7 @@ function tegnUtstyrValg(r) {
     boks.appendChild(h('div', { class: 'konsekvens' }, paa
       ? [h('b', null, 'Steker på ' + grunn.varm.inn + ' °C'), ' i stedet for ' + grunn.inn + ' °C, ned til ' + grunn.varm.ned + ' °C. Uten oppvarmingssjokket er det ikke 220-gradersgrensen som setter taket lenger, så oppsettet kan kjøres som en støpejernsgryte — mer bunnvarme og bedre ovnsløft. Deigen ligger på stålet og rører aldri glasset.']
       : [h('b', null, 'Steker på ' + grunn.inn + ' °C.'), ' Taket er glassets termiske sprang på 220 °C: et romtemperert glass inn i en 260-graders ovn er 240 og kan sprekke. Lar du glasset stå i ovnen fra kald start, forsvinner den grensen — kryss av over.']));
-    if (paa) boks.appendChild(h('div', { class: 'varsel' },
+    if (paa) boks.appendChild(h('div', { class: 'varsel fare' },
       h('b', null, 'To ting glasset ikke tåler: '), 'å settes tilbake i en varm ovn etter at det er blitt kaldt, og å kjøles raskt — legg det aldri i vann eller på en våt benk når du tar det av etter 20 minutter. La det kjøle i luft, eller sett det rett inn igjen mens det er varmt.'));
   }
   return boks;
@@ -946,7 +953,7 @@ function tegnDeigen(r) {
             const liste = (gyldigOverstyring(S.melOverstyr) || r.melListe).filter((_, j) => j !== i);
             S.melOverstyr = liste.length ? liste : null;
             oppdater();
-          } }, '✕') : null),
+          } }, '×') : null),
       // Gram er redigerbart. Har du 500 g igjen av en melsort, skriver du 500 —
       // i stedet for å regne ut hvilken andel det blir. Selve omregningen ligger
       // i engine.js (settMelGram), som itererer fordi melmengden avhenger av
@@ -995,7 +1002,7 @@ function tegnDeigen(r) {
     if (ma.trengerSyre) raad.push('Bruk surdeig eller 1–2 % eddik mot rugens amylase.');
     if (ma.maaIForm) raad.push('Bak i FORM — dette emnet holder ikke fasongen fritt.');
     raad.push('Reduser hevemålet og la brødet hvile 12–24 t før skjæring.');
-    melBoks.appendChild(h('div', { class: 'varsel', style: 'margin-top:10px;border-left:3px solid var(--color-danger)' },
+    melBoks.appendChild(h('div', { class: 'varsel fare' },
       h('div', { style: 'margin-bottom:6px' }, h('b', null, 'Melblandingen er utenfor det som gir et trygt brød.')),
       ...rader,
       h('div', { style: 'margin-top:6px;font-size:.82rem;color:var(--color-neutral-700)' }, raad.join(' '))));
@@ -1018,7 +1025,7 @@ function tegnDeigen(r) {
       const f = FLOURS.find(x => x.id === m.id);
       return f && f.prisAnslag && (m.gram || 0) > 0;
     });
-    melBoks.appendChild(h('div', { style: 'font-size:.68rem;color:var(--color-neutral-500);margin-top:8px;line-height:1.45' },
+    melBoks.appendChild(h('div', { style: 'font-size:.68rem;color:var(--color-neutral-600);margin-top:8px;line-height:1.45' },
       'Kiloprisene er hentet ' + PRIS_HENTET + ' fra ' + PRIS_KILDE + '.' +
       (anslag.length
         ? ' ' + anslag.map(m => m.navn).join(', ') + (anslag.length > 1 ? ' er anslag' : ' er et anslag') +
@@ -1075,7 +1082,7 @@ function tegnDeigen(r) {
       h('div', { style: 'font-size:.78rem;color:var(--color-neutral-600);margin-top:6px;font-variant-numeric:tabular-nums' }, vannKonsekvens(r)),
       infoUtfelling('hydrering'));
     vk.className = 'kort sone-' + lab0.sone;
-    if (S.hyd > tak) vk.appendChild(h('div', { class: 'varsel' },
+    if (S.hyd > tak) vk.appendChild(h('div', { class: 'varsel fare' },
       'Melblandingen din (vektet styrke ' + fmt(r.styrkeVektet, 1) + ') tåler anslagsvis ' + tak + ' % før deigen flyter ut i stedet for å reise seg. Du ligger ' + (S.hyd - tak) + ' pp over — bruk form, eller bytt inn sterkere mel.'));
     wrap.appendChild(vk);
   }
@@ -1520,7 +1527,7 @@ function tegnAutolyse(r) {
   if (paa && S.ff) boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
     'Du har både forferment og autolyse på, og det henger sammen: forfermenten modnes for seg og gir smak, mens autolysen gjelder ',
     h('b', null, 'resten'), ' av melet og vannet og bygger gluten uten at gjæringen starter. Bland forfermenten inn først når autolysen er ferdig, sammen med salt og gjær. Det er den klassiske baguettemetoden.'));
-  if (min >= 180) boks.appendChild(h('div', { class: 'varsel' },
+  if (min >= 180) boks.appendChild(h('div', { class: 'varsel fare' },
     'Over ~3 timer begynner proteasene å bryte ned mer enn de bygger, og deigen blir slapp og klissete. Med gjærdeig er 1–3 timer trygt — surdeig tåler langt mindre fordi lav pH vekker proteasene.'));
   return boks;
 }
@@ -1535,9 +1542,9 @@ function tegnFfTemp(r, f) {
   const kald = f.temp <= 12;
   boks.appendChild(h('div', { class: 'piller', style: 'margin-top:4px' },
     h('button', { class: kald ? '' : 'paa', onClick: () => { S.ffTemp = null; oppdater(); } },
-      'I rommet ' + fmt(S.romTemp || 22, 0) + '°'),
+      'I rommet ' + fmt(S.romTemp || 22, 0) + ' °C'),
     h('button', { class: kald ? 'paa' : '', onClick: () => { S.ffTemp = S.kjolskapTemp || 4; oppdater(); } },
-      'I kjøleskapet ' + fmt(S.kjolskapTemp || 4, 0) + '°')));
+      'I kjøleskapet ' + fmt(S.kjolskapTemp || 4, 0) + ' °C')));
   /* Det er ROMMET man vet temperaturen på, ikke forfermenten.
      Feltet het «Temperatur på forfermenten», og det er en temperatur ingen har
      målt: forfermenten holder den temperaturen omgivelsene gir den. Står den i
@@ -1577,7 +1584,7 @@ function tegnFfTemp(r, f) {
   if (f.gjaerPaaTaket) {
     const onsketFersk = gjaerKonverter(f.gjaerPctOnsket, r.gjaerType, 'fersk');
     const takFersk = gjaerKonverter(f.gjaerTakPct, r.gjaerType, 'fersk');
-    const v = h('div', { class: 'varsel' },
+    const v = h('div', { class: 'varsel fare' },
       h('b', null, 'Denne kombinasjonen går ikke opp. '),
       'For å rekke samme modning på ' + fmtTimer(f.timer) + ' ved ' + grader(f.temp, 0) +
       ' måtte forfermenten hatt ' + fmt(onsketFersk, 1) + ' % fersk gjær på sitt eget mel. ' +
@@ -1588,7 +1595,7 @@ function tegnFfTemp(r, f) {
       'Gi den ' + fmtTimer(ekv) + ' i stedet — da rekker den'));
     v.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:6px;width:100%;font-size:.8rem',
       onClick: () => { S.ffTemp = null; oppdater(); } },
-      'Eller sett den tilbake til planens ' + fmt(f.standardTemp, 0) + '°'));
+      'Eller sett den tilbake til planens ' + fmt(f.standardTemp, 0) + ' °C'));
     boks.appendChild(v);
   }
   return boks;
@@ -1656,7 +1663,7 @@ function tegnDoseRespons(r) {
   rader.forEach(rad => boks.appendChild(h('div', { style: 'margin-top:10px' },
     h('div', { style: 'font-weight:700;font-size:.86rem;margin-bottom:4px' }, rad.navn),
     ...rad.verdier.map(([lab, v, skala]) => deltaRad(lab, v, skala)),
-    h('div', { style: 'font-size:.64rem;color:var(--color-neutral-500);margin-top:4px' }, 'Kilde: ' + rad.kilde))));
+    h('div', { style: 'font-size:.64rem;color:var(--color-neutral-600);margin-top:4px' }, 'Kilde: ' + rad.kilde))));
   return boks;
 }
 /* Divergerende søyle: 0 i midten, pluss mot høyre, minus mot venstre. Grønn når
@@ -1718,7 +1725,7 @@ function tegnHeveplan(r) {
        bare et annet brød. */
     const paaTaket = r.gjaerTorr >= GJAER_TAK_TORR - 0.001;
     const sumT = trinn.reduce((s2, t) => s2 + (t.timer || 0), 0);
-    if (paaTaket) boks.appendChild(h('div', { class: 'varsel' },
+    if (paaTaket) boks.appendChild(h('div', { class: 'varsel fare' },
       h('b', null, 'For kort for gjæren. '),
       'Planen din gir ' + fmtTimer(sumT) + ' heving, og selv med gjæren på taket (' +
       fmt(GJAER_TAK_TORR, 2) + ' % tørrgjær) rekker ikke deigen måldosen. Over dette taket får du gjærsmak og dårligere løft i stedet for mer heving. Brødet blir bakt, men tettere og mindre smakfullt enn planen sikter mot — gi den en time eller to til, eller sett trinnene varmere.'));
@@ -1748,8 +1755,8 @@ function tegnHeveplan(r) {
         trinnFelt('Miljø', tr.miljo, '°C', v => redigerTrinn(i, 'miljo', v))),
       // Hurtigvalg for hvor deigen står: kjøleskapet eller rommet ditt.
       h('div', { class: 'piller', style: 'margin-top:6px' },
-        h('button', { class: Math.abs(tr.miljo - kjt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', kjt) }, 'Kjøleskapet ' + fmt(kjt, 0) + '°'),
-        h('button', { class: Math.abs(tr.miljo - rt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', rt) }, 'Rommet ditt ' + fmt(rt, 0) + '°')),
+        h('button', { class: Math.abs(tr.miljo - kjt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', kjt) }, 'Kjøleskapet ' + fmt(kjt, 0) + ' °C'),
+        h('button', { class: Math.abs(tr.miljo - rt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', rt) }, 'Rommet ditt ' + fmt(rt, 0) + ' °C')),
       // Eksplisitt utbakt-toggle: styrer om emnet er formet (kjøles som ett emne,
       // uten lokk) — en modellforskjell som ikke kan avledes av temperaturen alene.
       h('label', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.78rem;color:var(--color-neutral-700);cursor:pointer' },
@@ -1983,7 +1990,7 @@ function tegnTid(r, K) {
        Regnestykket kan lande på 1 °C eller lavere, og da er tallet ubrukelig
        som instruksjon. Da skal appen si hva som FAKTISK skjer, og hva man kan
        gjøre med det — ikke be om vann som ikke finnes. */
-    r.vannForKaldt ? h('div', { class: 'varsel' },
+    r.vannForKaldt ? h('div', { class: 'varsel fare' },
       h('div', { style: 'font-weight:800;margin-bottom:2px' },
         'Vannet må være kaldere enn du får det'),
       h('div', { style: 'font-size:.8rem;line-height:1.45' },
@@ -2163,7 +2170,7 @@ function tegnKalibrering(r) {
     boks.appendChild(h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:8px' },
       'Fyll inn start og de to første fartene, så regner appen ut friksjonen. Høy fart er valgfri — den er der for å vise deg forskjellen.'));
   }
-  if (midRate != null && midRate <= 0) boks.appendChild(h('div', { class: 'varsel' },
+  if (midRate != null && midRate <= 0) boks.appendChild(h('div', { class: 'varsel fare' },
     'Temperaturen gikk ikke opp mellom lav og middels. Enten gikk det for kort tid, eller så er kjøkkenet kaldere enn deigen — mål på nytt med litt lengre drag.'));
   boks.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:6px;font-size:.78rem',
     onClick: () => { S.friksjonKalibrert = true; oppdater(); } }, 'Ikke nå — bruk tabellverdien'));
@@ -2447,8 +2454,43 @@ function flyttFerdig(min) {
 /* ============================================================
    4 · PROSESS
    ============================================================ */
+/* Timer-panelet: pågående baketimere med levende nedtelling. Ligger øverst på
+   prosess-skjermen så «hvor lenge igjen» er ett blikk unna. */
+function tegnTimerpanel() {
+  const now = Date.now();
+  const timere = (S.timere || []).slice().sort((a, b) => a.slutt - b.slutt);
+  if (!timere.length) return null;
+  const boks = h('div', { class: 'timer-panel' },
+    h('div', { class: 'seksjonstittel', style: 'margin:2px 2px 6px' }, timere.length > 1 ? timere.length + ' timere' : 'Timer'),
+    ...timere.map(t => {
+      const ferdig = t.slutt <= now;
+      return h('div', { class: 'timerrad' + (ferdig ? ' ferdig' : '') },
+        h('div', { style: 'flex:1;min-width:0' },
+          h('div', { class: 'timer-navn' }, t.navn),
+          h('div', { class: 'timer-tid', 'data-timer': t.id }, ferdig ? 'ferdig' : timerTekst(t.slutt - now))),
+        ferdig ? null : h('button', { class: 'timer-juster', 'aria-label': 'Fem minutter mindre', onClick: () => justerTimer(t.id, -5) }, '−5'),
+        ferdig ? null : h('button', { class: 'timer-juster', 'aria-label': 'Fem minutter mer', onClick: () => justerTimer(t.id, 5) }, '+5'),
+        h('button', { class: 'timer-avbryt', 'aria-label': ferdig ? 'Fjern timer' : 'Avbryt timer', onClick: () => avbrytTimer(t.id) }, '×'));
+    }));
+  // Ærlig om hva som skal til for at det faktisk ringer på telefonen.
+  if (varslingStottes() && Notification.permission === 'default') {
+    boks.appendChild(h('button', { class: 'btn btn-primary', style: 'width:100%;margin-top:8px;font-size:.82rem',
+      onClick: async () => { await beOmVarsling(); (S.timere || []).forEach(planleggVarsel); oppdater(); } },
+      '🔔 Slå på varsling — så ringer det på telefonen'));
+  } else if (varslingStottes() && Notification.permission === 'denied') {
+    boks.appendChild(h('div', { class: 'timer-hint' },
+      'Varsling er avslått for denne siden — timeren teller ned her, men ringer ikke. Slå den på igjen i nettleserens innstillinger.'));
+  } else if (Notification.permission === 'granted' && !planlagteVarslerStottes()) {
+    boks.appendChild(h('div', { class: 'timer-hint' },
+      'Nettleseren støtter ikke planlagte varsler — hold appen åpen, så ringer den når tiden er ute.'));
+  }
+  return boks;
+}
+
 function tegnProsess(r, K) {
   const wrap = h('div');
+  const tp = tegnTimerpanel();
+  if (tp) wrap.appendChild(tp);
   /* «Dette må være i huset» er steg null: å oppdage at melet ikke rekker etter
      at forfermenten står, hjelper ingen. Den lå som et sammenklappet kort
      NEDERST — altså etter alt man skulle gjort med varene.
@@ -2526,6 +2568,84 @@ function tegnHandleliste(r) {
   d.appendChild(kropp);
   return d;
 }
+/* ---------- MÅLEKRUKKA — heveindikatoren ----------
+   Kjernen i appens filosofi: klokka styrer rekkefølgen, men DEIGEN bestemmer.
+   Står det 4 t bulk og krukka har nådd hevemålet etter 3, er den ferdig. Blir
+   klokka og krukka uenige, har krukka rett.
+
+   Metoden: ta en liten, RETT-SIDET beholder (et lite glass, en målekrukke), legg
+   i en klump deig, trykk flat og merk av startnivået — eller merk av nivået på
+   selve deigen i en rett bøtte. Når nivået har steget måltallet, er den klar.
+
+   Verktøyet gjør to ting: viser målet visuelt som en krukke, og regner om
+   startnivået DITT (ml, cm, hva du enn leser av) til nivået du baker ut på — så
+   du slipper hoderegning ved benken. `steg.maalRise` er måltallet i prosent. */
+function tegnKrukke(steg) {
+  const lo = steg.maalRise, hi = steg.maalRise * 1.2;      // båndet, som «Mål stigning»
+  const loF = lo / 100, hiF = hi / 100;
+  const snittF = (loF + hiF) / 2;
+  // Visuell krukke: start ligger på en fast andel, målet stiger derfra.
+  const startFrac = 0.40;
+  const maalFrac = Math.min(0.94, startFrac * (1 + snittF));
+
+  const jug = h('div', { class: 'krukke-jug' },
+    h('div', { class: 'krukke-deig', style: 'height:' + (startFrac * 100).toFixed(0) + '%' }),
+    h('div', { class: 'krukke-startlinje', style: 'bottom:' + (startFrac * 100).toFixed(0) + '%' }),
+    h('div', { class: 'krukke-maallinje', style: 'bottom:' + (maalFrac * 100).toFixed(0) + '%' },
+      h('span', { class: 'krukke-maal-tag' }, 'bak ut')));
+
+  // Kalkulator: startnivå → utbaknivå, i brukerens egen enhet.
+  const utEl = h('div', { class: 'krukke-ut' });
+  const settUt = v => {
+    if (v > 0) {
+      utEl.replaceChildren(
+        h('span', null, 'Bak ut når krukka når '),
+        h('b', null, fmt(v * (1 + loF), 0) + '–' + fmt(v * (1 + hiF), 0)),
+        h('span', { style: 'color:var(--color-neutral-600)' }, ' (fra ' + fmt(v, 0) + ')'));
+    } else {
+      utEl.replaceChildren(h('span', { style: 'color:var(--color-neutral-600)' },
+        'Skriv startnivået du merker av, så regner jeg ut hvor høyt det skal stige.'));
+    }
+  };
+  const inn = h('input', {
+    class: 'gramfelt', type: 'number', inputmode: 'numeric', min: 0, step: 10,
+    value: S.krukkeStart != null ? S.krukkeStart : '', placeholder: 'f.eks. 500',
+    'aria-label': 'Startnivå i målekrukka',
+    onchange: e => {
+      const raw = String(e.target.value).replace(',', '.').trim();
+      const v = parseFloat(raw);
+      S.krukkeStart = (raw === '' || !isFinite(v) || v < 0) ? null : v;
+      // Oppdater bare tallet, ikke hele skjermen — så fokus ikke rykker vekk.
+      settUt(S.krukkeStart || 0);
+    }
+  });
+  settUt(S.krukkeStart || 0);
+
+  const hode = h('div', { class: 'krukke-hode' },
+    h('span', { class: 'krukke-ikon', 'aria-hidden': 'true' }, '🫙'),
+    h('div', null,
+      h('div', { class: 'krukke-tittel' }, 'Målekrukka avgjør'),
+      h('div', { class: 'krukke-under' }, 'Deigen skal vokse ', h('b', null, steg.maalRiseTxt))));
+
+  const nullstill = S.krukkeStart != null
+    ? h('button', { class: 'm-fjern', 'aria-label': 'Nullstill startnivå',
+        onClick: () => { S.krukkeStart = null; oppdater(); } }, '×')
+    : null;
+
+  const hoyre = h('div', { class: 'krukke-hoyre' },
+    h('div', { class: 'krukke-metode' },
+      'Legg en klump deig i et rett-sidet glass, trykk flat og merk av nivået — eller merk av på selve deigen i en rett bøtte.'),
+    h('div', { class: 'felt-label', style: 'margin-top:10px' }, 'Startnivå (ml, cm — din enhet)'),
+    h('div', { style: 'display:flex;align-items:center;gap:8px' }, inn, nullstill),
+    utEl);
+
+  return h('div', { class: 'krukke-kort' },
+    hode,
+    h('div', { class: 'krukke-rad' }, jug, hoyre),
+    h('div', { class: 'krukke-note' },
+      'Klokka styrer rekkefølgen, men deigen bestemmer. Har krukka nådd målet før klokka, er den likevel ferdig — og blir de uenige, har krukka rett.'));
+}
+
 function stegKort(steg, status) {
   const kropp = h('div', { class: 'kropp' });
   if (steg.hoved) {
@@ -2540,6 +2660,24 @@ function stegKort(steg, status) {
   if (steg.tall && steg.tall.length) kropp.appendChild(h('div', { style: 'margin-top:8px' }, ...steg.tall.map(([k, v]) => h('div', { class: 'tallrad' }, h('span', null, k), h('b', null, v)))));
   if (steg.gjor) kropp.appendChild(h('div', { class: 'instruks' }, h('span', { class: 'lab' }, 'Slik gjør du'), steg.gjor));
   if (steg.sjekk) kropp.appendChild(h('div', { class: 'instruks sjekk' }, h('span', { class: 'lab' }, 'Sjekk'), steg.sjekk));
+  // Målekrukka: bare på gjæringstrinn der man faktisk kan følge stigningen, og
+  // bare på det AKTIVE steget (status satt) — ikke i hele-prosessen-lista.
+  if (steg.krukke && steg.maalRise && status) kropp.appendChild(tegnKrukke(steg));
+  // Timer for det aktive steget: setter en nedtelling på stegets varighet, som
+  // ringer på telefonen når det er tid å sjekke. Ikke på forvarmingen (den
+  // overlapper), og ikke der en timer alt er satt for steget.
+  if (status && steg.varighet >= 1 && steg.id !== 'ovn') {
+    const alt = (S.timere || []).some(t => t.stegId === steg.id);
+    const navn = steg.id === 'stek' ? 'Brødet er ferdig — sjekk kjernetemperaturen'
+               : steg.id === 'kjol' ? 'Brødet er avkjølt — nå kan du skjære'
+               : (steg.krukke ? 'Sjekk deigen: ' : '') + steg.navn;
+    kropp.appendChild(h('div', { style: 'margin-top:12px' },
+      alt
+        ? h('div', { class: 'timer-satt' }, '⏰ Timer i gang — se øverst på skjermen')
+        : h('button', { class: 'btn timer-start', style: 'width:100%',
+            onClick: () => startTimer(navn, Math.round(steg.varighet), steg.id) },
+            '⏰ Sett timer på ' + fmtTimer(steg.varighet / 60))));
+  }
   const pilleBg = status === 'I GANG' ? 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)' : 'background:var(--color-neutral-200);color:var(--color-neutral-700)';
   return h('div', { class: 'stegkort ' + (steg.tone || 'noytral') },
     h('div', { style: 'display:flex;align-items:center;padding:14px 16px 2px' },
@@ -2750,7 +2888,7 @@ function loggRediger(b, i) {
   boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:12px' },
     h('button', { class: 'btn btn-primary', style: 'flex:1;font-size:.82rem', onClick: () => { S.lgRediger = null; oppdater(); } }, 'Ferdig'),
     h('button', { class: 'btn', style: 'flex:0 0 auto;font-size:.82rem;color:var(--color-danger)', onClick: () => { S.lgSlett = b.id; S.lgRediger = null; oppdater(); } }, 'Slett')));
-  boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-500);margin-top:8px' },
+  boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-600);margin-top:8px' },
     'Endringene lagres mens du skriver. Måletallene (dose, hydrering, løft) kan ikke endres — de er hentet fra baket slik det faktisk var.'));
   return boks;
 }
@@ -2961,6 +3099,13 @@ async function seEtterOppdatering(e) {
   location.reload();
 }
 function tilbakeknapp() { return h('button', { class: 'btn-ghost', onClick: () => { S.oppslag = 'meny'; oppdater(); } }, '‹ Oppslag'); }
+/* Tom-treff-tilstand for Oppslag-søkene. Uten den sto brukeren igjen med et
+   søkefelt over et helt tomt område når søket ikke traff noe — det leser som en
+   feil, ikke som «ingen treff». */
+function tomTreff(sok) {
+  return h('div', { class: 'tomkort', style: 'margin-top:10px;text-align:center;color:var(--color-neutral-600);font-size:.86rem' },
+    'Ingen treff på «' + sok + '».');
+}
 
 function oppslagMel() {
   const wrap = h('div', null, tilbakeknapp());
@@ -3011,15 +3156,18 @@ function oppslagMel() {
       wrap.appendChild(kortEl);
     });
   });
+  if (sok && !Object.keys(grupper).length) wrap.appendChild(tomTreff(S.oppslagSok));
   return wrap;
 }
 function oppslagTeknikk() {
   const wrap = h('div', null, tilbakeknapp());
   wrap.appendChild(h('input', { class: 'sok', 'data-fokus': 'sok', placeholder: 'Søk fagstoff…', value: S.oppslagSok, oninput: e => { S.oppslagSok = e.target.value; render(); } }));
   const sok = (S.oppslagSok || '').toLowerCase();
+  let antTreff = 0;
   TIPS.forEach(t => {
     const tekst = JSON.stringify(t).toLowerCase();
     if (sok && !tekst.includes(sok)) return;
+    antTreff++;
     const motsier = (t.tittel || '').includes('⚠') || (t.ikon === '⚠');
     const boks = h('details', { class: 'kort', style: 'padding:0' });
     boks.appendChild(h('summary', { style: 'padding:14px 16px;cursor:pointer;font-weight:700;font-size:.9rem;list-style:none;display:flex;gap:8px;align-items:center' },
@@ -3034,6 +3182,7 @@ function oppslagTeknikk() {
     boks.appendChild(kropp);
     wrap.appendChild(boks);
   });
+  if (sok && !antTreff) wrap.appendChild(tomTreff(S.oppslagSok));
   return wrap;
 }
 /* Favoritter først. Rekkefølgen er den eneste måten en favoritt faktisk sparer
@@ -3112,6 +3261,7 @@ function oppslagOrdliste() {
               onClick: () => { S.oppslagSok = ord; oppdater(); } }, ord)))) : null));
     });
   });
+  if (sok && !Object.keys(grupper).length) wrap.appendChild(tomTreff(S.oppslagSok));
   return wrap;
 }
 
@@ -3137,7 +3287,7 @@ function tegnKonto() {
     boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
       h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: async () => { await Sky.skyvNaa(S); render(); } }, 'Synk nå'),
       h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: loggUtTrygt }, 'Logg ut')));
-    if (skyForm.utFeil) boks.appendChild(h('div', { class: 'varsel' },
+    if (skyForm.utFeil) boks.appendChild(h('div', { class: 'varsel fare' },
       h('b', null, 'Fikk ikke lagret loggen i skyen. '),
       'Du er fortsatt innlogget, og ingenting er slettet. ' + skyForm.utFeil +
       ' Prøv «Synk nå» når du har nett igjen, så kan du logge ut trygt.'));
@@ -3163,7 +3313,7 @@ function tegnKonto() {
   boks.appendChild(h('button', { class: 'btn btn-primary btn-full', disabled: skyForm.jobber ? '' : null,
     onClick: () => skySend(erNy) }, skyForm.jobber ? 'Vent …' : (erNy ? 'Opprett konto' : 'Logg inn')));
   if (!erNy) boks.appendChild(h('button', { class: 'btn-ghost', style: 'font-size:.78rem', onClick: skyGlemt }, 'Glemt passord?'));
-  if (skyForm.feil) boks.appendChild(h('div', { class: 'varsel', style: 'border-color:var(--color-danger)' }, skyForm.feil));
+  if (skyForm.feil) boks.appendChild(h('div', { class: 'varsel fare' }, skyForm.feil));
   if (skyForm.melding) boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' }, skyForm.melding));
   return boks;
 }
@@ -3427,6 +3577,158 @@ document.addEventListener('keydown', e => {
   if (bedt && SKJERMER.some(s => s.id === bedt)) { S.skjerm = bedt; if (bedt === 'prosess') S.aktivSteg = 0; }
 })();
 
+/* ============================================================
+   BAKETIMERE — nedtelling med varsel på telefonen
+   ============================================================
+   Under bakingen står man ofte og venter på ett tall: når skal jeg sjekke
+   deigen igjen, når er stekingen ferdig. Timerne løser det, og det viktige er
+   at de RINGER på telefonen selv om appen er lukket.
+
+   Hvordan det faktisk ringer når appen er borte: en PWA kan ikke kjøre en
+   `setTimeout` i bakgrunnen — service workeren blir drept. Den eneste veien til
+   et varsel på et framtidig klokkeslett UTEN en egen push-server er
+   Notification Triggers (`showTrigger` + `TimestampTrigger`): et varsel som
+   planlegges på OS-nivå og fyres av Android selv om appen er helt lukket.
+   Støttes det ikke, faller vi tilbake på et varsel + lyd mens appen er åpen, og
+   sier tydelig fra i grensesnittet at appen da må stå på. Ærlig framfor stille
+   svikt: en baketimer som ikke ringer er verre enn ingen timer. */
+
+function varslingStottes() { return typeof Notification !== 'undefined' && 'serviceWorker' in navigator; }
+function planlagteVarslerStottes() { return varslingStottes() && 'showTrigger' in Notification.prototype; }
+
+async function beOmVarsling() {
+  if (typeof Notification === 'undefined') return 'unsupported';
+  if (Notification.permission === 'granted') return 'granted';
+  if (Notification.permission === 'denied') return 'denied';
+  try { return await Notification.requestPermission(); } catch (e) { return 'denied'; }
+}
+
+/* Planlegg et OS-nivå varsel som fyrer selv om appen er lukket. */
+async function planleggVarsel(t) {
+  if (!planlagteVarslerStottes() || Notification.permission !== 'granted') return;
+  let reg; try { reg = await navigator.serviceWorker.ready; } catch (e) { return; }
+  try {
+    await reg.showNotification('Forge Bakery', {
+      tag: 'baketimer-' + t.id, body: t.navn,
+      icon: 'icons/icon-192-v2.png', badge: 'icons/icon-192-v2.png',
+      vibrate: [300, 120, 300, 120, 300], requireInteraction: true, renotify: true,
+      showTrigger: new TimestampTrigger(t.slutt),
+      data: { stegId: t.stegId || null, timerId: t.id }
+    });
+  } catch (e) {}
+}
+
+/* Vis varselet MED EN GANG (brukes når appen er åpen og timeren går ut, og
+   planlagte varsler ikke støttes). Samme tag, så det aldri dobles. */
+async function visVarselNaa(t) {
+  if (!varslingStottes() || Notification.permission !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification('Forge Bakery', {
+      tag: 'baketimer-' + t.id, body: t.navn, icon: 'icons/icon-192-v2.png', badge: 'icons/icon-192-v2.png',
+      vibrate: [300, 120, 300, 120, 300], requireInteraction: true,
+      data: { stegId: t.stegId || null, timerId: t.id }
+    });
+  } catch (e) {}
+}
+
+async function avlysVarsel(id) {
+  if (!varslingStottes()) return;
+  let reg; try { reg = await navigator.serviceWorker.ready; } catch (e) { return; }
+  for (const opt of [{ tag: 'baketimer-' + id, includeTriggered: true }, { tag: 'baketimer-' + id }]) {
+    try { (await reg.getNotifications(opt)).forEach(n => n.close()); return; } catch (e) {}
+  }
+}
+
+/* Kort pip + vibrasjon når appen er åpen, så man hører det uten å se skjermen. */
+let _lydCtx = null;
+function pip() {
+  try { if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 300]); } catch (e) {}
+  try {
+    _lydCtx = _lydCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _lydCtx; if (ctx.state === 'suspended') ctx.resume();
+    [0, 0.55, 1.1].forEach(dt => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = 880;
+      o.connect(g); g.connect(ctx.destination);
+      const t0 = ctx.currentTime + dt;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.35, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4);
+      o.start(t0); o.stop(t0 + 0.42);
+    });
+  } catch (e) {}
+}
+
+function timerId() { return 't' + Date.now().toString(36) + Math.floor(Math.random() * 1e5).toString(36); }
+async function startTimer(navn, minutter, stegId) {
+  const tillat = await beOmVarsling();
+  const t = { id: timerId(), navn: navn || 'Timer', slutt: Date.now() + Math.round(minutter * 60000), stegId: stegId || null, ringt: false };
+  S.timere = (S.timere || []).concat([t]);
+  if (tillat === 'granted') planleggVarsel(t);
+  oppdater();
+}
+function avbrytTimer(id) {
+  S.timere = (S.timere || []).filter(t => t.id !== id);
+  avlysVarsel(id);
+  oppdater();
+}
+function justerTimer(id, deltaMin) {
+  const t = (S.timere || []).find(x => x.id === id); if (!t) return;
+  t.slutt = Math.max(Date.now() + 1000, t.slutt + deltaMin * 60000);
+  t.ringt = false;
+  avlysVarsel(id).then(() => planleggVarsel(t));
+  oppdater();
+}
+
+function timerTekst(ms) {
+  if (ms <= 0) return 'ferdig';
+  const s = Math.round(ms / 1000), t = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sek = s % 60;
+  if (t > 0) return t + ' t ' + String(m).padStart(2, '0') + ' min';
+  return String(m).padStart(2, '0') + ':' + String(sek).padStart(2, '0');
+}
+
+/* Tikker hvert sekund: oppdaterer bare nedtellings-tekstene i DOM-en (ikke full
+   re-render, som ville stjålet fokus), og fyrer alarmen når en timer går ut. */
+let _timerTikk = null;
+function tikkTimere() {
+  const now = Date.now();
+  let ringte = false;
+  (S.timere || []).forEach(t => {
+    const el = document.querySelector('[data-timer="' + t.id + '"]');
+    if (el) el.textContent = timerTekst(t.slutt - now);
+    if (!t.ringt && now >= t.slutt) {
+      t.ringt = true; ringte = true;
+      pip();
+      // Planlagte varsler har allerede fyrt på OS-nivå; ellers vis det nå.
+      if (!planlagteVarslerStottes()) visVarselNaa(t);
+    }
+  });
+  if (ringte) { lagre(); if (S.skjerm === 'prosess') render(); }
+}
+
+function initTimere() {
+  if (typeof Notification === 'undefined') { S.timere = []; return; }
+  const now = Date.now();
+  // Rydd bort timere som gikk ut for mer enn en time siden; behold nye/pågående.
+  S.timere = (S.timere || []).filter(t => t && isFinite(t.slutt) && t.slutt > now - 3600000);
+  S.timere.forEach(t => {
+    if (now >= t.slutt) t.ringt = true;                 // alt utgått: ikke pip på nytt ved lasting
+    else if (Notification.permission === 'granted') planleggVarsel(t);   // re-arm etter omstart
+  });
+  if (_timerTikk == null) _timerTikk = setInterval(tikkTimere, 1000);
+  // Trykk på varselet åpner prosess-skjermen på riktig steg.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data && e.data.type === 'timer-klikk') {
+        S.skjerm = 'prosess';
+        if (e.data.stegId) { S.aktivStegId = e.data.stegId; S.aktivSteg = 0; }
+        oppdater();
+      }
+    });
+  }
+}
+
 /* ---------- Start ---------- */
 if (typeof Sky !== 'undefined' && Sky.klar()) {
   Sky.paaEndring(() => { render(); if (Sky.bruker()) synkVedInnlogging(); });
@@ -3442,10 +3744,12 @@ if (typeof Sky !== 'undefined' && Sky.klar()) {
   });
 }
 render();
+// Baketimere: rydd utgåtte, re-arm pågående varsler, og start sekund-tikken.
+try { initTimere(); } catch (e) {}
 // Grunntilstand i historikken, så første tilbaketrykk har noe å falle tilbake på.
 try { history.replaceState({ skjerm: S.skjerm }, ''); } catch (e) {}
 /* Testkroken. `flettLogg` er eksponert fordi den er ren og fordi den er den
    viktigste funksjonen i appen å ha dekket: det er den som gjør at bakeloggen
    ikke kan forsvinne i en synk. */
-window.__FB = { S, render, oppdater, flettLogg, oppskriftAvtrykk };
+window.__FB = { S, render, oppdater, flettLogg, oppskriftAvtrykk, startTimer, justerTimer, avbrytTimer };
 })();

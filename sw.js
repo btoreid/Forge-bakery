@@ -43,7 +43,9 @@
    cacher appikonet ved INSTALLASJON, og både service workeren og manifestet
    pekte på den gamle URL-en. Nytt filnavn er den eneste veien som treffer alle
    tre. Versjonen heves for å rydde bort den gamle cachen med de gamle ikonene. */
-const VERSJON = 'forgebakery-v8';
+/* v9: baketimere. Service workeren håndterer nå trykk på et timer-varsel —
+   den henter appen fram (eller åpner den) og sier fra hvilket steg det gjaldt. */
+const VERSJON = 'forgebakery-v9';
 
 /* Filene HTML-en laster, og som derfor skal versjonsstemples. */
 const APPFILER = [
@@ -120,6 +122,29 @@ async function navigasjon(req) {
   caches.open(VERSJON).then(c => c.put(absolutt('./'), ut.clone()));
   return ut;
 }
+
+/* ---------- Baketimere: trykk på varselet ----------
+   Et timer-varsel (også de OS-planlagte via TimestampTrigger) håndteres her.
+   Trykker man på det, hentes en åpen fane fram — eller appen åpnes — og
+   prosess-skjermen får beskjed om hvilket steg det gjaldt, så man lander riktig
+   sted. */
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const data = e.notification.data || {};
+  e.waitUntil((async () => {
+    const alle = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of alle) {
+      if ('focus' in c) {
+        await c.focus();
+        c.postMessage({ type: 'timer-klikk', stegId: data.stegId || null });
+        return;
+      }
+    }
+    if (self.clients.openWindow) {
+      await self.clients.openWindow(absolutt('./') + '?skjerm=prosess');
+    }
+  })());
+});
 
 self.addEventListener('fetch', e => {
   const req = e.request;
