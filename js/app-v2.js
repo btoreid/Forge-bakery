@@ -26,7 +26,7 @@ const STANDARD = {
   saltPct: null, ferdigMs: null, tidModus: 'ferdig',
   heveplan: null,                 // null = planens standard; array = redigert
   paramInfo: null, tilleggInfo: null, melInfo: null, meltallInfo: null,
-  aktivSteg: 0, regnskapAapen: false, byttBekreft: null,
+  aktivSteg: 0, aktivStegId: null, regnskapAapen: false, byttBekreft: null,
   loggListe: [], lgNavn: '', lgKar: 8, lgBilder: [], oppdatert: 0,
   lgRediger: null, lgSlett: null, bildeVis: null,
   // Gravsteiner: id-ene til slettede loggposter. Uten dem ville sammenfletningen
@@ -46,6 +46,7 @@ const STANDARD = {
   friksjonKalibrert: false,   // kalibreringsboksen er besvart eller avvist
   kalib: {},                  // {foer, etter, min} — målingene fra kalibreringen
   kurvMaal: {},               // brukerens kurvstørrelser i cm, per form-id
+  kjolTemp: 3.5,              // kaldeste vann du får — kjøleskapet ditt
   kompVist: false             // kompensasjonspanelet er åpnet av en endring
 };
 /* Er oppskriften fortsatt akkurat som den kom fra fabrikken? Brukes til å avgjøre
@@ -120,7 +121,8 @@ function last() {
    noen appen sist». */
 const UI_FELT = ['skjerm', 'paramInfo', 'tilleggInfo', 'melInfo', 'meltallInfo', 'aktivSteg',
   'regnskapAapen', 'byttBekreft', 'lgRediger', 'lgSlett', 'bildeVis', 'oppslag', 'oppslagSok',
-  'brodInfo', 'kompVist', 'melEndring', 'kompSporsmal', 'handlelisteOk', 'melVelger'];
+  'brodInfo', 'kompVist', 'melEndring', 'kompSporsmal', 'handlelisteOk', 'melVelger',
+  'visMaskiner', 'aktivSteg', 'aktivStegId'];
 function dataAvtrykk(s) {
   const kopi = {};
   Object.keys(s).forEach(k => { if (k !== 'oppdatert' && UI_FELT.indexOf(k) < 0) kopi[k] = s[k]; });
@@ -459,6 +461,9 @@ function renderInner() {
    først — det er den innerste tingen brukeren ser, og det er den man mener. */
 let _hopperTilbake = false;
 function bytt(id) {
+  // Trykk på fanen man allerede står på skal ikke legge noe i historikken —
+  // ellers må man trykke tilbake like mange ganger som man har bomtrykket.
+  if (id === S.skjerm) return;
   _nullstillScroll = true;
   if (id === 'prosess') S.aktivSteg = 0;
   S.skjerm = id; lagre(); render();
@@ -796,9 +801,20 @@ function nyBakst(id) {
     grov: STANDARD.grov, hyd: STANDARD.hyd, tid: STANDARD.tid,
     ff: STANDARD.ff, ffType: STANDARD.ffType,
     tillegg: bt.rute === 'preset' ? {} : Object.assign({}, STANDARD.tillegg),
-    saltPct: null, heveplan: null, stekeProfil: null, stekeProfilManuell: false,
-    form: STANDARD.form, aktivSteg: 0, byttBekreft: null,
-    paramInfo: null, tilleggInfo: null, melInfo: null
+    saltPct: null, heveplan: null, stekeProfilManuell: false,
+    /* Profilen utledes av UTSTYRET, ikke satt til null.
+       Med null falt motoren tilbake på BAKE_PROFILES[0] = støpejernsgryte på
+       260 °C — mens utstyret fortsatt var Pyrex som klokke, med tak på 230.
+       Det er nøyaktig den bruddrisikoen data.js selv advarer mot. */
+    stekeProfil: profilForUtstyr(S.utstyr, STANDARD.form),
+    form: STANDARD.form, aktivSteg: 0, aktivStegId: null, byttBekreft: null,
+    paramInfo: null, tilleggInfo: null, melInfo: null,
+    /* Disse hører til BAKSTEN og må vike, ikke arves inn i den nye.
+       `melOverstyr` var verst: en egen melblanding slår presetets eget mel, så
+       en ciabatta kunne bli bakt på 60 % sammalt rug — stikk i strid med det
+       bekreftelsesteksten lover. */
+    melOverstyr: null, melEndring: null, okDeig: false, autolyseMin: 0,
+    ffTemp: null, handlelisteOk: false, kompSporsmal: false, brodInfo: null
   });
   if (bt.antall) S.antall = bt.antall;
   if (bt.vekt) S.vekt = bt.vekt;
@@ -840,13 +856,22 @@ function anbefaltKnapp(naa, anbefalt, settInn, enhet) {
 }
 
 function stepperRad(label, verdi, felt, min, max, steg) {
+  /* Utgangspunktet er den VISTE verdien, ikke `S[felt]`.
+     Er feltet null (som `ffTemp` er til man rører den), viste raden planens
+     21 °C mens `(S[felt] || 0)` regnet fra 0 — og «+» klemte bare mot `max`.
+     Ett trykk sendte forfermenten til 1 °C, og gjærdosen fra 0,6 til 224 gram. */
+  /* `isFinite(null)` er TRUE (Number(null) === 0), så en null-sjekk må komme
+     først. Uten den falt `ffTemp: null` tilbake på 0 og «+» ga 1 °C. */
+  const naa = (S[felt] != null && isFinite(S[felt])) ? +S[felt]
+            : (verdi != null && isFinite(verdi)) ? +verdi : min;
+  const sett = v => { S[felt] = Math.min(max, Math.max(min, v)); oppdater(); };
   return h('div', { class: 'stepper-blokk' },
     h('div', { class: 'felt-label' }, label),
     h('div', { class: 'stepper' },
-      h('button', { onClick: () => { S[felt] = Math.max(min, (S[felt] || 0) - steg); oppdater(); } }, '−'),
-      h('input', { type: 'text', inputmode: 'numeric', value: String(verdi),
-        onblur: e => { const v = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(v)) S[felt] = Math.min(max, Math.max(min, v)); oppdater(); } }),
-      h('button', { onClick: () => { S[felt] = Math.min(max, (S[felt] || 0) + steg); oppdater(); } }, '+')));
+      h('button', { 'aria-label': 'Mindre ' + label, onClick: () => sett(naa - steg) }, '−'),
+      h('input', { type: 'text', inputmode: 'numeric', value: String(verdi), 'aria-label': label,
+        onblur: e => { const v = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(v)) sett(v); else oppdater(); } }),
+      h('button', { 'aria-label': 'Mer ' + label, onClick: () => sett(naa + steg) }, '+')));
 }
 
 /* ============================================================
@@ -1717,7 +1742,7 @@ function tegnTid(r, K) {
     // «Start nå» ankrer kjeden til NÅ: ferdig settes til nå + total tid. Uten
     // dette viste den bare starttiden som fulgte av gammelt ferdigtidspunkt —
     // og nå-markøren i grafen hadde ingenting ekte å peke på.
-    h('button', { class: S.tidModus === 'start' ? 'paa' : '', onClick: () => { S.tidModus = 'start'; S.ferdigMs = Date.now() + K.totalT * 3600000; oppdater(); } }, 'Start nå')));
+    h('button', { class: S.tidModus === 'start' ? 'paa' : '', onClick: () => { S.tidModus = 'start'; S.ferdigMs = Date.now() + K.tilOvnenT * 3600000; oppdater(); } }, 'Start nå')));
   const erStart = S.tidModus === 'start';
   const startMs = K.start.getTime();
   const visMs = erStart ? startMs : ferdigMs;
@@ -1760,7 +1785,10 @@ function tegnTid(r, K) {
   // Plan-kort
   TIDSPLANER.forEach(tp => {
     const paa = tp.id === S.tid;
-    const fv = paa ? { prov: r, pK: K } : planForhaandsvis(tp.id, ferdigMs);
+    /* Forhåndsvisningen må vise det KLIKKET gir. Den dro med seg `S.heveplan`,
+       så alle fire kortene viste dine egne trinn — mens klikket nullstiller dem.
+       Ekspress og Optimal så da like lange ut. */
+    const fv = (paa && !S.heveplan) ? { prov: r, pK: K } : planForhaandsvis(tp.id, ferdigMs);
     const prov = fv.prov, pK = fv.pK;
     // Etiketten leses fra EFFEKTIV tilstand (samme kilde som tallene), ikke fra
     // planens statiske forferment-spec (teknisk #5).
@@ -1795,11 +1823,31 @@ function tegnTid(r, K) {
       'For å treffe ', h('b', null, grader(S.startTemp || 24, 0)), ' deigtemp med mel på ', h('b', null, grader(S.melTemp || 21, 0)),
       ' og ', h('b', null, (S.eltMin || 13) + ' min'), ' elting: bruk vann på ', h('b', null, grader(r.vannTemp, 1)), '.',
       r.wh < 3 ? ' Arbeidet er under målsonen (3–5 Wh/kg) — elt lengre for åpnere krumme.' : r.wh > 8.3 ? ' Over metning (8,3 Wh/kg) — mer elting gir ikke mer nettverk.' : ' Arbeidet er i målsonen 3–5 Wh/kg.'),
+    /* Kan vannet appen ber om i det hele tatt skaffes?
+       Regnestykket kan lande på 1 °C eller lavere, og da er tallet ubrukelig
+       som instruksjon. Da skal appen si hva som FAKTISK skjer, og hva man kan
+       gjøre med det — ikke be om vann som ikke finnes. */
+    r.vannForKaldt ? h('div', { class: 'varsel' },
+      h('div', { style: 'font-weight:800;margin-bottom:2px' },
+        'Vannet må være kaldere enn du får det'),
+      h('div', { style: 'font-size:.8rem;line-height:1.45' },
+        'Regnestykket ber om ', h('b', null, grader(r.vannTemp, 1)),
+        ', men det kaldeste du får er ', h('b', null, grader(r.vannKaldest, 1)),
+        '. Bruker du det, lander deigen på ', h('b', null, grader(r.deigTempMulig, 1)),
+        ' — altså ', h('b', null, fmt(r.deigTempMulig - (S.startTemp || 24), 1) + ' °C'), ' over målet.'),
+      h('div', { style: 'font-size:.8rem;line-height:1.45;margin-top:6px' },
+        h('b', null, 'Det er rommet som er for varmt, ikke vannet som er for lunkent. '),
+        'Tre ting virker: sett melet kaldt noen timer (det er den største massen), elt kortere — ',
+        'friksjonen står for ', h('b', null, grader(r.friksjon, 1)), ' av oppvarmingen — eller bruk isbiter i vannet. ',
+        'Du kan også godta en varmere deig og korte ned bulkhevingen tilsvarende.')) : null,
     isRad(r),
     h('div', { style: 'margin-top:10px' },
       miniStepper('Ønsket deigtemp', S.startTemp || 24, 'startTemp', 18, 30, 0.5, ' °C'),
       miniStepper('Meltemperatur', S.melTemp || 21, 'melTemp', 4, 30, 1, ' °C'),
-      miniStepper('Eltetid', S.eltMin || 13, 'eltMin', 3, 25, 1, ' min')),
+      miniStepper('Eltetid', S.eltMin || 13, 'eltMin', 3, 25, 1, ' min'),
+      // Kjøleskap varierer fra 2 til 7 grader, og det avgjør hvor kaldt vann du
+      // faktisk kan skaffe.
+      miniStepper('Kaldeste vann du får', S.kjolTemp != null ? S.kjolTemp : 3.5, 'kjolTemp', 0, 15, 0.5, ' °C')),
     h('div', { style: 'margin-top:10px' },
       h('div', { class: 'felt-label' }, 'Maskin'),
       h('div', { class: 'piller', style: 'flex-wrap:wrap' }, ...['hand', 'planet', 'spiralHjemme', 'spiralProff', 'egen'].map(id =>
@@ -2122,12 +2170,15 @@ function gjaeringsGraf(pts, r, bulkStart, visNaa) {
    varmebalanse-kontrollene. */
 let _planMemo = { sig: null, data: {} };
 function planForhaandsvis(tpId, ferdigMs) {
+  // `heveplan` er UTE av signaturen: forhåndsvisningen regner alltid med
+  // planens egne trinn, fordi det er dem klikket gir.
   const sig = JSON.stringify([S.brotype, S.grov, S.hyd, S.ff, S.ffType, S.tillegg, S.antall, S.vekt,
-    S.startTemp, S.saltPct, S.lokk, S.fulltKjol, S.heveplan, S.stekeProfil, ferdigMs]);
+    S.startTemp, S.saltPct, S.lokk, S.fulltKjol, S.stekeProfil, S.autolyseMin, S.ffTemp, ferdigMs]);
   if (_planMemo.sig !== sig) _planMemo = { sig, data: {} };
   if (!_planMemo.data[tpId]) {
-    const prov = regn(Object.assign({}, S, { tid: tpId }));
-    const pK = kjede(Object.assign({}, S, { tid: tpId }), prov, ferdigMs);
+    const st = Object.assign({}, S, { tid: tpId, heveplan: null });
+    const prov = regn(st);
+    const pK = kjede(st, prov, ferdigMs);
     _planMemo.data[tpId] = { prov, pK };
   }
   return _planMemo.data[tpId];
@@ -2190,7 +2241,15 @@ function tegnProsess(r, K) {
      et steg uten varighet der ville forskjøvet klokkeslettene i alt som leser
      den (Tid, grafen, totaltiden). */
   wrap.appendChild(tegnHandleliste(r));
-  const i = Math.min(S.aktivSteg, K.length - 1);
+  /* Aktivt steg identifiseres på ID, ikke posisjon.
+     Slår man på autolyse eller et frøtillegg, settes et nytt steg inn FORAN i
+     kjeden, og den lagrede indeksen pekte plutselig på et helt annet steg. */
+  let i = K.findIndex(x => x.id === S.aktivStegId);
+  if (i < 0) i = Math.min(Math.max(0, S.aktivSteg || 0), K.length - 1);
+  const settSteg = j => {
+    const n = Math.min(Math.max(0, j), K.length - 1);
+    S.aktivSteg = n; S.aktivStegId = K[n] ? K[n].id : null; oppdater();
+  };
   wrap.appendChild(h('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:12px' },
     h('div', { class: 'framdrift', style: 'flex:1;margin:0' }, ...K.map((s, j) =>
       h('div', { class: 'prikk' + (j < i ? ' gjort' : j === i ? ' naa' : '') }))),
@@ -2199,11 +2258,11 @@ function tegnProsess(r, K) {
   wrap.appendChild(stegKort(K[i], 'I GANG'));
 
   wrap.appendChild(h('div', { style: 'display:flex;gap:8px;margin:6px 0 14px' },
-    h('button', { class: 'btn', style: 'flex:1', disabled: i === 0 ? '' : null, onClick: () => { S.aktivSteg = Math.max(0, i - 1); oppdater(); } }, '‹ Forrige'),
-    h('button', { class: 'btn btn-primary', style: 'flex:1', disabled: i === K.length - 1 ? '' : null, onClick: () => { S.aktivSteg = Math.min(K.length - 1, i + 1); oppdater(); } }, 'Neste ›')));
+    h('button', { class: 'btn', style: 'flex:1', disabled: i === 0 ? '' : null, onClick: () => settSteg(i - 1) }, '‹ Forrige'),
+    h('button', { class: 'btn btn-primary', style: 'flex:1', disabled: i === K.length - 1 ? '' : null, onClick: () => settSteg(i + 1) }, 'Neste ›')));
 
   wrap.appendChild(h('div', { class: 'seksjonstittel' }, 'Hele prosessen · totalt ' + fmt(K.totalT, 1) + ' t'));
-  K.forEach((s, j) => wrap.appendChild(h('button', { class: 'valgkort' + (j === i ? ' paa' : ''), style: 'min-height:48px', onClick: () => { S.aktivSteg = j; oppdater(); } },
+  K.forEach((s, j) => wrap.appendChild(h('button', { class: 'valgkort' + (j === i ? ' paa' : ''), style: 'min-height:48px', onClick: () => settSteg(j) },
     h('span', { style: 'flex:0 0 24px;height:24px;border-radius:999px;display:grid;place-items:center;font-size:.72rem;font-weight:800;' + (j < i ? 'background:var(--color-accent-2-500);color:#fff' : 'background:var(--color-neutral-200)') }, j < i ? '✓' : String(j + 1)),
     h('span', { style: 'flex:1;font-size:.86rem;font-weight:600' }, s.navn),
     h('span', { style: 'font-size:.74rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums' }, klokke(s.tid)))));

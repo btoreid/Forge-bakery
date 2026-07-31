@@ -133,14 +133,20 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     const S = window.__FB.S;
     const ov = settMelGram(S, 0, 500);
     const rMel = regn(Object.assign({}, S, { melOverstyr: ov }));
-    const hyd = settVannGram(S, 1500);
+    /* 1400 g ligger innenfor skyverens spenn (62–86 %). Løseren klemmer til
+       samme grenser som skyveren — ulike grenser ga før et tall over skyveren
+       som skyveren selv ikke kunne stå på. */
+    const hyd = settVannGram(S, 1400);
     const rVann = regn(Object.assign({}, S, { hyd }));
+    // Et uoppnåelig ønske skal klemmes til skyverens tak, ikke forbi det.
+    const hydHoy = settVannGram(S, 9000);
     return { mel0: Math.round(rMel.mel[0].gram), vann: Math.round(rVann.vannTotal),
-      sumPct: Math.round(rMel.mel.reduce((s, m) => s + m.pct, 0)) };
+      hydHoy, sumPct: Math.round(rMel.mel.reduce((s, m) => s + m.pct, 0)) };
   });
   ok('500 g på første meltype gir 500 g', Math.abs(gram.mel0 - 500) <= 2, String(gram.mel0));
   ok('melandelene summerer fortsatt til 100 %', Math.abs(gram.sumPct - 100) <= 1, String(gram.sumPct));
-  ok('1500 g vann gir 1500 g', Math.abs(gram.vann - 1500) <= 3, String(gram.vann));
+  ok('uoppnåelig vannmengde klemmes til skyverens tak', gram.hydHoy === 86, String(gram.hydHoy));
+  ok('1400 g vann gir 1400 g', Math.abs(gram.vann - 1400) <= 4, String(gram.vann));
 
   const nullstill = await page.evaluate(async () => {
     const FB = window.__FB, S = FB.S;

@@ -30,6 +30,13 @@ const FERM = {
   POOLISH_TREF: 23.0
 };
 
+/* Kaldeste vann man faktisk får tak i.
+   Kjøleskapsvann holder ~3,5 °C, og under det finnes ikke uten isbiter. Appen
+   regnet fritt nedover og kunne be om 1 °C eller −4 °C — tall man ikke kan
+   følge, og som ga en falsk trygghet om at deigtemperaturen ville treffe.
+   Brukeren kan sette sitt eget tall: kjøleskap varierer fra 2 til 7 grader. */
+const VANN_KALDEST_STD = 3.5;
+
 /* ---------- Relativ fermenteringsrate ---------- */
 function rateFactor(T) {
   const f = t => (t <= FERM.T_MIN || t >= FERM.T_MAX)
@@ -918,7 +925,10 @@ function settMelGramMerDeig(state, i, gram) {
     if (!isFinite(r.melTotal) || r.melTotal <= 0) break;
     vekt = vekt * nyTotal / r.melTotal;
   }
-  return { melOverstyr: liste, vekt: Math.round(vekt) };
+  /* Klemmes til samme spenn som stepperen på Brød (100–2000 g/brød).
+     Uten klemmen kunne et vilt gramtall gi 9 kg per brød, og brukeren hadde
+     ingen praktisk vei tilbake — stepperen går i steg på 50. */
+  return { melOverstyr: liste, vekt: Math.min(2000, Math.max(100, Math.round(vekt))) };
 }
 
 /* Vann i gram → hydrering i prosent. Samme gjensidige avhengighet: vannet er
@@ -933,7 +943,9 @@ function settVannGram(state, gram) {
     // 700 g, mener du alt vannet du heller i — så frøvannet trekkes fra før
     // hydreringen løses, ellers ville hvert frøtillegg forskjøvet tallet.
     const froVann = r.vannTotal - r.melTotal * (hyd / 100);
-    hyd = Math.max(50, Math.min(100, (maal - froVann) / r.melTotal * 100));
+    // Samme spenn som skyveren i UI-et (62–86). Ulike grenser ga et tall over
+    // skyveren som skyveren selv ikke kunne stå på.
+    hyd = Math.max(62, Math.min(86, (maal - froVann) / r.melTotal * 100));
   }
   return Math.round(hyd * 10) / 10;
 }
@@ -1088,7 +1100,7 @@ function regn(state) {
   const eltMin = state.eltMin || 13;
   const melIHoved = r.melTotal - (r.forferment ? r.forferment.mel : 0);
   const froGramTot = r.froAbsorbert + r.fro.reduce((s, f) => s + (f.gram || 0), 0);
-  const dt = vanntemperatur({
+  const dtInn = {
     onsketDeigTemp: state.startTemp ?? 24,
     melGram: melIHoved, melTemp: state.melTemp ?? 21,
     vannGram: Math.max(r.vannHoved, 1),
@@ -1101,7 +1113,11 @@ function regn(state) {
     mikser: state.maskin === 'egen' ? 'spiralHjemme' : (state.maskin || 'spiralHjemme'),
     friksjonPerMin: state.maskin === 'egen' && isFinite(state.egenFriksjon) ? state.egenFriksjon : null,
     minutter: eltMin
-  });
+  };
+  const dt = vanntemperatur(dtInn);
+  // Kaldeste vann brukeren faktisk får. Kjøleskap varierer, så det er en
+  // innstilling og ikke en konstant.
+  const kaldest = isFinite(state.kjolTemp) ? +state.kjolTemp : VANN_KALDEST_STD;
 
   // Løftindeks. Frø-leddet teller BARE ekte frø (ikke korn) — korn ligger
   // allerede i grovheten (brodskala), så å telle dem her ville vært dobbelt.
@@ -1138,6 +1154,17 @@ function regn(state) {
     gjaerTorr: torr, maalDose, gjaerUnderskudd,
     doseProfil, loft,
     ffAktiv, ffAndelEffektiv: pff,
+    /* Er vannet appen ber om i det hele tatt mulig å skaffe?
+       `vannTemp` er den TEORETISKE temperaturen. `vannTempMulig` er den man kan
+       faktisk kan helle, og `deigTempMulig` er temperaturen deigen da lander på.
+       Avviket er det brukeren må løse med andre tiltak — kaldere rom, kaldere
+       mel, kortere elting — og det kan appen ikke gjøre for ham. */
+    vannKaldest: kaldest,
+    vannForKaldt: dt.vannTemp < kaldest,
+    vannTempMulig: Math.max(kaldest, dt.vannTemp),
+    deigTempMulig: dt.vannTemp < kaldest
+      ? faktiskDeigTemp(dtInn, kaldest)
+      : (state.startTemp ?? 24),
     prof, eltMin, vannTemp: dt.vannTemp, friksjon: dt.friksjonsOkning, wh: dt.friksjonsOkning / ELTING.GRAD_PER_WH,
     // Anbefalt eltetid MED autolysen: melet er alt hydrert og glutenet delvis
     // organisert, så samme utvikling nås på kortere tid.
