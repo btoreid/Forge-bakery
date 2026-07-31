@@ -1519,10 +1519,10 @@ function kjede(state, r, ferdigMs) {
 
   // Første trinn som er utbakt = når emnet må være ferdig FORMET. Formingen
   // (forforming → benkehvile → forming) skjer rett FØR det, og etter siste
-  // gjæringstrinn gjenstår da bare temperering + kaldt snitt — IKKE en ny 45-min
-  // romheving, som ville omformet et ferdig kaldhevet emne og degassert
-  // blæreskinnet (baker-review, kritisk). Er ingen trinn utbakt (bulk i boks),
-  // er «Bak ut og la hvile» rett, og gjør formingen der.
+  // gjæringstrinn gjenstår da bare et kaldt snitt rett fra kjøl — IKKE temperering
+  // og IKKE en ny 45-min romheving, som ville omformet et ferdig kaldhevet emne og
+  // degassert blæreskinnet (baker-review, kritisk). Er ingen trinn utbakt (bulk i
+  // boks), er «Bak ut og la hvile» rett, og gjør formingen der.
   const formIdx = trinn.findIndex(t => t.utbakt);
   const sisteUtbakt = trinn.length > 0 && trinn[trinn.length - 1].utbakt;
   /* «Temperer og snitt · fra kjøl» forutsetter at emnet FAKTISK kommer fra kjøl.
@@ -1530,7 +1530,16 @@ function kjede(state, r, ferdigMs) {
      utbakt etterheving ved romtemperatur — så steget sa «ta emnene rett fra
      kjøl» om et emne som hadde stått på benken. */
   const sisteKaldt = sisteUtbakt && trinn[trinn.length - 1].miljo <= KALDGRENSE;
-  const POSTPROOF = sisteUtbakt ? 30 : KJEDE.UTBAK;   // temperer+snitt vs bak-ut-og-hvile
+  /* Et kaldhevet, ferdig emne skal RETT FRA KJØL i ovnen — ikke tempereres.
+     Baker-validering: kald kjerne gir bredere utvidelsesvindu (stivelsen setter
+     seg først ~60 °C), kald overflate snitter renere, og 30 min i romtemp skyver
+     et fullhevet emne mot overheving nettopp der det er mest sårbart (Q10≈2).
+     Standard praksis i moderne surdeigsmiljø er å bake fra kjøl. Det kalde steget
+     får derfor bare tiden snitting + innlasting faktisk tar (~10 min), ikke en
+     planlagt temperering. Det varme utbakte tilfellet (bevisst underhevet, hever
+     ferdig på benk) beholder 30 min, og uformet bulk i boks beholder UTBAK. */
+  const POSTPROOF_KALD = 10;
+  const POSTPROOF = sisteUtbakt ? (sisteKaldt ? POSTPROOF_KALD : 30) : KJEDE.UTBAK;
 
   /* Formen bestemmer HVORDAN emnet hviler og hva teksten kan love.
      `kjede()` leste aldri `state.form`, så «Uten form» fikk beskjed om å legge
@@ -1706,7 +1715,10 @@ function kjede(state, r, ferdigMs) {
       sjekk: kaldt ? 'Se på emnet før du steker: det skal ha vokst tydelig og kjennes luftig, ikke stinnt.'
                    : (tr.utbakt ? 'Trykktest før ovnen: gropen skal fylle seg langsomt igjen over 5–10 sekunder.'
                                 : 'Sikt mot ' + riseTxt + ' stigning i målekrukka. Grovt mel og mye vann tåler mindre stigning enn en loff — går den lenger, mister den løftet i ovnen.'),
-      krukke: !tr.utbakt || !kaldt
+      // Målekrukka gjelder trinn der du kan FØLGE stigningen: bulk i boks, og
+      // varme trinn. Et kaldt utbakt emne i hevekurv trykktestes i stedet.
+      krukke: !tr.utbakt || !kaldt,
+      maalRise, maalRiseTxt: riseTxt
     });
   });
 
@@ -1740,11 +1752,11 @@ function kjede(state, r, ferdigMs) {
   // (bulk i boks som ennå ikke er formet). L-04/baker-review, kritisk.
   if (sisteUtbakt && sisteKaldt) {
     steg.push({
-      id: 'snitt', navn: 'Temperer og snitt', tid: postStart, varighet: POSTPROOF, tone: 'noytral',
-      hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Fra kjøl', sideV: POSTPROOF + ' min',
-      tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)], ['Fra kjøl', 'snitt kaldt, rett i ovnen'], ['Benkestå', 'kort — ingen ny heving']],
-      gjor: 'Ta emnene rett fra kjøl, vend på plata med god side opp, og snitt kaldt — kald deig holder snittet bedre. IKKE form på nytt: da degasser du blæreskinnet du nettopp bygde.',
-      sjekk: 'Snittet skal åpne seg rent. Emnet er kaldt og fast — det er riktig; ovnsløftet kommer i ovnen, ikke på benken.'
+      id: 'snitt', navn: 'Snitt kaldt og sett inn', tid: postStart, varighet: POSTPROOF, tone: 'noytral',
+      hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Rett fra kjøl', sideV: POSTPROOF + ' min',
+      tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)], ['Rett fra kjøl', 'ikke temperer — snitt kaldt'], ['Benkestå', 'bare det snittingen tar'], ['Kald deig', '+2–4 min steketid']],
+      gjor: 'Ta emnene RETT FRA KJØL — ikke la dem stå og temperere. Vend på plata med god side opp og snitt kaldt: kald deig holder snittet bedre og gir bredere ovnsløft, fordi den kalde kjernen er strekkbar lenge etter at gassen har begynt å utvide seg. IKKE form på nytt: da degasser du blæreskinnet du nettopp bygde. Regn +2–4 min ekstra steketid siden emnet går kaldt inn.',
+      sjekk: 'Snittet skal åpne seg rent. Emnet er kaldt og fast — det er riktig; ovnsløftet kommer i ovnen, ikke på benken. Et fullhevet emne som får stå og bli varmt overhever i stedet.'
     });
   } else if (sisteUtbakt) {
     // Utbakt, men varmt: emnet står ferdig hevet på benken, ikke i skapet.

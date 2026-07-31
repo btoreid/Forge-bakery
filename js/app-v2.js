@@ -43,6 +43,7 @@ const STANDARD = {
   ffTemp: null,               // forfermentens temperatur; null = planens forslag
   autolyseMin: 0,             // autolyse i minutter; 0 = av
   handlelisteOk: false,       // «dette må være i huset» er kvittert bort
+  krukkeStart: null,          // startnivået du merker av i målekrukka (valgfritt)
   friksjonKalibrert: false,   // kalibreringsboksen er besvart eller avvist
   kalib: {},                  // {foer, etter, min} — målingene fra kalibreringen
   kurvMaal: {},               // brukerens kurvstørrelser i cm, per form-id
@@ -128,7 +129,7 @@ function last() {
 const UI_FELT = ['skjerm', 'paramInfo', 'tilleggInfo', 'melInfo', 'meltallInfo', 'aktivSteg',
   'regnskapAapen', 'byttBekreft', 'lgRediger', 'lgSlett', 'bildeVis', 'oppslag', 'oppslagSok',
   'brodInfo', 'kompVist', 'melEndring', 'kompSporsmal', 'handlelisteOk', 'melVelger',
-  'visMaskiner', 'aktivSteg', 'aktivStegId',
+  'visMaskiner', 'aktivSteg', 'aktivStegId', 'krukkeStart',
   /* Delte maskinmålinger er HENTET, ikke skrevet. De hører hjemme i den delte
      tabellen, ikke i din rad — teller de som data, ville hver nedlasting sett ut
      som en endring og stemplet `oppdatert` på nytt. */
@@ -2531,6 +2532,84 @@ function tegnHandleliste(r) {
   d.appendChild(kropp);
   return d;
 }
+/* ---------- MÅLEKRUKKA — heveindikatoren ----------
+   Kjernen i appens filosofi: klokka styrer rekkefølgen, men DEIGEN bestemmer.
+   Står det 4 t bulk og krukka har nådd hevemålet etter 3, er den ferdig. Blir
+   klokka og krukka uenige, har krukka rett.
+
+   Metoden: ta en liten, RETT-SIDET beholder (et lite glass, en målekrukke), legg
+   i en klump deig, trykk flat og merk av startnivået — eller merk av nivået på
+   selve deigen i en rett bøtte. Når nivået har steget måltallet, er den klar.
+
+   Verktøyet gjør to ting: viser målet visuelt som en krukke, og regner om
+   startnivået DITT (ml, cm, hva du enn leser av) til nivået du baker ut på — så
+   du slipper hoderegning ved benken. `steg.maalRise` er måltallet i prosent. */
+function tegnKrukke(steg) {
+  const lo = steg.maalRise, hi = steg.maalRise * 1.2;      // båndet, som «Mål stigning»
+  const loF = lo / 100, hiF = hi / 100;
+  const snittF = (loF + hiF) / 2;
+  // Visuell krukke: start ligger på en fast andel, målet stiger derfra.
+  const startFrac = 0.40;
+  const maalFrac = Math.min(0.94, startFrac * (1 + snittF));
+
+  const jug = h('div', { class: 'krukke-jug' },
+    h('div', { class: 'krukke-deig', style: 'height:' + (startFrac * 100).toFixed(0) + '%' }),
+    h('div', { class: 'krukke-startlinje', style: 'bottom:' + (startFrac * 100).toFixed(0) + '%' }),
+    h('div', { class: 'krukke-maallinje', style: 'bottom:' + (maalFrac * 100).toFixed(0) + '%' },
+      h('span', { class: 'krukke-maal-tag' }, 'bak ut')));
+
+  // Kalkulator: startnivå → utbaknivå, i brukerens egen enhet.
+  const utEl = h('div', { class: 'krukke-ut' });
+  const settUt = v => {
+    if (v > 0) {
+      utEl.replaceChildren(
+        h('span', null, 'Bak ut når krukka når '),
+        h('b', null, fmt(v * (1 + loF), 0) + '–' + fmt(v * (1 + hiF), 0)),
+        h('span', { style: 'color:var(--color-neutral-600)' }, ' (fra ' + fmt(v, 0) + ')'));
+    } else {
+      utEl.replaceChildren(h('span', { style: 'color:var(--color-neutral-600)' },
+        'Skriv startnivået du merker av, så regner jeg ut hvor høyt det skal stige.'));
+    }
+  };
+  const inn = h('input', {
+    class: 'gramfelt', type: 'number', inputmode: 'numeric', min: 0, step: 10,
+    value: S.krukkeStart != null ? S.krukkeStart : '', placeholder: 'f.eks. 500',
+    'aria-label': 'Startnivå i målekrukka',
+    onchange: e => {
+      const raw = String(e.target.value).replace(',', '.').trim();
+      const v = parseFloat(raw);
+      S.krukkeStart = (raw === '' || !isFinite(v) || v < 0) ? null : v;
+      // Oppdater bare tallet, ikke hele skjermen — så fokus ikke rykker vekk.
+      settUt(S.krukkeStart || 0);
+    }
+  });
+  settUt(S.krukkeStart || 0);
+
+  const hode = h('div', { class: 'krukke-hode' },
+    h('span', { class: 'krukke-ikon', 'aria-hidden': 'true' }, '🫙'),
+    h('div', null,
+      h('div', { class: 'krukke-tittel' }, 'Målekrukka avgjør'),
+      h('div', { class: 'krukke-under' }, 'Deigen skal vokse ', h('b', null, steg.maalRiseTxt))));
+
+  const nullstill = S.krukkeStart != null
+    ? h('button', { class: 'm-fjern', 'aria-label': 'Nullstill startnivå',
+        onClick: () => { S.krukkeStart = null; oppdater(); } }, '×')
+    : null;
+
+  const hoyre = h('div', { class: 'krukke-hoyre' },
+    h('div', { class: 'krukke-metode' },
+      'Legg en klump deig i et rett-sidet glass, trykk flat og merk av nivået — eller merk av på selve deigen i en rett bøtte.'),
+    h('div', { class: 'felt-label', style: 'margin-top:10px' }, 'Startnivå (ml, cm — din enhet)'),
+    h('div', { style: 'display:flex;align-items:center;gap:8px' }, inn, nullstill),
+    utEl);
+
+  return h('div', { class: 'krukke-kort' },
+    hode,
+    h('div', { class: 'krukke-rad' }, jug, hoyre),
+    h('div', { class: 'krukke-note' },
+      'Klokka styrer rekkefølgen, men deigen bestemmer. Har krukka nådd målet før klokka, er den likevel ferdig — og blir de uenige, har krukka rett.'));
+}
+
 function stegKort(steg, status) {
   const kropp = h('div', { class: 'kropp' });
   if (steg.hoved) {
@@ -2545,6 +2624,9 @@ function stegKort(steg, status) {
   if (steg.tall && steg.tall.length) kropp.appendChild(h('div', { style: 'margin-top:8px' }, ...steg.tall.map(([k, v]) => h('div', { class: 'tallrad' }, h('span', null, k), h('b', null, v)))));
   if (steg.gjor) kropp.appendChild(h('div', { class: 'instruks' }, h('span', { class: 'lab' }, 'Slik gjør du'), steg.gjor));
   if (steg.sjekk) kropp.appendChild(h('div', { class: 'instruks sjekk' }, h('span', { class: 'lab' }, 'Sjekk'), steg.sjekk));
+  // Målekrukka: bare på gjæringstrinn der man faktisk kan følge stigningen, og
+  // bare på det AKTIVE steget (status satt) — ikke i hele-prosessen-lista.
+  if (steg.krukke && steg.maalRise && status) kropp.appendChild(tegnKrukke(steg));
   const pilleBg = status === 'I GANG' ? 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)' : 'background:var(--color-neutral-200);color:var(--color-neutral-700)';
   return h('div', { class: 'stegkort ' + (steg.tone || 'noytral') },
     h('div', { style: 'display:flex;align-items:center;padding:14px 16px 2px' },
