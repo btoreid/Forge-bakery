@@ -608,6 +608,22 @@ svg.brodsvg .fyll { fill: var(--color-accent-200); }
   border-radius: var(--radius-md); padding: 8px 10px;
 }
 
+.mi-ukalibrert {
+  color: var(--color-accent-700); font-weight: 800; font-size: .72rem;
+  background: var(--color-accent-100); border-radius: 999px; padding: 2px 8px;
+}
+.fav-stjerne { color: var(--color-accent-500); margin-left: 5px; }
+.m-fjern {
+  flex: 0 0 30px; width: 30px; height: 30px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--color-neutral-300); background: #fff;
+  color: var(--color-neutral-600); font-size: .8rem; line-height: 1; margin-left: 4px;
+}
+.melvelger { max-height: 260px; overflow-y: auto; margin-top: 4px; }
+.melvelger-rad {
+  display: flex; align-items: center; gap: 10px; width: 100%; cursor: pointer;
+  background: #fff; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md);
+  padding: 8px 12px; margin-top: 6px; font: inherit; color: inherit; min-height: 48px;
+}
 .fav-pille {
   display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 999px;
   font-size: .58rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;

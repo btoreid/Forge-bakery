@@ -1352,20 +1352,24 @@ const UTSTYR = [
    eltetiden fasen tar; appen ganger med `S.eltMin`. `min` er et gulv i minutter,
    fordi samling tar den tiden den tar selv om totalen er kort.               */
 const MASKIN_INFO = {
-  hand: { navn:'For hånd', friksjon:0.15,
+  hand: { anslag:true, navn:'For hånd', friksjon:0.15,
     hva:'Elting på benk eller i bolle uten maskin. Tilfører minst varme av alt — benk og hender trekker nesten like mye varme ut som knaingen tilfører.',
     tid:'Regn 15–25 min med strekk-og-brett, eller la autolyse og lange hviler gjøre jobben i stedet for muskelkraft.',
     fart:'Ingen hastighet å velge — jobb rolig og la pausene gjøre jobben. Strekk-og-brett hvert 30. minutt bygger mer nettverk enn hardere knaing.',
     faser:[ { fart:'Rolig', andel:1, min:5, hva:'knaing med pauser — pausene gjør mer enn kraften' } ],
     note:'Lav friksjon betyr at vannet kan være varmere uten at deigen løper varm.' },
-  planet: { navn:'Kjøkkenmaskin (planet)', friksjon:0.6,
+  planet: { anslag:true, navn:'Kjøkkenmaskin (planet)', friksjon:0.6,
     hva:'Klassisk husholdningsmaskin med krok i planetbane (KitchenAid, Kenwood o.l.). Kroken drar deigen mot bollekanten og jobber hardt og lokalt.',
     tid:'~5–8 min på middels fart mot målsonen. Varmer raskt.',
     fart:'Laveste trinn til deigen er samlet (~2–3 min), deretter trinn 2. Produsentene (KitchenAid m.fl.) fraråder høyere fart til gjærdeig — det sliter på maskinen og varmer deigen unødig.',
     faser:[ { fart:'Lav', andel:0.35, min:2, hva:'til deigen er samlet' },
             { fart:'Middels (trinn 2)', andel:0.65, min:3, hva:'til utvikling — ikke høyere, produsentene fraråder det for gjærdeig' } ],
     note:'Høy friksjon: bruk kaldere vann og følg med — det er lett å kna forbi metning på en varm planetmaskin.' },
-  spiralHjemme: { navn:'Ooni Halo Pro (spiral hjemme)', friksjon:0.4,
+  /* `friksjon` er et KLASSEANSLAG og merkes som det med `anslag: true`.
+     Bjørn: «det skal ikke oppgis noe der før jeg har kalibrert den — stå heller
+     mangler kalibrering». Tallet trengs likevel for å kunne regne i det hele
+     tatt, men appen presenterer det ikke som maskinens verdi. */
+  spiralHjemme: { navn:'Ooni Halo Pro (spiral hjemme)', friksjon:0.4, anslag:true,
     hva:'Spiralmikser i husholdningsstørrelse, som Ooni Halo Pro. Spiralen står i ro mens bollen roterer, så deigen bearbeides jevnere og mer skånsomt enn i en planetmaskin.',
     tid:'~8 min mot improved mix. Jevn, moderat oppvarming.',
     fart:'Lav fart til deigen er samlet (~3 min), så middels fart til utvikling. Spiralen bygger nettverk fort — ta vindusprøven før du øker farten, og la deigtempen styre når du stopper.',
@@ -1375,7 +1379,7 @@ const MASKIN_INFO = {
        verdi, og de publiserte tallene gjelder bakerimaskiner (6–9 °F over ~8 min
        = 0,42–0,63 °C/min). Full gjennomgang i PARAMETERREVISJON.md, 31.07.2026. */
     note:'Appens standardvalg — balansert friksjon mellom hånd og proffmaskin. Merk at 0,40 °C/min er et anslag for klassen «husholdningsspiral»; Ooni oppgir ingen verdi for Halo Pro, og publiserte spiraltall ligger på 0,42–0,63 °C/min for bakerimaskiner. Vil du ha det presist, mål ditt eget under «Egen (kalibrer)»: deigtemp rett før og rett etter elting, delt på minuttene.' },
-  spiralProff: { navn:'Spiral proff', friksjon:1.0,
+  spiralProff: { anslag:true, navn:'Spiral proff', friksjon:1.0,
     hva:'Profesjonell spiralmikser som på et bakeri. Kraftig og effektiv — bygger glutennettverk fort.',
     tid:'~4–6 min er nok. Varmer raskest av alle maskinene.',
     fart:'Klassisk togirs kjøring: 1. gir til alt er samlet (~4 min), så et kort drag på 2. gir (2–4 min) til utvikling. Full utvikling kommer fort — ikke gå fra maskinen.',

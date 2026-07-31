@@ -80,3 +80,59 @@ offline og uten konto. Opplasting er debouncet 1,2 s (en skyver som dras skal ik
 hundre nettverkskall). Ved innlogging sammenlignes `oppdatert`-tidsstempelet, og **den
 nyeste versjonen vinner** — ellers ville en gammel kopi på PC-en overskrevet en fersk
 logg fra telefonen.
+
+
+---
+
+## Delt maskinkalibrering (lagt til 31.07.2026)
+
+Bjørn: «dersom jeg gjør kalibrering, så må de oppdatere seg og gjelde for alle
+som har den maskinen, ikke bare min konto» — og «det er kun min epost som eier
+repo som får skrive».
+
+Friksjonstallene i `MASKIN_INFO` er klasseanslag. For Ooni Halo Pro finnes ingen
+produsentoppgitt verdi i det hele tatt (se `PARAMETERREVISJON.md`). Én ekte
+måling er derfor mer verdt enn tabellen, og den bør komme alle til gode.
+
+Kjør denne i Supabase → SQL Editor:
+
+```sql
+create table if not exists public.maskinkalibrering (
+  maskin_id  text primary key,
+  friksjon   numeric not null check (friksjon > 0 and friksjon < 5),
+  deigvekt   integer,
+  notat      text,
+  oppdatert  timestamptz not null default now()
+);
+
+alter table public.maskinkalibrering enable row level security;
+
+-- ALLE innloggede kan LESE. Poenget er nettopp at målingen skal komme andre
+-- til gode.
+create policy "alle kan lese kalibreringer"
+  on public.maskinkalibrering for select
+  to authenticated
+  using (true);
+
+-- KUN eieren av repoet kan skrive. E-posten leses fra JWT-en, ikke fra noe
+-- klienten sender — en bruker kan ikke lyve seg til skrivetilgang.
+create policy "kun eier kan sette inn"
+  on public.maskinkalibrering for insert
+  to authenticated
+  with check (auth.jwt() ->> 'email' = 'bjorn@medthings.no');
+
+create policy "kun eier kan oppdatere"
+  on public.maskinkalibrering for update
+  to authenticated
+  using (auth.jwt() ->> 'email' = 'bjorn@medthings.no')
+  with check (auth.jwt() ->> 'email' = 'bjorn@medthings.no');
+```
+
+**Merk at det ikke finnes noen delete-policy.** Uten den kan ingen slette rader,
+heller ikke eieren — en kalibrering rettes ved å overskrive den, ikke ved å
+fjerne den. Det er med vilje: en app som plutselig mangler et tall den hadde, er
+verre enn en app med et gammelt tall.
+
+Endres e-posten, må begge policyene skrives om. De står som to separate policyer
+fordi PostgreSQL krever `with check` på insert og både `using` og `with check` på
+update — én felles policy ville ikke dekket begge riktig.

@@ -980,6 +980,17 @@ function tilleggOppdelt(tillegg, melTotal) {
    Gjæren løses ALLTID numerisk mot måldosen (L-02) — aldri fra en tabell.       */
 const GJAER_TAK_TORR = 0.833;   // 2,5 % fersk; over dette: gjærsmak og dårlig løft
 
+/* Delt måling for maskinen som er valgt, hvis noen har målt den og delt den.
+   `state.delteKalib` fylles av appen etter innlogging og er `null` ellers — så
+   uten sky, og uten en måling for akkurat denne maskinen, faller alt tilbake til
+   klasseanslaget i FRIKSJON. */
+function delfriksjon(state) {
+  const kal = state && state.delteKalib;
+  const mid = (state && state.maskin) || 'spiralHjemme';
+  const rad = kal && kal[mid];
+  return rad && isFinite(rad.friksjon) ? +rad.friksjon : null;
+}
+
 function regn(state) {
   const bt = BROTYPER.find(b => b.id === state.brotype) || BROTYPER[0];
   const plan = TIDSPLANER.find(t => t.id === state.tid)
@@ -1111,7 +1122,11 @@ function regn(state) {
     // «egen» maskin bruker brukerens kalibrerte friksjon (°C/min) i stedet for
     // en av standardmaskinene.
     mikser: state.maskin === 'egen' ? 'spiralHjemme' : (state.maskin || 'spiralHjemme'),
-    friksjonPerMin: state.maskin === 'egen' && isFinite(state.egenFriksjon) ? state.egenFriksjon : null,
+    /* Rekkefølgen er: din egen måling → en delt måling for nettopp denne
+       maskinen → klasseanslaget i tabellen. En ekte måling er mer verdt enn et
+       anslag, også når det er en annen som har gjort den. */
+    friksjonPerMin: state.maskin === 'egen' && isFinite(state.egenFriksjon) ? state.egenFriksjon
+      : delfriksjon(state),
     minutter: eltMin
   };
   const dt = vanntemperatur(dtInn);

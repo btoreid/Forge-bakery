@@ -47,6 +47,10 @@ const STANDARD = {
   kalib: {},                  // {foer, etter, min} — målingene fra kalibreringen
   kurvMaal: {},               // brukerens kurvstørrelser i cm, per form-id
   kjolTemp: 3.5,              // kaldeste vann du får — kjøleskapet ditt
+  delteKalib: null,           // delte maskinmålinger hentet fra skyen
+  kalibFor: null,             // hvilken maskin din egen måling gjelder
+  kalibVekt: null,            // deigvekten målingen ble gjort på
+  kalibDelt: null,            // kvittering etter deling (visning)
   kompVist: false             // kompensasjonspanelet er åpnet av en endring
 };
 /* Er oppskriften fortsatt akkurat som den kom fra fabrikken? Brukes til å avgjøre
@@ -122,7 +126,11 @@ function last() {
 const UI_FELT = ['skjerm', 'paramInfo', 'tilleggInfo', 'melInfo', 'meltallInfo', 'aktivSteg',
   'regnskapAapen', 'byttBekreft', 'lgRediger', 'lgSlett', 'bildeVis', 'oppslag', 'oppslagSok',
   'brodInfo', 'kompVist', 'melEndring', 'kompSporsmal', 'handlelisteOk', 'melVelger',
-  'visMaskiner', 'aktivSteg', 'aktivStegId'];
+  'visMaskiner', 'aktivSteg', 'aktivStegId',
+  /* Delte maskinmålinger er HENTET, ikke skrevet. De hører hjemme i den delte
+     tabellen, ikke i din rad — teller de som data, ville hver nedlasting sett ut
+     som en endring og stemplet `oppdatert` på nytt. */
+  'delteKalib', 'kalibDelt'];
 function dataAvtrykk(s) {
   const kopi = {};
   Object.keys(s).forEach(k => { if (k !== 'oppdatert' && UI_FELT.indexOf(k) < 0) kopi[k] = s[k]; });
@@ -1995,6 +2003,12 @@ function tegnKalibrering(r) {
     boks.appendChild(h('button', { class: 'btn btn-primary btn-full', style: 'margin-top:10px',
       onClick: () => {
         S.egenFriksjon = Math.round(midRate * 100) / 100;
+        /* Hvilken maskin målingen GJELDER, tas vare på før valget bytter til
+           «egen». Uten den vet appen etterpå bare at tallet er målt — ikke hva
+           det er målt på, og da kan det ikke deles med andre som har samme
+           maskin. */
+        S.kalibFor = S.maskin && S.maskin !== 'egen' ? S.maskin : (S.kalibFor || null);
+        S.kalibVekt = isFinite(k.vekt) ? k.vekt : Math.round(r.totalVekt);
         S.maskin = 'egen'; S.friksjonKalibrert = true; oppdater();
       } }, 'Bruk ' + fmt(midRate, 2) + ' °C/min for maskinen min'));
   } else {
@@ -2013,13 +2027,23 @@ function maskinInfoPanel(r) {
   const info = (typeof MASKIN_INFO !== 'undefined') && MASKIN_INFO[mid];
   if (!info) return null;
   const min = S.eltMin || 13;
-  const frik = mid === 'egen' ? (S.egenFriksjon || 0.4) : info.friksjon;
+  // Samme rangering som motoren bruker: egen måling → delt måling → anslag.
+  const delt = (S.delteKalib && S.delteKalib[mid] && isFinite(S.delteKalib[mid].friksjon)) ? +S.delteKalib[mid].friksjon : null;
+  const frik = mid === 'egen' ? (S.egenFriksjon || 0.4) : (delt != null ? delt : info.friksjon);
   const sone = r.wh < 3 ? ['under målsonen', 'var(--color-accent-700)'] : r.wh > 8.3 ? ['over metning', 'var(--color-danger)'] : ['i målsonen', 'var(--color-accent-2-700)'];
 
   const panel = h('div', { class: 'maskin-info' },
     h('div', { class: 'mi-topp' },
       h('b', null, info.navn),
-      h('span', { class: 'mi-frik' }, mid === 'egen' ? 'målt ' + fmt(frik, 2) + ' °C/min' : fmt(frik, 2) + ' °C/min')),
+      /* Et tall her leses som «slik er DIN maskin». Er det bare et
+         klasseanslag, står det ikke noe tall — det står at kalibreringen
+         mangler. Regnestykket bruker anslaget videre (ellers kan appen ikke
+         regne vanntemperatur i det hele tatt), men den later ikke som. */
+      mid === 'egen'
+        ? h('span', { class: 'mi-frik' }, 'målt ' + fmt(frik, 2) + ' °C/min')
+        : (S.delteKalib && S.delteKalib[mid])
+          ? h('span', { class: 'mi-frik' }, fmt(S.delteKalib[mid].friksjon, 2) + ' °C/min · delt måling')
+          : h('span', { class: 'mi-frik mi-ukalibrert' }, 'mangler kalibrering')),
     h('div', { class: 'mi-hva' }, info.hva),
     h('div', { class: 'mi-hva', style: 'margin-top:4px' }, info.tid),
     // Hastighet som FASER med minutter, regnet av eltetiden du faktisk har satt.
@@ -2032,6 +2056,10 @@ function maskinInfoPanel(r) {
         h('span', { class: 'ff-min' }, f.min + ' min'),
         h('span', { class: 'ff-hva' }, f.hva)))) : null,
     info.fart ? h('div', { class: 'mi-hva', style: 'margin-top:6px' }, info.fart) : null,
+    info.anslag && mid !== 'egen' && !(S.delteKalib && S.delteKalib[mid])
+      ? h('div', { class: 'mi-hva', style: 'margin-top:6px;color:var(--color-accent-700)' },
+          'Vanntemperaturen under er regnet med et anslag for maskinTYPEN. Kalibrer under, så blir den din.')
+      : null,
     // Den levende utregningen — samme tall som varmebalansen bruker.
     h('div', { class: 'mi-regn' },
       h('span', null, fmt(frik, 2), ' °C/min × ', String(min), ' min = '),
@@ -2040,6 +2068,23 @@ function maskinInfoPanel(r) {
       h('b', { style: 'color:' + sone[1] }, fmt(r.wh, 1) + ' Wh/kg'),
       h('span', { style: 'color:' + sone[1] }, ' (' + sone[0] + ')')),
     h('div', { class: 'mi-note' }, info.note));
+
+  /* Del målingen.
+     Knappen vises bare for den som faktisk har skrivetilgang i den delte
+     tabellen (RLS slipper gjennom én e-post, se SUPABASE.md). For alle andre
+     ville den bare gitt en avvisning fra serveren, og da er det ærligere å ikke
+     tilby den. Selve sperren ligger i databasen — dette skjuler bare en knapp. */
+  if (mid === 'egen' && S.kalibFor && typeof Sky !== 'undefined' && Sky.kanPublisere && Sky.kanPublisere()) {
+    const forNavn = (MASKIN_INFO[S.kalibFor] || {}).navn || S.kalibFor;
+    panel.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:8px;font-size:.78rem',
+      onClick: async () => {
+        const svar = await Sky.lagreKalibrering(S.kalibFor, S.egenFriksjon || 0.4, S.kalibVekt || null);
+        S.kalibDelt = svar && svar.feil ? svar.feil : 'Delt — alle med ' + forNavn + ' får nå ' + fmt(S.egenFriksjon || 0.4, 2) + ' °C/min.';
+        oppdater();
+        hentDelteKalibreringer();
+      } }, 'Del målingen med alle som har ' + forNavn));
+    if (S.kalibDelt) panel.appendChild(h('div', { class: 'mi-hva', style: 'margin-top:4px' }, S.kalibDelt));
+  }
 
   // Sammenlign alle maskinene ved gjeldende eltetid.
   const vis = !!S.visMaskiner;
@@ -3175,6 +3220,21 @@ async function synkVedInnlogging() {
   lagre();                 // skriv det flettede lokalt (og stempl det, hvis det endret seg)
   Sky.skyvNaa(S);          // og opp, så begge enhetene ender likt
   render();
+  hentDelteKalibreringer();
+}
+
+/* Delte maskinmålinger.
+   Friksjonstallene i tabellen er klasseanslag. Har noen målt sin egen maskin og
+   delt den, skal alle med samme maskin få nytte av den — derfor hentes de fra en
+   egen, delt tabell ved innlogging. Feiler den (tabellen finnes ikke ennå, eller
+   nettet er nede), går appen videre på anslagene: dette er en forbedring, ikke
+   en forutsetning. */
+async function hentDelteKalibreringer() {
+  if (typeof Sky === 'undefined' || !Sky.hentKalibreringer) return;
+  try {
+    const kal = await Sky.hentKalibreringer();
+    if (kal && Object.keys(kal).length) { S.delteKalib = kal; render(); }
+  } catch (e) {}
 }
 
 /* Tastatur i bildevisningen: Esc lukker, piler blar. Én lytter for hele appen —

@@ -124,6 +124,37 @@ async function glemtPassord(epost) {
   return { melding: 'Vi har sendt deg en e-post for å sette nytt passord.' };
 }
 
+/* ---------- Delt maskinkalibrering ----------
+   Friksjonstallene i appen er klasseanslag. Én ekte måling er mer verdt enn
+   tabellen, og skal komme alle med samme maskin til gode — derfor en egen,
+   delt tabell i stedet for å gjemme målingen i eierens egen rad.
+
+   SKRIVETILGANGEN ligger i databasen, ikke her: RLS slipper bare gjennom
+   e-posten som eier repoet (se SUPABASE.md). Klienten kan altså ikke lyve seg
+   til å publisere — `kanPublisere()` under er bare til å skjule en knapp som
+   likevel ville blitt avvist. */
+const EIER_EPOST = 'bjorn@medthings.no';
+function kanPublisere() {
+  return !!(bruker && String(bruker.email || '').toLowerCase() === EIER_EPOST);
+}
+async function hentKalibreringer() {
+  if (!klient || !bruker) return null;
+  const { data, error } = await klient.from('maskinkalibrering').select('maskin_id, friksjon, deigvekt, oppdatert');
+  // Feiler den (tabellen finnes ikke ennå), skal appen gå videre på anslagene.
+  if (error || !Array.isArray(data)) return null;
+  const ut = {};
+  data.forEach(rad => { if (rad && rad.maskin_id) ut[rad.maskin_id] = rad; });
+  return ut;
+}
+async function lagreKalibrering(maskinId, friksjon, deigvekt) {
+  if (!klient || !bruker) return { feil: 'Ikke innlogget.' };
+  const { error } = await klient.from('maskinkalibrering')
+    .upsert({ maskin_id: maskinId, friksjon, deigvekt, oppdatert: new Date().toISOString() },
+            { onConflict: 'maskin_id' });
+  if (error) return { feil: norsk(error) };
+  return { melding: 'Kalibreringen er delt.' };
+}
+
 /* ---------- Data opp og ned ---------- */
 async function hentNed() {
   if (!klient || !bruker) return null;
@@ -178,6 +209,7 @@ window.Sky = {
   sesjonSjekket: () => sesjonSjekket,
   status, paaEndring: cb => lyttere.push(cb),
   registrer, loggInn, loggUt, glemtPassord,
+  kanPublisere, hentKalibreringer, lagreKalibrering,
   hentNed, lagreOpp, skyvNaa
 };
 })();
