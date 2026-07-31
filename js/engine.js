@@ -248,8 +248,13 @@ function gjaerKonverter(mengde, fra, til) {
 function tilTorrPct(pct, type) { return gjaerKonverter(pct, type, 'torr'); }
 
 /* ---------- Måltall for heveprosent ----------
-   Forankret i målt tabell (75 % hydrering, 90/10 hvete/fullkorn, 2 % salt). */
-const RISE_ANKER = [[27, 30], [24, 50], [21, 75], [18, 100]];
+   Forankret i målt tabell (75 % hydrering, 90/10 hvete/fullkorn, 2 % salt).
+   27 °C-ankeret sto på 30 %. Retningen er riktig — varm deig brytes ned
+   raskere og settes inn tidligere — men 30 % presenteres som et konkret «Mål
+   stigning», og et vanlig hvetebrød satt inn på 30 % er UNDERHEVET: tett krumme,
+   sprengte sider. Hevet til 40 % står trygt over den grensa uten å bli overhevet
+   i det varme vinduet. */
+const RISE_ANKER = [[27, 40], [24, 50], [21, 75], [18, 100]];
 
 function maalHeveProsent(deigTemp, o = {}) {
   const { hydrering = 0.75, grovAndel = 0.10, styrke = 'middels', etterKaldheving = false } = o;
@@ -271,7 +276,12 @@ function maalHeveProsent(deigTemp, o = {}) {
   // er ikke kalibrert for en ciabatta på 82 % ren sterk hvete. Formelen ga der
   // 45 % bulkstigning, mens fagteksten sier 70–80 %. Går deigen på kjøl etterpå
   // og ligger over 80 % hydrering, settes et gulv på 60 %.
-  const gulv = (etterKaldheving && hydrering > 0.80) ? 60 : 18;
+  // For et ELLERS vanlig hvetebrød (lite grovt mel) settes et absolutt gulv på
+  // 40 %: et sifta-hvetebrød satt inn under det er underhevet uansett hva de
+  // øvrige justeringene gjør. Grove deiger tåler — og trenger — mindre stigning,
+  // så gulvet gjelder bare når glutennettverket faktisk kan holde på gassen.
+  const renHveteGulv = grovAndel <= 0.15 ? 40 : 18;
+  const gulv = (etterKaldheving && hydrering > 0.80) ? 60 : renHveteGulv;
   return Math.max(gulv, maal);
 }
 
@@ -468,13 +478,35 @@ function beregnOppskrift(inn) {
   // (frø kommer i tillegg som fast gram, sammen med vannet de skal ha)
   const perMel = 1 + hydrering + (saltPct + honningPct + oljePct + sukkerPct + smorPct + maltPct + gjaerPct) / 100;
 
+  /* Surdeigsstarterens masse må inn i deigvekten FØR melTotal løses.
+     Et levain podes med moden starter (`podePct` % av levainens mel), og den
+     starteren er REELL masse i bollen — halvt mel, halvt vann ved ~100 %
+     hydrering. Før lå den bare i `ff.total` og var helt utenfor `totalVekt`: en
+     surdeig på 2 × 900 g ba deg tilsette 61 g starter, så bollen veide 1861 g og
+     hvert emne 930 g, ikke 900. `starterFaktor` = gram starter per gram
+     oppskriftsmel, så den kan foldes inn i divisoren akkurat som frøvekten. */
+  let starterFaktor = 0;
+  if (forferment && forferment.bruk) {
+    const ffTypeDef = (typeof FF_TYPER !== 'undefined' && FF_TYPER.find(t => t.id === forferment.type)) || {};
+    if (ffTypeDef.kultur) starterFaktor = (forferment.pctMel / 100) * ((ffTypeDef.podePct || 20) / 100);
+  }
+
   // Enten tar frøene vannet sitt fra den oppgitte hydreringen (regnearkets
   // konvensjon), eller det legges på toppen slik at deigen faktisk blir så våt
   // som tallet sier. Bare i det andre tilfellet tilfører frøene vekt utover
   // sin egen tørrvekt — ellers ligger vannet deres allerede i hydreringen.
   const froEkstraVann = froVannPaaToppen ? froAbsorbert : 0;
   const froMedVann = froGramTotal + froEkstraVann;
-  const melTotal = Math.max(0, (maalVekt - froMedVann) / perMel);
+  // Starteren tar plass i deigvekten (`starterFaktor` i divisoren), så melTotal
+  // krymper akkurat nok til at ferdig bolle treffer antall × vektPerBrod.
+  const melTotal = Math.max(0, (maalVekt - froMedVann) / (perMel + starterFaktor));
+
+  // Melet og vannet starteren bærer med seg. Moden starter er ~100 % hydrering,
+  // så halvparten er mel og halvparten vann. Disse teller i sum tørt og i
+  // hydreringen — det er de ~30 g melet som ellers falt ut av bakerprosenten.
+  const starterMasse = melTotal * starterFaktor;
+  const starterMel = starterMasse / 2;
+  const starterVann = starterMasse / 2;
 
   const vannTotal = melTotal * hydrering + froEkstraVann;
   const salt    = melTotal * saltPct / 100;
@@ -586,7 +618,9 @@ function beregnOppskrift(inn) {
   const vannUnderskudd = Math.max(0, -vannHovedRaa);
 
   // Vannet frøene binder ligger allerede i vannTotal, så her teller bare tørrvekten.
-  const totalVekt = melTotal + vannTotal + salt + honning + olje + sukker + smor + malt + gjaerTotal + froGramTotal;
+  // Starteren (starterMasse = starterMel + starterVann) er reell masse i bollen
+  // og MÅ med, ellers veier hvert emne mer enn appen sier.
+  const totalVekt = melTotal + vannTotal + salt + honning + olje + sukker + smor + malt + gjaerTotal + froGramTotal + starterMasse;
 
   // Kostnad
   const melKost = mel.reduce((s, m) => s + m.kost, 0);
@@ -596,11 +630,21 @@ function beregnOppskrift(inn) {
                   + gjaerTotal / 1000 * (gjaerType === 'fersk' ? 60 : 250);
   const totalKost = melKost + froKost + annenKost;
 
+  // Sum tørt og totalt vann INKLUDERT det starteren bærer. Starterens mel er
+  // ~30 g fint mel som ellers falt ut av bakerprosenten, så hydrering og
+  // grovhet driftet (75,0 vist mot 75,7 faktisk). Salt/gjær holdes fortsatt på
+  // det VEIDE oppskriftsmelet (melTotal) — det er melet brukeren doserer mot.
+  const sumTort = melTotal + starterMel;
+  const vannMedStarter = vannTotal + starterVann;
+
   // Effektiv hydrering: vannet frøene binder er ikke tilgjengelig for deigen
-  const effektivHydrering = (vannTotal - froAbsorbert) / melTotal;
+  const effektivHydrering = (vannMedStarter - froAbsorbert) / Math.max(sumTort, 1);
 
   return {
     melTotal, vannTotal, totalVekt,
+    // Starterens bidrag, eksponert så UI og logg kan vise den ekte deigvekten.
+    starterMel, starterVann, starterMasse,
+    sumTort,
     mel, fro, forferment: ff,
     salt, honning, olje, sukker, smor, malt,
     honningVann, smorVann,
@@ -612,7 +656,8 @@ function beregnOppskrift(inn) {
     // hit: der helles nøyaktig det som bindes, og alt går i deigen.
     froVannOverskudd: froVannHelles - froAbsorbert,
     hydrering, effektivHydrering, anbefaltHydrering, absFaktor, froVannPaaToppen,
-    oppgittHydrering: vannTotal / melTotal,
+    // Faktisk hydrering mot sum tørt inkl. starterens mel/vann.
+    oppgittHydrering: vannMedStarter / Math.max(sumTort, 1),
     grovAndel, svakesteStyrke, styrkeVektet,
     // Frø er ikke mel. De bygger ikke gluten, men de fortynner nettverket og
     // stjeler vann. Derfor flere ulike «grovhets»-tall som ofte forveksles —
@@ -621,8 +666,9 @@ function beregnOppskrift(inn) {
     grovMelAndel: grovAndel,                                             // grovt MEL som andel av melet
     kornTillegg,                                                          // gryn og kli av korn, i gram
     // OFFISIELL grovhet etter norsk standard. Frø holdes utenfor, korngryn
-    // teller med. Dette er tallet som svarer til merkingen i butikk.
-    brodskala: brodskalan(grovAndel * melTotal, melTotal, kornTillegg),
+    // teller med. Starterens mel er fint mel og teller i nevneren (fortynner
+    // grovheten litt), på linje med resten av sum tørt.
+    brodskala: brodskalan(grovAndel * melTotal, melTotal + starterMel, kornTillegg),
     // Strukturfortynning: hvor stor del av alt tørrstoffet som ikke bygger
     // glutennettverk. Dette er IKKE grovhet — frøene teller fullt her, fordi
     // de fortynner nettverket selv om Brødskala'n ser bort fra dem. Det er
@@ -670,6 +716,48 @@ const BRODSKALAN = [
 
 function brodskalanKlasse(pct) {
   return BRODSKALAN.find(b => pct <= b.grense) || BRODSKALAN[BRODSKALAN.length - 1];
+}
+
+/* ---------- MELBLANDINGENS PRAKTISKE GRENSER (maxPct) ----------
+   `maxPct` i FLOURS er det praktiske taket for hvor stor andel ett mel kan ha i
+   et frittstående brød. Forvalgene og grovhetstrappa holder seg innenfor av seg
+   selv, men i det øyeblikket brukeren skriver inn egne gram/prosent
+   (`melOverstyr`), var det INGENTING som stoppet 100 % rug eller 40 % havre kjørt
+   gjennom hvete-prosessen — et kollapset, mulig ustekt brød uten advarsel.
+
+   Denne sperrer ikke; den flagger, samme mønster som `gjaerUnderskudd` og
+   `vannUnderskudd`. To konsekvenser avledes av melets `glutenbidrag` (MEL_INFO):
+     bryterned (rug)         → trenger SYRE (surdeig/1–2 % eddik) mot amylasen,
+                               og over ~40 % må brødet i FORM.
+     fortynner + styrke ingen → korn uten bakeevne (havre, bygg, kikert, bokhvete):
+                               kan ikke bære struktur, må i form.
+   `melListe` = [{id, pct}] der pct summerer til melandelen (normaliseres her). */
+function melAdvarsler(melListe) {
+  const MI = (typeof MEL_INFO !== 'undefined') ? MEL_INFO : {};
+  const pctSum = (melListe || []).reduce((s, m) => s + (m.pct || 0), 0) || 100;
+  const perMel = [];
+  (melListe || []).forEach(m => {
+    const f = FLOURS.find(x => x.id === m.id); if (!f) return;
+    const andel = (m.pct || 0) / pctSum * 100;
+    const maxPct = f.maxPct ?? 100;
+    if (andel <= maxPct + 0.5) return;
+    // Uten oppslag i MEL_INFO: grovt mel fortynner, siktet bidrar. Konservativt.
+    const bidrag = (MI[m.id] && MI[m.id].glutenbidrag) || (f.grov ? 'fortynner' : 'bidrar');
+    const utenBakeevne = bidrag === 'fortynner' && (f.styrke === 'ingen');
+    perMel.push({
+      id: m.id, navn: f.navn, pct: andel, maxPct, bidrag, styrke: f.styrke,
+      // Rug angriper stivelsen (amylase) og har ingen gluten → syre + form.
+      // Korn uten bakeevne bærer ikke et fritt emne → form.
+      trengerSyre: bidrag === 'bryterned',
+      maaIForm: (bidrag === 'bryterned' && andel > 40) || utenBakeevne
+    });
+  });
+  return {
+    perMel,
+    over: perMel.length > 0,
+    maaIForm: perMel.some(p => p.maaIForm),
+    trengerSyre: perMel.some(p => p.trengerSyre)
+  };
 }
 
 /* melTotal/grovMel i gram, kornTillegg = gryn og kli av korn i gram. */
@@ -1057,7 +1145,34 @@ function delfriksjon(state) {
   return rad && isFinite(rad.friksjon) ? +rad.friksjon : null;
 }
 
+/* regn() er en REN funksjon av tilstanden, men tung: gjærsolveren kjører 42
+   halveringer × full plangjennomregning, og ett gramtastetrykk kan utløse 6–10
+   kall (fikspunktløkkene i settMelGram/settVannGram + flere kall per render).
+   Derfor et lite LRU-minne på serialisert tilstand: identisk tilstand gir
+   identisk svar, så gjentatte kall i samme interaksjon koster bare en
+   JSON.stringify i stedet for en ny integrasjon. Ingen numerisk endring —
+   samme funksjon, bare husket. Cachen tømmes aldri manuelt; 16 plasser holder
+   for et par renders, og gammelt faller ut av seg selv. */
+const _regnCache = new Map();
+const _REGN_CACHE_MAX = 16;
 function regn(state) {
+  let key;
+  try { key = JSON.stringify(state); } catch (e) { key = null; }
+  if (key !== null && _regnCache.has(key)) {
+    // Flytt til «nyest brukt» (LRU) og returner det huskede resultatet.
+    const v = _regnCache.get(key);
+    _regnCache.delete(key); _regnCache.set(key, v);
+    return v;
+  }
+  const v = regnKjerne(state);
+  if (key !== null) {
+    _regnCache.set(key, v);
+    if (_regnCache.size > _REGN_CACHE_MAX) _regnCache.delete(_regnCache.keys().next().value);
+  }
+  return v;
+}
+
+function regnKjerne(state) {
   const bt = BROTYPER.find(b => b.id === state.brotype) || BROTYPER[0];
   const plan = TIDSPLANER.find(t => t.id === state.tid)
             || TIDSPLANER.find(t => t.id === 'lang') || TIDSPLANER[0];
@@ -1067,12 +1182,18 @@ function regn(state) {
   // `melOverstyr` er brukerens egen blanding og slår begge — den settes når man
   // skriver inn gram eller prosent på en meltype, og nullstilles av grovhets-
   // trinnene (ellers ville dialen sluttet å virke uten at noe sa fra).
+  /* `?? ` fanger bare null/undefined, IKKE NaN — og `NaN / 100` propagerer til
+     melTotal og hele oppskriften (alt blir «–»). Skyverne gir alltid gyldige
+     tall, så dette er en teoretisk luke, men en korrupt lagret tilstand
+     (saltPct: NaN fra en gammel migrering) skal ikke velte regnestykket.
+     Derfor `isFinite`-gulv på alt som mater melTotal/totalVekt. */
+  const num = (v, fallback) => (isFinite(v) ? +v : fallback);
   const melListe = gyldigOverstyring(state.melOverstyr)
-    || (preset ? preset.mel.map(m => ({ ...m })) : melblandingForGrov(state.grov ?? 40));
+    || (preset ? preset.mel.map(m => ({ ...m })) : melblandingForGrov(num(state.grov, 40)));
 
   // Hydrering og salt: preset eier sine, ellers brukerens valg.
-  const hyd = (preset ? preset.hydrering : (state.hyd ?? 75)) / 100;
-  const saltPct = preset ? preset.salt : (state.saltPct ?? 1.8);
+  const hyd = (preset ? preset.hydrering : num(state.hyd, 75)) / 100;
+  const saltPct = preset ? preset.salt : num(state.saltPct, 1.8);
 
   /* Rommet og kjøleskapet, slik brukeren har oppgitt dem. Alt som skal stå
      «i rommet» eller «på kjøl» måles mot disse to, ikke mot tabellens tall. */
@@ -1090,9 +1211,22 @@ function regn(state) {
      modningstid — det er ikke en separat regel som må vedlikeholdes. */
   /* Står forfermenten varmt, står den i ROMMET DITT — ikke på et tabelltall.
      Tabellens 21 grader er ingen som har målt; det er en antakelse. Er den
-     derimot ment å stå kaldt, er det kjøleskapet, og da gjelder ditt skap. */
+     derimot ment å stå kaldt, er det kjøleskapet, og da gjelder ditt skap.
+
+     UNNTAK: en biga vil stå KJØLIGERE enn rommet (16–18 °C). Har typen et
+     temperaturbånd (`tempMin`/`tempMax`), klemmes romtemperaturen inn i det —
+     så en biga på et 24 °C-kjøkken lander på 20 (kjøligste realistiske) i stedet
+     for å gjære for fort på full romtemp, og en biga på et 17 °C-kjøkken står på
+     17. Gjærdosen løses mot den faktiske temperaturen uansett. */
   const ffNominell = pf.temp || ffT.temp || 21;
-  const ffStandardTemp = ffNominell <= KALDGRENSE ? kjolskapT : romT;
+  let ffStandardTemp;
+  if (ffNominell <= KALDGRENSE) {
+    ffStandardTemp = kjolskapT;
+  } else if (isFinite(ffT.tempMin) && isFinite(ffT.tempMax)) {
+    ffStandardTemp = Math.max(ffT.tempMin, Math.min(ffT.tempMax, romT));
+  } else {
+    ffStandardTemp = romT;
+  }
   const forferment = {
     bruk: ffPaa, type: ffT.id,
     pctMel: pf.pctMel || ffT.pctMel,
@@ -1311,6 +1445,10 @@ function regn(state) {
     // organisert, så samme utvikling nås på kortere tid.
     eltMinAnbefalt: Math.max(2, Math.round(eltMin * autolyseFaktor(state.autolyseMin || 0).elt)),
     autolyse: autolyseFaktor(state.autolyseMin || 0),
+    // Praktiske melgrenser (maxPct). Bruker den BEREGNEDE melfordelingen (r.mel),
+    // som er normalisert til 100 %, så et mel over sitt tak flagges uansett om
+    // brukeren skrev prosent eller gram.
+    melAdvarsler: melAdvarsler(r.mel),
     melListe
   };
 }

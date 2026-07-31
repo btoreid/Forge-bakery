@@ -859,8 +859,13 @@ function gramFelt(verdi, settInn, etikett) {
        når det faktisk finnes en presis peker. */
     onfocus: e => { try { if (window.matchMedia('(pointer: fine)').matches) e.target.select(); } catch (err) {} },
     onchange: e => {
-      const v = +e.target.value;
-      if (!isFinite(v) || v < 0) { render(); return; }
+      /* Komma OG tomt felt må håndteres. `+''` er 0, ikke NaN, så et tomt eller
+         komma-avvist felt (type=number gir value='' for «500,5») satte før melet
+         til 0 g stille. parseFloat med komma→punktum, og tomt/ugyldig ruller
+         tilbake til vist verdi i stedet for å nulle raden. */
+      const raw = String(e.target.value).replace(',', '.').trim();
+      const v = parseFloat(raw);
+      if (raw === '' || !isFinite(v) || v < 0) { render(); return; }
       settInn(v);
     }
   });
@@ -973,6 +978,28 @@ function tegnDeigen(r) {
   // Spørsmålet etter en gramendring: hva skal gi etter?
   const melSp = tegnMelEndring(r);
   if (melSp) melBoks.appendChild(melSp);
+  // Praktisk melgrense (maxPct). En egen blanding kan settes langt utenfor det
+  // et mel tåler i et frittstående brød — 100 % rug, 40 % havre — og da må
+  // brukeren få vite HVA det koster, ikke bare at deigen «flyter ut».
+  const ma = r.melAdvarsler;
+  if (ma && ma.over) {
+    const rader = ma.perMel.map(p =>
+      h('div', { class: 'info-linje' },
+        h('span', { class: 'etikett', style: 'flex:0 0 18px;color:var(--color-danger)' }, '⚠'),
+        h('span', { class: 'tekst' },
+          h('b', null, p.navn), ' ligger på ' + fmt(p.pct, 0) + ' %, over det praktiske taket på ' + p.maxPct + ' %' +
+          (p.bidrag === 'bryterned' ? ' — rug har ikke gluten og amylasen bryter ned stivelsen.'
+           : p.styrke === 'ingen' ? ' — dette melet har ingen bakeevne og bærer ikke et emne alene.'
+           : ' — over dette rives eller lukkes deigen i stedet for å reise seg.'))));
+    const raad = [];
+    if (ma.trengerSyre) raad.push('Bruk surdeig eller 1–2 % eddik mot rugens amylase.');
+    if (ma.maaIForm) raad.push('Bak i FORM — dette emnet holder ikke fasongen fritt.');
+    raad.push('Reduser hevemålet og la brødet hvile 12–24 t før skjæring.');
+    melBoks.appendChild(h('div', { class: 'varsel', style: 'margin-top:10px;border-left:3px solid var(--color-danger)' },
+      h('div', { style: 'margin-bottom:6px' }, h('b', null, 'Melblandingen er utenfor det som gir et trygt brød.')),
+      ...rader,
+      h('div', { style: 'margin-top:6px;font-size:.82rem;color:var(--color-neutral-700)' }, raad.join(' '))));
+  }
   // Veien tilbake til anbefalingen. Uten den er en egen blanding en enveisdør,
   // og grovhetsdialen ser ut som den har sluttet å virke.
   if (S.melOverstyr) {
@@ -1759,9 +1786,23 @@ function tegnRateTabell() {
         h('span', { style: 'display:block;height:100%;width:' + Math.min(100, rel / rateFactor(36) * 100).toFixed(0) + '%;background:var(--color-accent-500)' })),
       h('span', { style: 'flex:0 0 52px;text-align:right;font-size:.76rem;font-weight:700;font-variant-numeric:tabular-nums' }, '×' + fmt(rel, 2)));
   })));
-  const dbl = (typeof doublingInterval === 'function') ? doublingInterval(S.startTemp || 24) : null;
+  const naa = S.startTemp || 24;
+  const dbl = (typeof doublingInterval === 'function') ? doublingInterval(naa) : null;
+  /* Modellens optimum (der raten topper) skannes fram, så meldingen kan si
+     hvor det ligger. `doublingInterval` er null både PÅ optimum OG godt under
+     det — raten topper på ~1,8× og når aldri det dobbelte av 24 °C-raten. Å
+     kalle 24 °C «nær optimum» er feil: man står 11–12 °C under, og mer varme
+     hjelper faktisk. De to tilfellene skilles nå ad. */
+  let optT = naa, optR = rateFactor(naa);
+  for (let T = 0; T <= 44; T += 0.5) { const R = rateFactor(T); if (R > optR) { optR = R; optT = T; } }
+  const relNaa = rateFactor(naa) || 1e-9;
+  const melding = dbl
+    ? 'Fra ' + grader(naa, 0) + ' må du ' + fmt(dbl, 1) + ' °C opp for å doble farten.'
+    : (naa >= optT - 0.5
+        ? 'Du er på eller over optimum (rundt ' + grader(optT, 0) + ') — mer varme gjør ikke farten høyere.'
+        : 'Mer varme hjelper opp mot optimum rundt ' + grader(optT, 0) + ', men farten topper på ×' + fmt(optR / relNaa, 1) + ' herfra og dobler seg aldri helt.');
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
-    'Relativt til 24 °C (×1,00). ' + (dbl ? 'Fra ' + grader(S.startTemp || 24, 0) + ' må du ' + fmt(dbl, 1) + ' °C opp for å doble farten.' : 'Du er nær eller over optimum — mer varme dobler ikke lenger.')));
+    'Relativt til 24 °C (×1,00). ' + melding));
   return boks;
 }
 
