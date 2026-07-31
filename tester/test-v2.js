@@ -115,12 +115,13 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await solInp2.fill('6'); await solInp2.dispatchEvent('blur');
   await page.waitForTimeout(200);
 
-  /* 6: kompensasjonspanelet. Det er en MODAL nå, ikke et kort nederst: et
-     spørsmål som ligger og venter langt nede i en rulleliste blir ikke stilt.
-     Den reises av hver endring i tilleggene — fill+blur over holder. */
-  const komp = page.locator('.modal-ark');
-  ok('kompensasjonsmodalen reises av en tilleggsendring', await komp.count() === 1);
-  ok('modalen har riktig spørsmål', /hva vil du gjøre med endringen/i.test(await komp.innerText()));
+  /* 6: kompensasjonspanelet. Det er INLINE nå (øverst i tillegg-seksjonen), ikke
+     en modal som dekket kontrollen man nettopp brukte og poppet opp på nytt for
+     hvert +/−. Det står fast og oppdaterer seg mens man justerer. */
+  const komp = page.locator('.kort:has-text("Hva vil du gjøre med endringen")');
+  ok('kompensasjonen vises inline i tillegg-seksjonen', await komp.count() === 1);
+  ok('ingen modal-overlegg dekker skjermen', await page.locator('.modal-ark').count() === 0);
+  ok('panelet har riktig spørsmål', /hva vil du gjøre med endringen/i.test(await komp.innerText()));
   const kompTekst = await komp.innerText();
   // Formuleringen er endret; det som skal holde er at tapet oppgis i gram.
   ok('panelet viser meltapet i gram', /faller melet\s+[\d\s ]+ g/.test(kompTekst), kompTekst.split('\n')[1]);
@@ -145,10 +146,6 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await page.waitForTimeout(200);
   const melAv = await page.locator('.kort:has-text("2 · Meltypene") .h-meta').innerText();
   ok('«Behold brødvekten» slår kompensasjonen av igjen', melAv === melFoer, melAv);
-  // Lukk modalen igjen, ellers dekker den resten av skjermen for testene under.
-  await komp.locator('button:has-text("Ferdig")').click();
-  await page.waitForTimeout(200);
-  ok('modalen lukkes med «Ferdig»', await page.locator('.modal-ark').count() === 0);
 
   // 9: dose–respons som ± mot normalen
   const dr = page.locator('.kort:has-text("Hva valgene koster")');

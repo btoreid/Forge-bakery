@@ -462,7 +462,9 @@ function renderInner() {
 
   tegnBunnlinje(r, K);
   tegnBildeVis();
-  tegnKompModal(r);
+  // Kompensasjonen er ikke lenger en modal — den rendres inline i tillegg-
+  // seksjonen. Rydd bort en eventuell gammel modal fra en tidligere versjon.
+  { const gml = byId('kompmodal'); if (gml) gml.remove(); }
 
   byId('bunnmeny').replaceChildren(...SKJERMER.map(s =>
     h('button', { class: s.id === S.skjerm ? 'paa' : '', 'aria-current': s.id === S.skjerm ? 'page' : null, onClick: () => bytt(s.id) },
@@ -1272,6 +1274,14 @@ function tilleggSeksjon(r) {
     { key: 'smak', tittel: '6 · Smak og skorpe', filt: t => t.type === 'smak' }
   ];
   const wrap = h('div');
+  /* «Hva vil du gjøre med endringen?» — INLINE, øverst i tillegg-seksjonen, rett
+     over ingrediensene den handler om. Før var dette en modal som la seg oppå og
+     dekket kontrollen man nettopp brukte, og som poppet opp igjen for hvert +/−.
+     Nå står valget fast her og oppdaterer seg mens man justerer, så man ser både
+     ingrediensen og konsekvensen samtidig. Den vises bare når et tillegg faktisk
+     har tatt plass fra melet (tap ≥ 1 g). */
+  const komp = tegnKompensasjon(r, false);
+  if (komp) wrap.appendChild(komp);
   grupper.forEach(gr => {
     const items = TILLEGG.filter(gr.filt);
     if (!items.length) return;
@@ -1313,33 +1323,9 @@ function tegnKompensasjon(r, iModal) {
     : ['Brødene er ', h('b', null, S.vekt + ' g'), ' som valgt, med ' + g0(r.melTotal) + ' mel — ' + g0(tap) + ' mindre enn uten tillegg. Litt tettere krumme, samme størrelse.']));
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
     'Valget kan slås av og på uten at noe går tapt: brødvekten din står urørt på ' + S.vekt + ' g/brød under Størrelse.'));
-  if (iModal) boks.appendChild(h('button', { class: 'btn btn-primary btn-full', style: 'margin-top:12px',
-    onClick: () => { S.kompSporsmal = false; oppdater(); } }, 'Ferdig'));
+  // Ingen «Ferdig»-knapp lenger: panelet er ikke en modal, det står inline i
+  // tillegg-seksjonen. `iModal` beholdes bare for bakoverkompatibel signatur.
   return boks;
-}
-/* Modal i stedet for et kort nederst på skjermen.
-   Panelet er et SPØRSMÅL — «hva vil du gjøre med endringen?» — og et spørsmål
-   som ligger og venter langt nede i en rulleliste blir ikke stilt. Det dukker nå
-   opp der blikket er, i det øyeblikket endringen skjer, og lukkes når man har
-   svart. `S.kompSporsmal` settes av hver eneste vei inn i tilleggene. */
-function tegnKompModal(r) {
-  const gml = byId('kompmodal');
-  if (!S.kompSporsmal) { if (gml) gml.remove(); return; }
-  const innmat = tegnKompensasjon(r, true);
-  if (!innmat) { S.kompSporsmal = false; if (gml) gml.remove(); return; }
-  /* Står modalen allerede oppe, byttes bare INNHOLDET. Å fjerne og legge til
-     ytterelementet på nytt ville spilt av inn-animasjonen ved hver render — og
-     hvert trykk inne i modalen utløser en render. Det er den flimringen. */
-  if (gml) {
-    const ark = gml.querySelector('.modal-ark');
-    if (ark) { ark.replaceChildren(innmat); return; }
-    gml.remove();
-  }
-  const lukk = () => { S.kompSporsmal = false; oppdater(); };
-  const lag = h('div', { class: 'modal-bakteppe', id: 'kompmodal', role: 'dialog', 'aria-modal': 'true',
-    'aria-label': 'Hva vil du gjøre med endringen?', onClick: lukk },
-    h('div', { class: 'modal-ark', onClick: e => e.stopPropagation() }, innmat));
-  byId('telefon').appendChild(lag);
 }
 
 function soakerKorn(id) { const s = SOAKERS.find(x => x.id === id); return s && s.korn; }
@@ -1425,8 +1411,9 @@ function settTilleggGram(t, gram) {
   settTillegg(t, pct);
 }
 function settTillegg(t, v) {
-  // Enhver endring i tilleggene reiser spørsmålet om hva den skal gå ut over.
-  S.kompSporsmal = true;
+  // Spørsmålet «hva skal endringen gå ut over» vises nå INLINE i tillegg-
+  // seksjonen (ikke som en modal som dekket kontrollen man nettopp brukte, og
+  // poppet opp på nytt for hvert +/−). Derfor settes ikke kompSporsmal her lenger.
   S.tillegg = Object.assign({}, S.tillegg);
   const min = t.min || 0, max = t.max || 30;
   v = Math.round(v * 10) / 10;
