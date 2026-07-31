@@ -519,11 +519,35 @@ function beregnOppskrift(inn) {
     const ffGjaerPct = forfermentGjaerPct(forferment.timer, forferment.temp, {
       hydrering: forferment.hydrering / 100, type: gjaerType
     });
-    const ffGjaer = ffMel * ffGjaerPct / 100;
+    /* Taket på forfermentens egen gjærdose.
+       Modellen holder tiden fast og løser gjærmengden mot temperaturen. Det gir
+       riktig matematikk og umulig bakverk når man setter en 12-timers poolish i
+       kjøleskapet: dosen løp opp i 5,3 % tørrgjær av forfermentens mel — 15,9 %
+       fersk. En kald biga kjøres på ca. 1 % fersk, ikke femten.
+
+       Faglig grense er ~2 % FERSK gjær; over det smaker det gjær og forfermenten
+       mister hensikten. Uttrykt i den gjærtypen dosen regnes i, er det
+       FF_GJAER_TAK_FERSK omregnet — ikke 2 % av hva som helst, som var feilen:
+       terskelen sto på 2 og ble sammenlignet med en tørrgjærprosent, altså 6 %
+       fersk.
+
+       Taket NEKTER ikke — det klemmer dosen og flagger underskuddet, samme
+       mønster som hoveddeigens `gjaerUnderskudd`. Da ser bakeren at tiden, ikke
+       gjæren, er det som må gi seg. */
+    const ffPctBrukt = Math.min(ffGjaerPct, gjaerKonverter(FF_GJAER_TAK_FERSK, 'fersk', gjaerType));
+    const ffGjaer = ffMel * ffPctBrukt / 100;
     ff = {
       type: forferment.type, pctMel: forferment.pctMel, hydrering: forferment.hydrering,
       timer: forferment.timer, temp: forferment.temp,
-      mel: ffMel, vann: ffVann, gjaer: ffGjaer, gjaerPctAvFfMel: ffGjaerPct,
+      // Hva planen foreslo, og om brukeren har overstyrt — UI-et trenger begge
+      // for å kunne tilby «tilbake til planens verdi».
+      standardTemp: forferment.standardTemp, egenTemp: !!forferment.egenTemp,
+      standardTimer: forferment.standardTimer, egenTimer: !!forferment.egenTimer,
+      mel: ffMel, vann: ffVann, gjaer: ffGjaer, gjaerPctAvFfMel: ffPctBrukt,
+      // Hva modellen VILLE hatt, og hvor mye den ikke fikk. Null når taket ikke slo inn.
+      gjaerPctOnsket: ffGjaerPct,
+      gjaerPaaTaket: ffGjaerPct > ffPctBrukt + 1e-9,
+      gjaerTakPct: gjaerKonverter(FF_GJAER_TAK_FERSK, 'fersk', gjaerType),
       salt: ffMel * 0.0015,                       // 0,15 % mot proteaseoppløsning
       total: ffMel + ffVann + ffGjaer,
       brukTidligst: Math.max(1, forferment.timer - 2),
@@ -697,12 +721,19 @@ function froLoftFaktor(froPct, tortFrak = 0) {
 /* Hydreringens løfteffekt. Damp er ~halve løftet, så mer vann hjelper — helt til
    melets tak, der deigen flyter ut sidelengs i stedet for å reise seg. Vindu
    68–78 % er fullt; under det blir deigen strammere med mindre damp, over melets
-   tak kollapser løftet. `tak` er melblandingens hydreringstak i prosent.       */
+   tak kollapser løftet. `tak` er melblandingens hydreringstak i prosent.
+
+   Det flate optimumet slutter ved 78 % ELLER ved melets eget tak, det som kommer
+   først. Uten `flat` var 78 hardkodet, og en svak blanding med tak på 72 fikk
+   full uttelling helt opp til 78 og så et fall på fem prosentpoeng i løftindeks
+   over ett eneste prosentpoeng vann. Et mel som gir seg ved 72 gir seg ved 72 —
+   ikke først seks poeng senere, og ikke i ett byks.                            */
 function hydLoftFaktor(hydPct, tak = 82) {
   if (hydPct < 68) return 1 - 0.010 * (68 - hydPct);
-  if (hydPct <= 78) return 1;
-  if (hydPct <= tak) return 1 - 0.006 * (hydPct - 78);
-  return 1 - 0.006 * (tak - 78) - 0.020 * (hydPct - tak);
+  const flat = Math.min(78, tak);
+  if (hydPct <= flat) return 1;
+  if (hydPct <= tak) return 1 - 0.006 * (hydPct - flat);
+  return 1 - 0.006 * (tak - flat) - 0.020 * (hydPct - tak);
 }
 
 /* Forfermentens løftfaktor. `loftBase`/`refAndel`/`syre` kommer fra FF_TYPER.
@@ -945,7 +976,7 @@ function settVannGram(state, gram) {
     const froVann = r.vannTotal - r.melTotal * (hyd / 100);
     // Samme spenn som skyveren i UI-et (62–86). Ulike grenser ga et tall over
     // skyveren som skyveren selv ikke kunne stå på.
-    hyd = Math.max(62, Math.min(86, (maal - froVann) / r.melTotal * 100));
+    hyd = Math.max(62, Math.min(88, (maal - froVann) / r.melTotal * 100));
   }
   return Math.round(hyd * 10) / 10;
 }
@@ -979,6 +1010,10 @@ function tilleggOppdelt(tillegg, melTotal) {
    blanding (L-03), tillegg{id:pct} → froListe, og loftIndeks() (L-01/L-14).
    Gjæren løses ALLTID numerisk mot måldosen (L-02) — aldri fra en tabell.       */
 const GJAER_TAK_TORR = 0.833;   // 2,5 % fersk; over dette: gjærsmak og dårlig løft
+/* Forfermentens eget tak, oppgitt i FERSK gjær av forfermentens mel. Over ~2 %
+   fersk smaker forfermenten gjær, og da er den ikke lenger en smakskilde. En
+   kald biga kjøres typisk på 1 % fersk over 18–24 t. */
+const FF_GJAER_TAK_FERSK = 2.0;
 
 /* Delt måling for maskinen som er valgt, hvis noen har målt den og delt den.
    `state.delteKalib` fylles av appen etter innlogging og er `null` ellers — så
@@ -1008,6 +1043,11 @@ function regn(state) {
   const hyd = (preset ? preset.hydrering : (state.hyd ?? 75)) / 100;
   const saltPct = preset ? preset.salt : (state.saltPct ?? 1.8);
 
+  /* Rommet og kjøleskapet, slik brukeren har oppgitt dem. Alt som skal stå
+     «i rommet» eller «på kjøl» måles mot disse to, ikke mot tabellens tall. */
+  const romT = isFinite(state.romTemp) ? +state.romTemp : ROM_NOMINELL;
+  const kjolskapT = isFinite(state.kjolskapTemp) ? +state.kjolskapTemp : KJOLSKAP_STD;
+
   // Forferment: TYPEN eies av valget, TIDSPLANEN (timer, andel) av planen.
   const ffT = ffTypeFor(state.ffType);
   const ffPaa = !!state.ff && ffT.id !== 'ingen';
@@ -1017,12 +1057,23 @@ function regn(state) {
      Gjærdosen i forfermenten løses mot NETTOPP denne temperaturen
      (forfermentGjaerPct), så et kaldt skap gir automatisk mer gjær for samme
      modningstid — det er ikke en separat regel som må vedlikeholdes. */
-  const ffStandardTemp = pf.temp || ffT.temp || 21;
+  /* Står forfermenten varmt, står den i ROMMET DITT — ikke på et tabelltall.
+     Tabellens 21 grader er ingen som har målt; det er en antakelse. Er den
+     derimot ment å stå kaldt, er det kjøleskapet, og da gjelder ditt skap. */
+  const ffNominell = pf.temp || ffT.temp || 21;
+  const ffStandardTemp = ffNominell <= KALDGRENSE ? kjolskapT : romT;
   const forferment = {
     bruk: ffPaa, type: ffT.id,
     pctMel: pf.pctMel || ffT.pctMel,
     hydrering: ffT.hyd || pf.hydrering || 100,
-    timer: pf.timer || ffT.timer,
+    /* Modningstiden kan overstyres på samme måte som temperaturen. Uten den
+       hadde appen ingen vei ut av «for kaldt til å rekke det»: den kunne bare
+       konstatere at kombinasjonen ikke går opp, uten å la deg gjøre noe med
+       den ene variabelen som faktisk løser det. */
+    timer: (state.ffTimer != null && isFinite(state.ffTimer) && state.ffTimer > 0)
+      ? +state.ffTimer : (pf.timer || ffT.timer),
+    standardTimer: pf.timer || ffT.timer,
+    egenTimer: state.ffTimer != null,
     temp: state.ffTemp != null ? state.ffTemp : ffStandardTemp,
     standardTemp: ffStandardTemp,
     egenTemp: state.ffTemp != null
@@ -1066,9 +1117,32 @@ function regn(state) {
   };
   let r = oppskrift(0.3, losMel(0.3));
 
-  // Gjæren løses numerisk mot måldosen (L-02), med tak og underskudd-flagg.
-  // Heveplanen kan være redigert av brukeren (state.heveplan); ellers planens standard.
-  const planTrinn = (Array.isArray(state.heveplan) && state.heveplan.length ? state.heveplan : plan.plan).map(s => ({ ...s }));
+  /* Gjæren løses numerisk mot måldosen (L-02), med tak og underskudd-flagg.
+     Heveplanen kan være redigert av brukeren (state.heveplan); ellers planens
+     standard.
+
+     PLANENS TEMPERATURER ER NOMINELLE, ikke fasit. Tabellen sier «bulk ved 24»
+     og «kjøleskap ved 3,5», men rommet ditt er ikke 24 grader hele året, og
+     kjøleskapet ditt er ditt eget. Før måtte man redigere heveplanen for å
+     endre det — og da ble planen «egendefinert» av å svare ærlig på hvor kaldt
+     det er hjemme. Det er feil: en egendefinert tidsplan er når man endrer hvor
+     LENGE noe står, ikke når man forteller appen hva termometeret viser.
+
+     Derfor: varme trinn forskyves med differansen mellom rommet ditt og
+     plantabellens nominelle romtemperatur, så et trinn planen legger to grader
+     over romtemp fortsatt ligger to grader over DITT rom. Kalde trinn settes
+     rett til kjøleskapstemperaturen din. Har brukeren redigert planen selv, står
+     hans egne tall — da er de valgt, ikke arvet. */
+  const egenPlan = Array.isArray(state.heveplan) && state.heveplan.length;
+  const planTrinn = (egenPlan ? state.heveplan : plan.plan).map(s => {
+    const t = { ...s };
+    if (!egenPlan) {
+      t.miljo = s.miljo <= KALDGRENSE
+        ? kjolskapT
+        : Math.max(KALDGRENSE + 0.5, s.miljo + (romT - ROM_NOMINELL));
+    }
+    return t;
+  });
   if (planTrinn.length) planTrinn[0].temp = state.startTemp ?? 24;
   /* Forfermentens EFFEKTIVE andel, ikke bare melandelen.
      `maalDoseFor` senket måldosen ut fra hvor stor andel av melet som ligger i
@@ -1147,9 +1221,17 @@ function regn(state) {
   });
   const froPctEkte = froW / Math.max(r.melTotal, 1) * 100;
   const tortFrak = froW > 0 ? tortW / froW : 0;
-  // Hydreringstaket følger melblandingens styrke: sterkt mel tåler mer vann før
-  // deigen flyter ut. Var hardkodet 82 uansett blanding (teknisk review #6).
-  const tak = Math.max(72, Math.min(88, 74 + (r.styrkeVektet - 3) * 6));
+  /* Hydreringstaket følger BÅDE styrken og absorpsjonen.
+     Styrken alene var ikke nok: et grovt brød har svakere gluten, så
+     styrkeleddet dro taket ned mot 75 % — samtidig som kli og fullkorn suger
+     16–19 % mer vann og deigen faktisk TRENGER over 80 for ikke å bli tørr.
+     Appen advarte altså mot den hydreringen den selv burde anbefalt. Nå ganges
+     taket med blandingens absorpsjonsfaktor, slik at «tåler» og «trenger» måles
+     i samme enhet. Ankeret er middels siktet butikkmel (styrkeVektet 4,
+     absorpsjon 1,00), som lander på 79 % — der den gamle formelen lå for siktet
+     hvete, så hvetebrødene oppfører seg som før. Det som endrer seg er de grove
+     blandingene, som var de eneste formelen tok feil på. */
+  const tak = Math.max(70, Math.min(92, (79 + (r.styrkeVektet - 4) * 4) * r.absFaktor));
   const loft = loftIndeks({
     plan, grovPct: r.brodskala.pct, froPct: froPctEkte, tortFrak,
     hydPct: hyd * 100, tak,
@@ -1166,6 +1248,19 @@ function regn(state) {
     bt, plan, preset, planTrinn,
     ffT, ffPaa, ffInn: forferment,
     hyd, saltPct,
+    /* Hydreringstaket og den anbefalte hydreringen hører sammen, og begge følger
+       melblandingen.
+
+       74 % var oppgitt som anbefaling uansett hva som lå i blandingen. Det er en
+       anbefaling for siktet butikkmel, og på 100 % grovt er den direkte feil:
+       kli og fullkorn suger 16–19 % mer vann enn siktet hvete, så samme 74 %
+       gir en deig som kjennes stiv og bakes tørr. Anbefalingen er derfor
+       forankret i 74 % og ganget med blandingens absorpsjonsfaktor — på ren
+       fullkorn lander den rundt 86 %, og den klippes mot melets eget tak.
+       `tak` regnes én gang her og brukes både av løftmodellen og av UI-et, så
+       de to ikke kan komme i utakt. */
+    tak,
+    hydAnbefalt: Math.round(Math.max(62, Math.min(tak, 88, 74 * r.absFaktor))),
     gjaerTorr: torr, maalDose, gjaerUnderskudd,
     doseProfil, loft,
     ffAktiv, ffAndelEffektiv: pff,
@@ -1204,6 +1299,12 @@ function regn(state) {
    `ferdigMs` er ønsket ferdig-tidspunkt i ms (Date). Utelatt: en fast referanse,
    så tidene finnes for testing — totaltiden er uansett uavhengig av den.        */
 const KALDGRENSE = 12;        // °C — skillet kaldt/varmt miljø (L-04: var hardkodet)
+/* Plantabellens nominelle romtemperatur og kjøleskap. Trinnene i TIDSPLANER er
+   skrevet mot disse; brukerens egne verdier (`romTemp`, `kjolskapTemp`)
+   forskyver dem. Ingen av dem er et valg brukeren har tatt — de er bare det
+   tabellen antar når han ikke har sagt noe annet. */
+const ROM_NOMINELL = 24;
+const KJOLSKAP_STD = 4;
 const KJEDE = { UTBAK: 45, ELT: 75, PREP: 30, RIST: 15, FORM: 25 };  // faste stegvarigheter (min)
 const REF_FERDIG = Date.UTC(2026, 6, 30, 15, 0, 0);        // deterministisk testreferanse
 
@@ -1222,6 +1323,21 @@ function kjede(state, r, ferdigMs) {
   const trinn = r.planTrinn;
   const doseTr = r.doseProfil.trinn || [];
   const doseSum = r.doseProfil.dose || 1;
+
+  /* Måltallet for stigning i bulk.
+     Det sto «60–72 %» for ALT — samme tall for en loff på fint hvetemel og for
+     et 100 % grovt brød. Det er feil vei å ta feil på: et grovt brød har mindre
+     gluten å holde på gassen, og hever du det til 70 % har du ikke et luftig
+     brød, du har et som faller sammen i ovnen. Riktig måltall faller med
+     grovhet, med hydrering og med svakt mel — `maalHeveProsent()` har regnet det
+     hele tiden, V2 spurte bare aldri. Båndet er måltallet til måltallet × 1,2,
+     samme som V1 viser. */
+  const harKald = trinn.some(t => t.miljo <= KALDGRENSE);
+  const maalRise = maalHeveProsent(state.startTemp ?? 24, {
+    hydrering: r.hydrering, grovAndel: r.grovMelAndel,
+    styrke: r.svakesteStyrke, etterKaldheving: harKald
+  });
+  const riseTxt = Math.round(maalRise) + '–' + Math.round(maalRise * 1.2) + ' %';
 
   // Første trinn som er utbakt = når emnet må være ferdig FORMET. Formingen
   // (forforming → benkehvile → forming) skjer rett FØR det, og etter siste
@@ -1328,13 +1444,24 @@ function kjede(state, r, ferdigMs) {
 
   // 2b · Autolyse (bare hvis på)
   if (autoMin > 0) {
+    /* Melet som skal autolyseres er HOVEDDEIGENS mel, ikke alt melet.
+       Sto det `r.melTotal`, ba steget deg blande i forfermentens mel også — det
+       melet står allerede i en bøtte og modner, og å ta det ut igjen er hverken
+       mulig eller ønskelig. Samme sak for vannet: `r.vannHoved` var alt riktig,
+       men melet var ikke, så tallene var ikke engang konsistente med hverandre. */
+    const autoMel = r.melTotal - (r.ffPaa && r.forferment ? r.forferment.mel : 0);
     steg.push({
       id: 'autolyse', navn: 'Autolyse', tid: autoStart, varighet: autoMin, tone: 'noytral',
       hoved: fmtTimer(autoMin / 60), hovedNote: 'mel og vann hviler', sideK: 'Uten', sideV: 'salt og gjær',
-      tall: [['Varighet', fmtTimer(autoMin / 60)], ['Mel', gram(r.melTotal)], ['Vann', gram(r.vannHoved)],
-             ['Salt og gjær', 'holdes utenfor']],
-      gjor: 'Bland mel og vann til det ikke er tørt mel igjen — ikke elt. La det hvile tildekket. Salt og gjær kommer i når eltingen begynner.',
-      sjekk: 'Deigen skal kjennes tydelig mykere og mer strekkbar enn da du blandet den. Det er enzymene og vannet som har gjort jobben elting ellers måtte gjort.'
+      tall: [['Varighet', fmtTimer(autoMin / 60)], ['Mel (hoveddeigen)', gram(autoMel)], ['Vann', gram(r.vannHoved)],
+             ['Salt og gjær', 'holdes utenfor'],
+             ...(r.ffPaa ? [['Forfermenten', 'står for seg — kommer i ved elting']] : [])],
+      gjor: 'Bland hoveddeigens mel og vann til det ikke er tørt mel igjen — ikke elt. La det hvile tildekket. Salt og gjær' +
+            (r.ffPaa ? ' og forfermenten' : '') + ' kommer i når eltingen begynner.',
+      sjekk: 'Deigen skal kjennes tydelig mykere og mer strekkbar enn da du blandet den. Det er enzymene og vannet som har gjort jobben elting ellers måtte gjort. ' +
+             (autoMin <= 45
+               ? 'På ' + Math.round(autoMin) + ' minutter er det mest hydreringen du henter — deigen blir smidigere og eltetiden kortere.'
+               : 'Over en time begynner proteasene å myke opp glutenet i tillegg, og deigen blir merkbart mer strekkbar. Går den for lenge på svakt mel, blir den slapp i stedet for smidig.')
     });
   }
 
@@ -1342,9 +1469,16 @@ function kjede(state, r, ferdigMs) {
   steg.push({
     id: 'elt', navn: 'Elt deigen', tid: eltStart, varighet: KJEDE.ELT, tone: 'accent',
     hoved: grader(state.startTemp ?? 24, 1), hovedNote: 'deigtemp ut av maskinen', sideK: 'Vann inn', sideV: grader(r.vannTemp, 1),
-    tall: [['Friksjon, ' + r.eltMin + ' min', '+' + grader(r.friksjon, 1)], ['Arbeid', fmt(r.wh, 1) + ' Wh/kg'],
+    /* Gjærmengden hører hjemme HER, i steget der den skal på vekta — og det er
+       hoveddeigens gjær, ikke totalen. Med forferment er differansen opptil en
+       tredjedel, og totalen lest som «det du veier opp nå» er en overdose. */
+    tall: [['Tørrgjær nå', fmt(r.ffPaa ? r.gjaerHoved : r.gjaerTotal, 2) + ' g'],
+           ...(r.ffPaa ? [['(forfermenten har alt tatt', fmt(r.forferment.gjaer, 2) + ' g)']] : []),
+           ['Salt', fmt(r.salt - (r.ffPaa && r.forferment ? (r.forferment.salt || 0) : 0), 1) + ' g'],
+           ['Friksjon, ' + r.eltMin + ' min', '+' + grader(r.friksjon, 1)], ['Arbeid', fmt(r.wh, 1) + ' Wh/kg'],
            ['Meltemperatur', grader(state.melTemp ?? 21, 0)], ['Deigvekt', gram(r.totalVekt)]],
-    gjor: 'Salt de siste 2–3 minuttene. Stopp ved 60–75 % glutenutvikling — IKKE full vindusrute.',
+    gjor: (r.ffPaa ? 'Bruk ' + fmt(r.gjaerHoved, 2) + ' g tørrgjær her — resten står alt i forfermenten. ' : '') +
+          'Salt de siste 2–3 minuttene. Stopp ved 60–75 % glutenutvikling — IKKE full vindusrute.',
     sjekk: 'Deigen slipper bollen, men er fortsatt litt klissete. Dømm på deigen, ikke på klokka.', veie: true
   });
 
@@ -1362,7 +1496,7 @@ function kjede(state, r, ferdigMs) {
       // (baker-review #5).
       hoved: fmtTimer(tr.timer), hovedNote: 'ved ' + grader(tr.miljo, 1), sideK: 'Andel hoveddeig', sideV: pst(andel, 0),
       tall: [['Varighet', fmtTimer(tr.timer)], ['Ferdig', kl(tt.slutt)], ['Miljø', grader(tr.miljo, 1)],
-             ['Andel av hoveddeigens gjæring', pst(andel, 0)], ...(tr.utbakt ? [['Emnestørrelse', gram(r.totalVekt / antall) + ' × ' + antall]] : [['Mål stigning', '60–72 %']])],
+             ['Andel av hoveddeigens gjæring', pst(andel, 0)], ...(tr.utbakt ? [['Emnestørrelse', gram(r.totalVekt / antall) + ' × ' + antall]] : [['Mål stigning', riseTxt]])],
       gjor: kaldt
         ? (tr.utbakt
             ? 'Emnene står UTILDEKKET i hevekurv på kjøl — utildekket gir skinn, og skinn gir blemmer og rent snitt. Mesteparten av gjæringen skjer de første 6 timene, mens deigen ennå kjøles ned.'
@@ -1371,7 +1505,7 @@ function kjede(state, r, ferdigMs) {
                    : 'Følg emnene tett — hevevinduet er smalt når det er varmt.'),
       sjekk: kaldt ? 'Se på emnet før du steker: det skal ha vokst tydelig og kjennes luftig, ikke stinnt.'
                    : (tr.utbakt ? 'Trykktest før ovnen: gropen skal fylle seg langsomt igjen over 5–10 sekunder.'
-                                : 'Sikt mot 60–72 % stigning i målekrukka.'),
+                                : 'Sikt mot ' + riseTxt + ' stigning i målekrukka. Grovt mel og mye vann tåler mindre stigning enn en loff — går den lenger, mister den løftet i ovnen.'),
       krukke: !tr.utbakt || !kaldt
     });
   });
@@ -1454,6 +1588,8 @@ function kjede(state, r, ferdigMs) {
   steg.filter(x => x.id === 'kjol').forEach(x => { x.sideV = fmt(steg.totalT, 1) + ' t'; });
   steg.start = steg[0].tid;
   steg.ferdig = ferdig;
+  steg.maalRise = maalRise;
+  steg.maalRiseTxt = riseTxt;
   return steg;
 }
 

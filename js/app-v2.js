@@ -46,7 +46,9 @@ const STANDARD = {
   friksjonKalibrert: false,   // kalibreringsboksen er besvart eller avvist
   kalib: {},                  // {foer, etter, min} — målingene fra kalibreringen
   kurvMaal: {},               // brukerens kurvstørrelser i cm, per form-id
-  kjolTemp: 3.5,              // kaldeste vann du får — kjøleskapet ditt
+  kjolTemp: 3.5,              // kaldeste vann du får ut av kranen/kjøleskapet
+  kjolskapTemp: 4,            // lufta i kjøleskapet — kaldhevingen skjer i den
+  ffTimer: null,              // egen modningstid på forfermenten; null = planens
   delteKalib: null,           // delte maskinmålinger hentet fra skyen
   kalibFor: null,             // hvilken maskin din egen måling gjelder
   kalibVekt: null,            // deigvekten målingen ble gjort på
@@ -544,7 +546,15 @@ function tegnBunnlinje(r, K) {
     ['Vann i deigen', g0(r.vannHoved)],
     r.ffPaa ? ['Forferment', g0(r.forferment.total)] : null,
     ['Salt', fmt(r.salt, 1) + ' g'],
-    ['Gjær (tørr)', fmt(r.gjaerTotal, 2) + ' g'],
+    /* Med forferment er totalen IKKE det man veier opp i hoveddeigen.
+       Sto det bare «Gjær (tørr) 0,72 g» og forfermenten alt hadde tatt 0,25 av
+       dem, veide man opp 0,72 til og fikk 35 % for mye gjær i deigen. Nå står
+       begge tallene, og det som skal på vekta står først. */
+    r.ffPaa
+      ? ['Gjær i hoveddeigen (tørr)', fmt(r.gjaerHoved, 2) + ' g']
+      : ['Gjær (tørr)', fmt(r.gjaerTotal, 2) + ' g'],
+    r.ffPaa ? ['Gjær i forfermenten', fmt(r.forferment.gjaer, 2) + ' g'] : null,
+    r.ffPaa ? ['Gjær totalt', fmt(r.gjaerTotal, 2) + ' g'] : null,
     ['Effektiv hydrering', pst(r.effektivHydrering * 100, 1)],
     ['Brødskala', fmt(r.brodskala.pct, 0) + ' % · ' + r.brodskala.kort],
     ['Løftindeks', r.loft.loft + ' / 100'],
@@ -822,7 +832,7 @@ function nyBakst(id) {
        en ciabatta kunne bli bakt på 60 % sammalt rug — stikk i strid med det
        bekreftelsesteksten lover. */
     melOverstyr: null, melEndring: null, okDeig: false, autolyseMin: 0,
-    ffTemp: null, handlelisteOk: false, kompSporsmal: false, brodInfo: null
+    ffTemp: null, ffTimer: null, handlelisteOk: false, kompSporsmal: false, brodInfo: null
   });
   if (bt.antall) S.antall = bt.antall;
   if (bt.vekt) S.vekt = bt.vekt;
@@ -978,24 +988,29 @@ function tegnDeigen(r) {
 
   // 3 · Vann (preset låser)
   if (!erPreset) {
-    const tak = Math.round(Math.max(72, Math.min(88, 74 + (r.styrkeVektet - 3) * 6)));
-    const lab0 = vannMerke(S.hyd);
+    // Taket og anbefalingen kommer nå fra motoren, ikke fra en formel gjentatt
+    // her. To steder å regne det samme er to steder å komme i utakt.
+    const tak = Math.round(r.tak);
+    const anb = r.hydAnbefalt;
+    const lab0 = vannMerke(S.hyd, anb, tak);
     const verdiEl = h('span', { class: 'skyver-verdi' }, S.hyd + ' %');
     const merkeEl = h('span', { class: 'skyver-klasse', style: 'background:' + lab0.bg + ';color:' + lab0.farge }, lab0.merke);
-    const guideEl = h('div', { class: 'konsekvens' }, vannGuide(S.hyd));
+    const guideEl = h('div', { class: 'konsekvens' }, vannGuide(S.hyd, anb, tak));
     // Live-oppdatering UNDER draget (oninput) uten full re-render — så tallet og
     // merkelappen følger fingeren. Selve utregningen skjer på slipp (onchange).
     const oppdaterLive = v => {
       verdiEl.textContent = v + ' %';
-      const m = vannMerke(v);
+      const m = vannMerke(v, anb, tak);
       merkeEl.textContent = m.merke;
       merkeEl.setAttribute('style', 'background:' + m.bg + ';color:' + m.farge);
-      guideEl.textContent = vannGuide(v);
+      guideEl.textContent = vannGuide(v, anb, tak);
       if (vk) vk.className = 'kort sone-' + m.sone;
     };
     const vk = kort('3 · Vann', 'hydrering',
       h('div', { class: 'skyver-topp' }, verdiEl, merkeEl),
-      h('input', { type: 'range', class: 'skyver', min: 62, max: 86, step: 1, value: S.hyd,
+      // Taket kan ligge på 88 for en grov blanding. En skyver som stopper på 86
+      // kan da ikke nå appens egen anbefaling.
+      h('input', { type: 'range', class: 'skyver', min: 62, max: 88, step: 1, value: S.hyd,
         oninput: e => oppdaterLive(+e.target.value),
         onchange: e => { S.hyd = +e.target.value; oppdater(); } }),
       // Gramtallet er det man faktisk heller opp, og lå før bare som en bisetning
@@ -1005,8 +1020,14 @@ function tegnDeigen(r) {
         h('span', { class: 'gramrad-lab' }, 'Vann i deigen'),
         gramFelt(r.vannTotal, nyGram => { S.hyd = settVannGram(S, nyGram); oppdater(); }, 'Gram vann'),
         h('span', { class: 'gramrad-enhet' }, 'g')),
-      h('div', { style: 'font-size:.74rem;color:var(--color-neutral-600);margin-top:6px' }, 'Anbefalt 74 % for et frittstående brød på butikkmel.'),
-      anbefaltKnapp(S.hyd, 74, v => { S.hyd = v; oppdater(); }, ' %'),
+      /* Anbefalingen følger melet i bollen. 74 % gjelder siktet butikkmel; kli
+         og fullkorn suger 16–19 % mer, og da er 74 % en tørr deig, ikke en
+         normal en. */
+      h('div', { style: 'font-size:.74rem;color:var(--color-neutral-600);margin-top:6px' },
+        anb === 74
+          ? 'Anbefalt 74 % for et frittstående brød på siktet butikkmel.'
+          : 'Anbefalt ' + anb + ' % for melblandingen din — grovt mel og fullkorn suger mer vann enn siktet hvete, så 74 % ville gitt en stram, tørr deig her.'),
+      anbefaltKnapp(S.hyd, anb, v => { S.hyd = v; oppdater(); }, ' %'),
       guideEl,
       h('div', { style: 'font-size:.78rem;color:var(--color-neutral-600);margin-top:6px;font-variant-numeric:tabular-nums' }, vannKonsekvens(r)),
       infoUtfelling('hydrering'));
@@ -1462,12 +1483,20 @@ function tegnFfTemp(r, f) {
   boks.appendChild(h('div', { class: 'felt-label' }, 'Hvor står forfermenten?'));
   const kald = f.temp <= 12;
   boks.appendChild(h('div', { class: 'piller', style: 'margin-top:4px' },
-    h('button', { class: kald ? '' : 'paa', onClick: () => { S.ffTemp = S.romTemp || 21; oppdater(); } },
-      'Rommet ditt ' + fmt(S.romTemp || 21, 0) + '°'),
-    h('button', { class: kald ? 'paa' : '', onClick: () => { S.ffTemp = 4; oppdater(); } }, 'Kjøleskap 4°'),
-    f.egenTemp ? h('button', { onClick: () => { S.ffTemp = null; oppdater(); } },
-      'Planens ' + fmt(f.standardTemp, 0) + '°') : null));
-  boks.appendChild(stepperRad('Temperatur på forfermenten', f.temp, 'ffTemp', 2, 30, 1));
+    h('button', { class: kald ? '' : 'paa', onClick: () => { S.ffTemp = null; oppdater(); } },
+      'I rommet ' + fmt(S.romTemp || 22, 0) + '°'),
+    h('button', { class: kald ? 'paa' : '', onClick: () => { S.ffTemp = S.kjolskapTemp || 4; oppdater(); } },
+      'I kjøleskapet ' + fmt(S.kjolskapTemp || 4, 0) + '°')));
+  /* Det er ROMMET man vet temperaturen på, ikke forfermenten.
+     Feltet het «Temperatur på forfermenten», og det er en temperatur ingen har
+     målt: forfermenten holder den temperaturen omgivelsene gir den. Står den i
+     rommet, følger den romtemperaturen du alt har satt; står den i kjøleskapet,
+     følger den kjøleskapet. Da er det de to man skal kunne stille på — og de
+     står begge på Tid, ett sted, i stedet for som et tredje tall her. */
+  boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
+    kald
+      ? 'Forfermenten holder kjøleskapets temperatur — ' + grader(f.temp, 0) + ' — ikke sin egen. Er skapet ditt kaldere eller varmere, still det under Tid, så følger regnestykket med.'
+      : 'Forfermenten holder rommets temperatur — ' + grader(f.temp, 0) + '. Endrer rommet seg gjennom døgnet, still romtemperaturen under Tid.'));
 
   // Hva kulda koster i tid. Regnet, ikke påstått.
   const ekv = ffTidEkvivalent(f.timer, f.standardTemp, f.temp);
@@ -1487,16 +1516,30 @@ function tegnFfTemp(r, f) {
     'Under ~2 °C står gjæringen praktisk talt stille i modellen, og tallene under blir da mer et anslag enn en beregning.'));
   /* Appen holder tiden fast og løser gjæren. Setter man en poolish kaldt uten å
      forlenge, blir svaret matematisk riktig og bakefaglig meningsløst: dosen
-     løper opp i flere prosent av forfermentens mel. Da skal appen si det, ikke
-     bare skrive ut tallet. */
-  const ffPct = f.mel > 0 ? f.gjaer / f.mel * 100 : 0;
-  if (ffPct > 2) boks.appendChild(h('div', { class: 'varsel' },
-    h('b', null, 'Denne kombinasjonen går ikke opp. '),
-    'For å rekke samme modning på ' + fmtTimer(f.timer) + ' ved ' + grader(f.temp, 0) +
-    ' må forfermenten ha ' + fmt(ffPct, 1) + ' % gjær på sitt eget mel (' + veiG(f.gjaer) +
-    '). Over ~2 % smaker det gjær, og poenget med en forferment forsvinner. ' +
-    (ekv ? 'Enten står den ' + fmtTimer(ekv) + ' ved denne temperaturen, eller så setter du den varmere.'
-         : 'Sett den varmere, eller gi den vesentlig lengre tid.')));
+     løp opp i 5,3 % tørrgjær — 15,9 % fersk — der en kald biga kjøres på 1 %
+     fersk. Motoren klemmer nå dosen mot taket, og her sier appen hvorfor og hva
+     man gjør med det.
+
+     Terskelen måles i FERSK gjær. Den sto på «2» og ble sammenlignet med en
+     tørrgjærprosent, altså 6 % fersk — tre ganger for høyt, så advarselen kom
+     aldri i praksis. */
+  if (f.gjaerPaaTaket) {
+    const onsketFersk = gjaerKonverter(f.gjaerPctOnsket, r.gjaerType, 'fersk');
+    const takFersk = gjaerKonverter(f.gjaerTakPct, r.gjaerType, 'fersk');
+    const v = h('div', { class: 'varsel' },
+      h('b', null, 'Denne kombinasjonen går ikke opp. '),
+      'For å rekke samme modning på ' + fmtTimer(f.timer) + ' ved ' + grader(f.temp, 0) +
+      ' måtte forfermenten hatt ' + fmt(onsketFersk, 1) + ' % fersk gjær på sitt eget mel. ' +
+      'Over ~' + fmt(takFersk, 0) + ' % smaker det gjær, og poenget med en forferment forsvinner — så appen har stoppet på ' +
+      veiG(f.gjaer) + ' (' + fmt(takFersk, 0) + ' % fersk). Forfermenten blir da mindre moden enn planen regner med.');
+    if (ekv && ekv > f.timer) v.appendChild(h('button', { class: 'btn', style: 'margin-top:8px;width:100%;font-size:.82rem',
+      onClick: () => { S.ffTimer = Math.round(ekv * 2) / 2; oppdater(); } },
+      'Gi den ' + fmtTimer(ekv) + ' i stedet — da rekker den'));
+    v.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:6px;width:100%;font-size:.8rem',
+      onClick: () => { S.ffTemp = null; oppdater(); } },
+      'Eller sett den tilbake til planens ' + fmt(f.standardTemp, 0) + '°'));
+    boks.appendChild(v);
+  }
   return boks;
 }
 
@@ -1578,10 +1621,19 @@ function deltaRad(lab, v, skala) {
     h('span', { style: 'flex:0 0 52px;text-align:right;font-size:.74rem;font-weight:700;font-variant-numeric:tabular-nums;color:' + (v.tone === 'darlig' ? 'var(--color-danger)' : 'inherit') }, fmtDelta(v)));
 }
 
-/* ---------- Redigerbar heveplan + «løs for» ---------- */
+/* ---------- Redigerbar heveplan + «løs for» ----------
+   Planen som vises er den motoren FAKTISK kjører — altså med rommet ditt og
+   kjøleskapet ditt satt inn. Sto tabellens 24 og 3,5 her mens motoren regnet med
+   19 og 5, viste editoren tall ingen andre steder i appen brukte. */
 function basePlan() {
   const tp = TIDSPLANER.find(t => t.id === S.tid) || TIDSPLANER[0];
-  return (Array.isArray(S.heveplan) && S.heveplan.length ? S.heveplan : tp.plan).map(s => ({ ...s }));
+  if (Array.isArray(S.heveplan) && S.heveplan.length) return S.heveplan.map(s => ({ ...s }));
+  const romT = isFinite(S.romTemp) ? +S.romTemp : 24;
+  const kjolT = isFinite(S.kjolskapTemp) ? +S.kjolskapTemp : 4;
+  return tp.plan.map(s => ({ ...s,
+    miljo: s.miljo <= KALDGRENSE_APP
+      ? kjolT
+      : Math.max(KALDGRENSE_APP + 0.5, s.miljo + (romT - 24)) }));
 }
 const KALDGRENSE_APP = 12;
 function redigerTrinn(i, felt, val) {
@@ -1622,12 +1674,17 @@ function tegnHeveplan(r) {
     else if (sumT < 1.5) boks.appendChild(h('div', { class: 'varsel' },
       'Under halvannen time samlet heving er svært kort. Det går, men regn med tett krumme og lite smak — det meste av både smaken og strukturen kommer av tid.'));
   }
-  // Rommet deigen faktisk skal stå i — «Rommet ditt»-knappen per trinn bruker
-  // denne, så du slipper å taste temperatur i hvert felt.
-  const rt = S.romTemp || 22;
+  /* Rommet og kjøleskapet. Dette er MÅLINGER, ikke valg — derfor endrer de ikke
+     planen til «egendefinert». Planen er de timene du gir deigen; rommet er
+     bare den virkeligheten timene skjer i, og den er ikke 22 grader hele året.
+     Trinnene forskyves med differansen mot tabellens nominelle 24 °C, slik at et
+     trinn planen legger over romtemp fortsatt ligger over DITT rom. */
+  const rt = isFinite(S.romTemp) ? +S.romTemp : 22;
+  const kjt = isFinite(S.kjolskapTemp) ? +S.kjolskapTemp : 4;
   boks.appendChild(miniStepper('Romtemp der deigen hever', rt, 'romTemp', 14, 30, 0.5, ' °C'));
+  boks.appendChild(miniStepper('Kjøleskapet ditt', kjt, 'kjolskapTemp', 1, 12, 0.5, ' °C'));
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:4px' },
-    'Sett temperaturen i rommet deigen skal stå i, og merk trinn som skal i kjøleskapet (4 °C). Gjærmengden løses om automatisk.'));
+    'Begge er målinger, ikke valg: å skru på dem gjør ikke planen egendefinert — den blir den først når du endrer hvor lenge et trinn står. Gjærmengden løses om automatisk mot temperaturene du oppgir.'));
   trinn.forEach((tr, i) => {
     const kaldt = tr.miljo <= KALDGRENSE_APP;
     boks.appendChild(h('div', { style: 'border-top:1px solid var(--color-neutral-200);padding:9px 0' },
@@ -1640,7 +1697,7 @@ function tegnHeveplan(r) {
         trinnFelt('Miljø', tr.miljo, '°C', v => redigerTrinn(i, 'miljo', v))),
       // Hurtigvalg for hvor deigen står: kjøleskapet eller rommet ditt.
       h('div', { class: 'piller', style: 'margin-top:6px' },
-        h('button', { class: Math.abs(tr.miljo - 4) < 0.6 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', 4) }, 'Kjøleskap 4°'),
+        h('button', { class: Math.abs(tr.miljo - kjt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', kjt) }, 'Kjøleskapet ' + fmt(kjt, 0) + '°'),
         h('button', { class: Math.abs(tr.miljo - rt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', rt) }, 'Rommet ditt ' + fmt(rt, 0) + '°')),
       // Eksplisitt utbakt-toggle: styrer om emnet er formet (kjøles som ett emne,
       // uten lokk) — en modellforskjell som ikke kan avledes av temperaturen alene.
@@ -1715,19 +1772,33 @@ function saltMerke(v) {
   if (v >= 1.6 && v <= 2.2) return { merke: 'UTENFOR SONEN', sone: 'gul', bg: '#f6ecd2', farge: '#7a5a12' };
   return { merke: 'LANGT UTENFOR', sone: 'rod', bg: '#f6ddd6', farge: 'var(--color-danger)' };
 }
-function vannMerke(hyd) {
-  if (hyd <= 68) return { merke: 'STRAMT', sone: 'gul', bg: 'var(--color-neutral-200)', farge: 'var(--color-neutral-700)' };
-  if (hyd <= 71) return { merke: 'TRYGT', sone: 'gronn', bg: 'var(--color-accent-2-100)', farge: 'var(--color-accent-2-700)' };
-  if (hyd <= 77) return { merke: 'I VINDUET', sone: 'gronn', bg: 'var(--color-accent-2-200)', farge: 'var(--color-accent-2-900)' };
-  if (hyd <= 82) return { merke: 'LØST', sone: 'gul', bg: 'var(--color-accent-200)', farge: 'var(--color-accent-900)' };
+/* Merkelappene måles MOT melblandingen, ikke mot faste tall.
+   68/71/77/82 var absolutte, og på en grov blanding sa de «LØST» og «OVER TAKET»
+   om nettopp den hydreringen appen selv anbefaler — fordi kli suger vannet og
+   deigen ikke er løs i det hele tatt. Nå ligger grensene i forhold til
+   anbefalingen og melets eget tak, så en 86 % fullkorndeig leses som «i vinduet»
+   mens en 86 % loff fortsatt leses som over taket.
+   Med standardmelet (anbefalt 74, tak 82) gir det nøyaktig de gamle grensene. */
+function vannSoner(anb, tak) {
+  anb = isFinite(anb) ? anb : 74;
+  tak = isFinite(tak) ? tak : 82;
+  return { stramt: anb - 6, trygt: anb - 3, vindu: Math.min(anb + 3, tak), lost: tak };
+}
+function vannMerke(hyd, anb, tak) {
+  const s = vannSoner(anb, tak);
+  if (hyd <= s.stramt) return { merke: 'STRAMT', sone: 'gul', bg: 'var(--color-neutral-200)', farge: 'var(--color-neutral-700)' };
+  if (hyd <= s.trygt) return { merke: 'TRYGT', sone: 'gronn', bg: 'var(--color-accent-2-100)', farge: 'var(--color-accent-2-700)' };
+  if (hyd <= s.vindu) return { merke: 'I VINDUET', sone: 'gronn', bg: 'var(--color-accent-2-200)', farge: 'var(--color-accent-2-900)' };
+  if (hyd <= s.lost) return { merke: 'LØST', sone: 'gul', bg: 'var(--color-accent-200)', farge: 'var(--color-accent-900)' };
   return { merke: 'OVER TAKET', sone: 'rod', bg: 'var(--color-accent-300)', farge: 'var(--color-accent-900)' };
 }
-function vannGuide(hyd) {
-  if (hyd <= 68) return 'Stramt: fast deig som er lett å håndtere og forme, men tettere krumme med mindre uregelmessige hull. Trygt for nybegynnere og grovt mel.';
-  if (hyd <= 71) return 'Trygt: deigen holder formen godt, gir jevn krumme og reiser seg villig. Et godt utgangspunkt før du skrur oppover.';
-  if (hyd <= 77) return 'I vinduet: her ligger de fleste frittstående hveitebrød — åpen, saftig krumme uten at deigen flyter ut. Krever litt stø hånd i formingen.';
-  if (hyd <= 82) return 'Løst: våt, klissete deig som gir stor, hullete krumme og sprø skorpe — men den vil helst støttes av form eller kurv, og trenger sterkt mel.';
-  return 'Over taket: svært våt deig som flyter ut om ikke melet er sterkt nok. Bruk form, brett ofte under heving, og regn med tettere bunn.';
+function vannGuide(hyd, anb, tak) {
+  const s = vannSoner(anb, tak);
+  if (hyd <= s.stramt) return 'Stramt: fast deig som er lett å håndtere og forme, men tettere krumme med mindre uregelmessige hull. Trygt for nybegynnere og grovt mel.';
+  if (hyd <= s.trygt) return 'Trygt: deigen holder formen godt, gir jevn krumme og reiser seg villig. Et godt utgangspunkt før du skrur oppover.';
+  if (hyd <= s.vindu) return 'I vinduet: her ligger de fleste frittstående brød på denne melblandingen — åpen, saftig krumme uten at deigen flyter ut. Krever litt stø hånd i formingen.';
+  if (hyd <= s.lost) return 'Løst: våt, klissete deig som gir stor, hullete krumme og sprø skorpe — men den vil helst støttes av form eller kurv, og trenger sterkt mel.';
+  return 'Over taket: mer vann enn denne melblandingen holder på, så deigen flyter ut i stedet for å reise seg. Bruk form, brett ofte under heving, og regn med tettere bunn.';
 }
 function vannKonsekvens(r) {
   const froPp = (r.oppgittHydrering - r.effektivHydrering) * 100;
@@ -2218,7 +2289,10 @@ function planForhaandsvis(tpId, ferdigMs) {
   // `heveplan` er UTE av signaturen: forhåndsvisningen regner alltid med
   // planens egne trinn, fordi det er dem klikket gir.
   const sig = JSON.stringify([S.brotype, S.grov, S.hyd, S.ff, S.ffType, S.tillegg, S.antall, S.vekt,
-    S.startTemp, S.saltPct, S.lokk, S.fulltKjol, S.stekeProfil, S.autolyseMin, S.ffTemp, ferdigMs]);
+    // Rom og kjøleskap MÅ være med: de flytter hvert eneste trinns miljø, og uten
+    // dem viste forhåndsvisningen tallene fra før man skrudde på temperaturen.
+    S.startTemp, S.saltPct, S.lokk, S.fulltKjol, S.stekeProfil, S.autolyseMin, S.ffTemp, S.ffTimer,
+    S.romTemp, S.kjolskapTemp, ferdigMs]);
   if (_planMemo.sig !== sig) _planMemo = { sig, data: {} };
   if (!_planMemo.data[tpId]) {
     const st = Object.assign({}, S, { tid: tpId, heveplan: null });
@@ -2441,8 +2515,8 @@ function tegnLogg(r) {
    ikke «hele S minus litt»: visningstilstand, logg, favoritter og kontoting har
    ingenting i en oppskrift å gjøre, og en svarteliste ville sluppet gjennom
    hvert nytt felt som legges til senere. */
-const OPPSKRIFT_FELT = ['brotype', 'grov', 'hyd', 'tid', 'ff', 'ffType', 'ffTemp', 'ffKjol',
-  'tillegg', 'antall', 'vekt', 'startTemp', 'melTemp', 'maskin', 'eltMin', 'romTemp',
+const OPPSKRIFT_FELT = ['brotype', 'grov', 'hyd', 'tid', 'ff', 'ffType', 'ffTemp', 'ffTimer', 'ffKjol',
+  'tillegg', 'antall', 'vekt', 'startTemp', 'melTemp', 'maskin', 'eltMin', 'romTemp', 'kjolskapTemp',
   'stekeProfil', 'stekeProfilManuell', 'lokk', 'fulltKjol', 'form', 'utstyr', 'pyrexIOvn',
   'saltPct', 'heveplan', 'melOverstyr', 'okDeig'];
 function oppskriftAvtrykk() {
