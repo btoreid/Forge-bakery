@@ -1406,9 +1406,11 @@ function tegnForferment(r) {
       'Tar ', h('b', null, fmt(f.pctMel, 0) + ' %'), ' av melet (', g0(f.mel), ') og modner ', h('b', null, fmtTimer(f.timer)),
       ' ved ', h('b', null, grader(f.temp, 0)), '. Gjærdosen i hoveddeigen faller, og løftet ', h('b', null, (r.loft.tap.ff >= 0 ? '+' : '') + fmt(r.loft.tap.ff, 1)), ' poeng.'));
     boks.appendChild(h('div', { style: 'margin-top:10px' },
-      tallrad('Mel', veiG(f.mel)), tallrad('Vann', veiG(f.vann)), tallrad('Gjær (tørr)', veiG(f.gjaer)),
+      tallrad('Mel', veiG(f.mel)), tallrad('Vann', veiG(f.vann)),
+      // Et levain podes med starter, ikke med tørrgjær.
+      f.kultur ? tallrad('Moden starter', veiG(f.starter)) : tallrad('Gjær (tørr)', veiG(f.gjaer)),
       tallrad('Modning', fmtTimer(f.timer) + ' ved ' + grader(f.temp, 0)), f.salt > 0.05 ? tallrad('Salt', veiG(f.salt)) : null));
-    if (underVekt(f.gjaer)) boks.appendChild(h('div', { class: 'varsel' },
+    if (!f.kultur && underVekt(f.gjaer)) boks.appendChild(h('div', { class: 'varsel' },
       'Gjærmengden (' + veiG(f.gjaer) + ') er for liten til å veies pålitelig på kjøkkenvekta di. Løs opp en større mengde i vann og bruk en andel — eller sett vekta til 0,01 g under Størrelse.'));
   } else if (ff.id === 'ingen') {
     boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' }, ff.hvorfor));
@@ -1447,10 +1449,16 @@ function tegnAutolyse(r) {
       tallrad('Elting du trenger', eltUten + ' → ' + r.eltMinAnbefalt + ' min'),
       tallrad('Løftindeks', utenAuto.loft.loft + ' → ' + r.loft.loft),
       tallrad('Deigen kjennes som', 'ca. ' + fmt(S.hyd - a.absorpsjon, 0) + ' % vann (du har ' + S.hyd + ' %)'),
-      tallrad('Effekt oppnådd', fmt(a.metning * 100, 0) + ' % av det autolysen kan gi')));
+      // De to prosessene hver for seg. Ett samletall skjulte nettopp det
+      // spørsmålet folk stiller: hva er forskjellen på 30 minutter og 2 timer?
+      tallrad('Hydrering av melet', fmt((a.hydratert != null ? a.hydratert : a.metning) * 100, 0) + ' % ferdig'),
+      tallrad('Enzymene (strekkbarhet)', fmt((a.proteolyse || 0) * 100, 0) + ' % ferdig')));
     boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
-      'Legger ', h('b', null, fmtTimer(min / 60)), ' til totaltiden. Effekten flater ut: ',
-      'en halvtime gir omtrent halvparten av gevinsten, en time tre firedeler, og etter to timer er det lite igjen å hente.'));
+      'Legger ', h('b', null, fmtTimer(min / 60)), ' til totaltiden. ',
+      'De to virkningene går i hver sin fart, og det er derfor 30 minutter og 2 timer ikke er samme sak: ',
+      h('b', null, 'hydreringen'), ' er nesten ferdig etter en halvtime — melet har drukket seg fullt, deigen er mykere og eltetiden kortere. ',
+      h('b', null, 'Enzymene'), ' bruker timer: de klipper glutenet og gjør deigen tydelig mer strekkbar, og det er den forskjellen du kjenner mellom en halvtime og to timer. ',
+      'Kort autolyse for lettere elting, lang for strekkbarhet — men ikke lenger enn melet tåler.'));
     boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
       h('b', null, 'Gjærmengden endres ikke — og det er riktig. '),
       'Gjæren er ikke i deigen under autolysen, og hevetiden etterpå er den samme, så det er ingenting for gjæren å ta igjen. Det autolysen gir, er at melet er ferdig hydrert og glutenet delvis bygget FØR eltingen begynner. Amylasen frigjør samtidig litt maltose, som gir mer skorpefarge og mat til gjæren sent i hevingen.'));
@@ -1817,7 +1825,10 @@ function tegnTid(r, K) {
   // Ferdig/Start-veksler + tidsstepper
   const kort1 = h('div', { class: 'kort' });
   kort1.appendChild(h('div', { class: 'toggle2' },
-    h('button', { class: S.tidModus !== 'start' ? 'paa' : '', onClick: () => { S.tidModus = 'ferdig'; oppdater(); } }, 'Ferdig ' + ukedagKort(ferdigMs) + ' ' + klHM(ferdigMs)),
+    h('button', { class: S.tidModus !== 'start' ? 'paa' : '', onClick: () => { S.tidModus = 'ferdig'; oppdater(); }       /* «man» og «lør» i småbokstaver midt i en knapp leses som stavefeil.
+         Her er det ikke plass til hele ukedagen, så den står i store bokstaver:
+         MAN, LØR. Da er den åpenbart en forkortelse og ikke et halvt ord. */
+}, 'Ferdig ' + ukedagKort(ferdigMs).toUpperCase() + ' ' + klHM(ferdigMs)),
     // «Start nå» ankrer kjeden til NÅ: ferdig settes til nå + total tid. Uten
     // dette viste den bare starttiden som fulgte av gammelt ferdigtidspunkt —
     // og nå-markøren i grafen hadde ingenting ekte å peke på.
@@ -1843,21 +1854,30 @@ function tegnTid(r, K) {
   // hvilket døgn du starter og hvilket du er ferdig (baken går over døgnskiller).
   const forsteNavn = (K[0] && K[0].navn) ? K[0].navn.toLowerCase() : 'første steg';
   const spenn = dagSpenn(startMs, ferdigMs);
+  /* Ukedag, dato og klokkeslett i EGNE kolonner, ikke som én tekstlinje.
+     Sto det «Fredag 31. juli, kl. 19:57» over «Lørdag 1. august, kl. 17:00»,
+     havnet ingenting under hverandre: ukedagene har ulik lengde, så datoen og
+     klokkeslettet forskjøv seg for hver rad, og øyet fikk ingen kolonne å
+     sammenligne i. Nå er de fire cellene i et rutenett med faste kolonner —
+     dagen under dagen, datoen under datoen, klokkeslettet under klokkeslettet. */
+  const tidRad = (merke, klasse, ms, under) => h('div', { class: 'tid-rad' },
+    h('span', { class: 'tid-merke ' + klasse }, merke),
+    h('span', { class: 'tid-dag' }, ukedagLang(ms)),
+    h('span', { class: 'tid-dato' }, datoKort(ms)),
+    h('span', { class: 'tid-kl' }, klHM(ms)),
+    h('span', { class: 'tid-under' }, under));
   const oppsum = h('div', { class: 'tid-oppsum' },
-    h('div', { class: 'tid-rad' },
-      h('span', { class: 'tid-merke start' }, 'STARTER'),
-      h('div', { class: 'tid-tekst' },
-        h('div', { class: 'd' }, klDato(startMs)),
-        h('div', { class: 's' }, 'du begynner: ' + forsteNavn))),
+    tidRad('STARTER', 'start', startMs, 'du begynner: ' + forsteNavn),
     h('div', { class: 'tid-strek' }, h('span', null, '↓ ' + fmt(K.totalT, 1) + ' t fra start til avkjølt brød')),
-    h('div', { class: 'tid-rad' },
-      h('span', { class: 'tid-merke ferdig' }, 'UT AV OVNEN'),
-      h('div', { class: 'tid-tekst' },
-        h('div', { class: 'd' }, klDato(ferdigMs)),
-        h('div', { class: 's' }, 'brødet er stekt og skal kjøle'))));
+    tidRad('UT AV OVNEN', 'ferdig', ferdigMs, 'brødet er stekt og skal kjøle'));
+  /* Ukedagene skrives ut, ikke forkortet til «fre» og «lør» midt i en setning.
+     Der leste de som ord man snublet i; skrevet helt ut er de det man faktisk
+     trenger å få med seg. */
   if (spenn >= 1) oppsum.appendChild(h('div', { class: 'tid-doegn' },
-    spenn === 1 ? 'Baken går over natta — du starter ' + ukedagKort(startMs) + ' og er ferdig ' + ukedagKort(ferdigMs) + '.'
-      : 'Baken går over ' + spenn + ' døgn — du starter ' + ukedagKort(startMs) + ' og er ferdig ' + ukedagKort(ferdigMs) + '.'));
+    spenn === 1 ? ['Baken går over natta — du starter ', h('b', null, ukedagLang(startMs).toLowerCase()),
+                   ' og er ferdig ', h('b', null, ukedagLang(ferdigMs).toLowerCase()), '.']
+      : ['Baken går over ' + spenn + ' døgn — du starter ', h('b', null, ukedagLang(startMs).toLowerCase()),
+         ' og er ferdig ', h('b', null, ukedagLang(ferdigMs).toLowerCase()), '.']));
   kort1.appendChild(oppsum);
   wrap.appendChild(kort1);
 
@@ -2101,7 +2121,15 @@ function maskinInfoPanel(r) {
   // Samme rangering som motoren bruker: egen måling → delt måling → anslag.
   const delt = (S.delteKalib && S.delteKalib[mid] && isFinite(S.delteKalib[mid].friksjon)) ? +S.delteKalib[mid].friksjon : null;
   const frik = mid === 'egen' ? (S.egenFriksjon || 0.4) : (delt != null ? delt : info.friksjon);
-  const sone = r.wh < 3 ? ['under målsonen', 'var(--color-accent-700)'] : r.wh > 8.3 ? ['over metning', 'var(--color-danger)'] : ['i målsonen', 'var(--color-accent-2-700)'];
+  /* Wh/kg-sonen gjelder MASKINELTING. Målsonen 3–8,3 Wh/kg kommer fra
+     spiralelting, og for hånd er den meningsløs: tallet er lavt fordi hendene
+     tilfører lite varme, ikke fordi deigen er underutviklet. Sto det «under
+     målsonen» på håndelting, leste det som en feil å rette opp — og svaret ville
+     vært å elte hardere, som er nøyaktig feil råd. */
+  const forHand = mid === 'hand';
+  const sone = forHand
+    ? ['gjelder ikke for hånd', 'var(--color-neutral-600)']
+    : r.wh < 3 ? ['under målsonen', 'var(--color-accent-700)'] : r.wh > 8.3 ? ['over metning', 'var(--color-danger)'] : ['i målsonen', 'var(--color-accent-2-700)'];
 
   const panel = h('div', { class: 'maskin-info' },
     h('div', { class: 'mi-topp' },
@@ -2138,6 +2166,8 @@ function maskinInfoPanel(r) {
       h('span', null, ' → ÷ 1,29 = '),
       h('b', { style: 'color:' + sone[1] }, fmt(r.wh, 1) + ' Wh/kg'),
       h('span', { style: 'color:' + sone[1] }, ' (' + sone[0] + ')')),
+    forHand ? h('div', { class: 'mi-hva', style: 'margin-top:4px' },
+      'Wh/kg måler arbeidet en maskin tilfører deigen. Elter du for hånd, er tallet lavt av natur — det er ikke noe å rette opp. Dømm på deigen: strekk-og-brett til den er smidig og holder fasongen.') : null,
     h('div', { class: 'mi-note' }, info.note));
 
   /* Del målingen.
@@ -2315,6 +2345,16 @@ function klDato(ms) {
   return dag.charAt(0).toUpperCase() + dag.slice(1) + ', kl. ' + klHM(ms);
 }
 function ukedagKort(ms) { return new Date(ms).toLocaleDateString('nb-NO', { weekday: 'short' }).replace(/\.$/, ''); }
+/* Ukedagen skrevet ut («Lørdag»), og datoen kort («1. aug.») — de står i hver
+   sin kolonne i start/ferdig-oppsummeringen, så de må være hver sin verdi og
+   ikke én ferdig sammensatt setning. */
+function ukedagLang(ms) {
+  const d = new Date(ms).toLocaleDateString('nb-NO', { weekday: 'long' });
+  return d.charAt(0).toUpperCase() + d.slice(1);
+}
+function datoKort(ms) {
+  return new Date(ms).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' });
+}
 /* Dato på en loggpost, skrevet så man ser NÅR PÅ ÅRET det var — «14. februar
    2026», ikke «14.2.2026». Poenget med datoen i loggen er å kunne kjenne igjen
    årstiden: melet, romtemperaturen og kjøkkenet er ikke det samme i februar som

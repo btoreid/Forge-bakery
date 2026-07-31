@@ -304,6 +304,20 @@ Invarianter som holder og bør testes ved endringer:
     vann totalt = vann i deigen + vann i forfermenten + vann frøene binder
     totalvekt   = antall brød × vekt per brød
 
+## Sist levert (31.07 kveld) — bakefaglig review
+
+De fire kritikalitetene som faktisk ville gitt et dårligere brød, er rettet:
+hevemålet følger nå grovheten (54 % loff → 18 % ved 100 %), hydreringsanbefaling og
+tak følger melblandingens absorpsjon, gjærmengden som vises er hoveddeigens og ikke
+totalen, og forfermentens dose har fått et tak på 2 % fersk. Rom- og
+kjøleskapstemperatur er nå målinger som forskyver planens trinn uten å gjøre planen
+egendefinert. Full liste med begrunnelser i `CHANGELOG.md` (31.07 kveld) og
+`PARAMETERREVISJON.md`.
+
+**Gjenstår for Bjørn (én gang):** kjøre SQL-en for `maskinkalibrering` i `SUPABASE.md`.
+Uten den går appen videre på klasseanslagene og skriver «mangler kalibrering» — som er
+riktig oppførsel, men delingen virker ikke før tabellen finnes.
+
 ## Åpne punkter
 
 **Bjørn har ikke bestemt seg for melvalg.** Han har fått rangeringen etter smak per tapt

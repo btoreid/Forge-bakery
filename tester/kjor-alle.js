@@ -10,6 +10,7 @@ const SUITER = [
   ['test-v2', 'Runde 2: tid, soner, dose–respons, favoritter, deigregnskap'],
   ['test-r3', 'Runde 3: bytte bakst, om-baket, stekeprofiler, backup'],
   ['test-r4', 'Runde 4: synk uten datatap, bak-på-nytt, gram inn, vanlig ovn'],
+  ['test-r5', 'Runde 5: hevemål, hydrering mot melet, gjærdose, rom og kjøleskap'],
   ['test-logg', 'Loggen: fullskjermbilder, rediger, slett'],
   ['test-pyrex', 'Pyrex i ovnen: 260 °C kun for kloke-oppsettet'],
   ['test-flytt', 'Inngangene: rota = V2, index-v1 = V1, videresending'],

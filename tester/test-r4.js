@@ -145,7 +145,7 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   });
   ok('500 g på første meltype gir 500 g', Math.abs(gram.mel0 - 500) <= 2, String(gram.mel0));
   ok('melandelene summerer fortsatt til 100 %', Math.abs(gram.sumPct - 100) <= 1, String(gram.sumPct));
-  ok('uoppnåelig vannmengde klemmes til skyverens tak', gram.hydHoy === 86, String(gram.hydHoy));
+  ok('uoppnåelig vannmengde klemmes til skyverens tak', gram.hydHoy === 88, String(gram.hydHoy));
   ok('1400 g vann gir 1400 g', Math.abs(gram.vann - 1400) <= 4, String(gram.vann));
 
   const nullstill = await page.evaluate(async () => {
@@ -372,23 +372,30 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   console.log('— Soner og form —');
   const soner = await page.evaluate(async () => {
     const FB = window.__FB, S = FB.S;
-    S.skjerm = 'deigen'; S.hyd = 86; FB.render();
+    S.skjerm = 'deigen'; FB.render();
     await new Promise(r => setTimeout(r, 120));
     // Velg på overskriften, ikke på at ordet «vann» finnes i kortet: flere kort
     // nevner vann i konsekvensteksten, og da traff find() feil kort.
     const finnKort = nr => [...document.querySelectorAll('.kort')]
       .find(k => { const n = k.querySelector('.kort-num'); return n && n.textContent.trim().indexOf(nr) === 0; });
-    const vannKort = finnKort('3 ·');
-    const rod = vannKort && vannKort.className.includes('sone-rod');
-    S.hyd = 75; FB.render();
+    /* Taket og anbefalingen følger melblandingen nå, så testen kan ikke bruke
+       faste tall: 86 % er over taket på siktet hvete og innenfor det på en grov
+       blanding. Den spør derfor motoren hva grensene ER for blandingen som
+       ligger der, og sjekker fargen på hver side av dem. */
+    const g = regn(S);
+    S.hyd = Math.min(88, Math.round(g.tak) + 2); FB.render();
+    await new Promise(r => setTimeout(r, 120));
+    const over = finnKort('3 ·');
+    const rod = over && over.className.includes('sone-rod');
+    S.hyd = g.hydAnbefalt; FB.render();
     await new Promise(r => setTimeout(r, 120));
     const vk2 = finnKort('3 ·');
     const gronn = vk2 && vk2.className.includes('sone-gronn');
     const felt = document.querySelector('.gramfelt');
-    return { rod, gronn, radius: felt ? getComputedStyle(felt).borderRadius : '' };
+    return { rod, gronn, tak: g.tak, anb: g.hydAnbefalt, radius: felt ? getComputedStyle(felt).borderRadius : '' };
   });
-  ok('vannkortet blir rødt over taket', soner.rod);
-  ok('vannkortet er grønt i vinduet', soner.gronn);
+  ok('vannkortet blir rødt over melblandingens tak', soner.rod, 'tak ' + Math.round(soner.tak));
+  ok('vannkortet er grønt på anbefalt hydrering', soner.gronn, 'anbefalt ' + soner.anb);
   ok('gramfeltet har runde kanter', /999px|50%/.test(soner.radius) || parseFloat(soner.radius) >= 12, soner.radius);
 
 
@@ -451,10 +458,14 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     return { varmTemp: varm.forferment.temp, kaldTemp: kald.forferment.temp,
       varmGjaer: varm.forferment.gjaer, kaldGjaer: kald.forferment.gjaer,
       ekv: ffTidEkvivalent(varm.forferment.timer, varm.forferment.temp, 4),
-      advarer: /går ikke opp/i.test(tekst), harKjoleskapsknapp: /Kjøleskap 4°/.test(tekst) };
+      rom: S.romTemp,
+      advarer: /går ikke opp/i.test(tekst), harKjoleskapsknapp: /I kjøleskapet/.test(tekst) };
   });
-  ok('planens temperatur gjelder når man ikke har rørt den', ffT.varmTemp === 21, String(ffT.varmTemp));
-  ok('kjøleskapsknappen setter 4 °C', ffT.kaldTemp === 4 && ffT.harKjoleskapsknapp);
+  /* Forfermenten holder ROMMETS temperatur når man ikke har rørt den — ikke et
+     tabelltall på 21 grader. Det er rommet man vet temperaturen på. */
+  ok('forfermenten følger romtemperaturen når man ikke har rørt den', ffT.varmTemp === ffT.rom,
+    ffT.varmTemp + ' mot rom ' + ffT.rom);
+  ok('kjøleskapsknappen setter kjøleskapstemperaturen', ffT.kaldTemp === 4 && ffT.harKjoleskapsknapp);
   ok('kaldt krever mer gjær for samme tid', ffT.kaldGjaer > ffT.varmGjaer,
     ffT.varmGjaer.toFixed(2) + ' → ' + ffT.kaldGjaer.toFixed(2) + ' g');
   ok('ekvivalent tid regnes ut', ffT.ekv > 0 && isFinite(ffT.ekv), Math.round(ffT.ekv) + ' t');

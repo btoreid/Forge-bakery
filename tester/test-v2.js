@@ -28,7 +28,12 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await dato.dispatchEvent('change');
   await page.waitForTimeout(200);
   const ferdigTekst = await page.locator('.tid-rad').nth(1).innerText();
-  ok('ferdig-oppsummering viser valgt dato', /2\.\s*august.*12[:.]30/i.test(ferdigTekst.replace(/\n/g, ' ')), ferdigTekst.replace(/\n/g, ' | '));
+  /* Raden er nå fire kolonner — ukedag, dato, klokkeslett — så måneden står
+     forkortet («2. aug.») og ukedagen i egen celle. Testen sjekker at datoen og
+     klokkeslettet faktisk er DET SOM BLE VALGT, ikke hvordan de er satt sammen. */
+  ok('ferdig-oppsummering viser valgt dato', /2\.\s*aug/i.test(ferdigTekst) && /12[:.]30/.test(ferdigTekst),
+    ferdigTekst.replace(/\n/g, ' | '));
+  ok('ukedagen står i egen kolonne', /søndag/i.test(ferdigTekst), ferdigTekst.replace(/\n/g, ' | '));
 
   // 2: luft mellom plankortene
   const mb = await page.locator('.plan-valg').first().evaluate(e => getComputedStyle(e).marginBottom);
@@ -71,10 +76,12 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   // 10: romtemp + kjøleskap-pills i heveplanen
   const hp = page.locator('.kort:has-text("Heveplan")').first();
   ok('romtemp-stepper finnes', await hp.locator('text=Romtemp der deigen hever').count() > 0);
-  ok('kjøleskap-knapp per trinn', await hp.locator('button:has-text("Kjøleskap 4°")').count() >= 2);
+  ok('kjøleskap-knapp per trinn', await hp.locator('button:has-text("Kjøleskapet")').count() >= 2);
   ok('rommet ditt-knapp per trinn', await hp.locator('button:has-text("Rommet ditt")').count() >= 2);
-  // kaldtrinnet (3,5°) skal vise kjøleskap som aktivt
-  ok('kaldheving (3,5°) markert som kjøleskap', await hp.locator('button.paa:has-text("Kjøleskap 4°")').count() >= 1);
+  // Kaldtrinnet står nå på BRUKERENS kjøleskapstemperatur, ikke plantabellens
+  // 3,5 — knappen skal derfor være aktiv på det trinnet uten at man har rørt noe.
+  ok('kaldheving markert som kjøleskap', await hp.locator('button.paa:has-text("Kjøleskapet")').count() >= 1);
+  ok('kjøleskaps-stepper finnes', await hp.locator('text=Kjøleskapet ditt').count() > 0);
   // trykk «Rommet ditt» på første trinn og se at miljø-feltet følger med
   await hp.locator('button:has-text("Rommet ditt")').first().click();
   await page.waitForTimeout(200);

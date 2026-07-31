@@ -534,8 +534,16 @@ function beregnOppskrift(inn) {
        Taket NEKTER ikke — det klemmer dosen og flagger underskuddet, samme
        mønster som hoveddeigens `gjaerUnderskudd`. Da ser bakeren at tiden, ikke
        gjæren, er det som må gi seg. */
-    const ffPctBrukt = Math.min(ffGjaerPct, gjaerKonverter(FF_GJAER_TAK_FERSK, 'fersk', gjaerType));
+    /* Et levain podes med SURDEIGSSTARTER, ikke med kommersiell gjær.
+       Modellen doserte tørrgjær også i surdeigsvalget — og en levain med
+       tørrgjær i er ikke en levain, det er en poolish med surdeigsnavn. Er
+       typen merket `kultur`, settes gjærdosen i forfermenten til null og
+       podemengden oppgis i gram moden starter i stedet. */
+    const ffTypeDef = (typeof FF_TYPER !== 'undefined' && FF_TYPER.find(t => t.id === forferment.type)) || {};
+    const medKultur = !!ffTypeDef.kultur;
+    const ffPctBrukt = medKultur ? 0 : Math.min(ffGjaerPct, gjaerKonverter(FF_GJAER_TAK_FERSK, 'fersk', gjaerType));
     const ffGjaer = ffMel * ffPctBrukt / 100;
+    const ffStarter = medKultur ? ffMel * (ffTypeDef.podePct || 20) / 100 : 0;
     ff = {
       type: forferment.type, pctMel: forferment.pctMel, hydrering: forferment.hydrering,
       timer: forferment.timer, temp: forferment.temp,
@@ -546,10 +554,12 @@ function beregnOppskrift(inn) {
       mel: ffMel, vann: ffVann, gjaer: ffGjaer, gjaerPctAvFfMel: ffPctBrukt,
       // Hva modellen VILLE hatt, og hvor mye den ikke fikk. Null når taket ikke slo inn.
       gjaerPctOnsket: ffGjaerPct,
-      gjaerPaaTaket: ffGjaerPct > ffPctBrukt + 1e-9,
+      kultur: medKultur, starter: ffStarter, podePct: medKultur ? (ffTypeDef.podePct || 20) : 0,
+      gjaerPaaTaket: !medKultur && ffGjaerPct > ffPctBrukt + 1e-9,
       gjaerTakPct: gjaerKonverter(FF_GJAER_TAK_FERSK, 'fersk', gjaerType),
       salt: ffMel * 0.0015,                       // 0,15 % mot proteaseoppløsning
-      total: ffMel + ffVann + ffGjaer,
+      // Starteren er også masse som går i bollen, og den skal telle i totalen.
+      total: ffMel + ffVann + ffGjaer + ffStarter,
       brukTidligst: Math.max(1, forferment.timer - 2),
       brukSenest: forferment.timer + 3,
       hardtTak: forferment.timer + 5
@@ -785,20 +795,41 @@ function ffLoftFaktor(ffType, andel, styrkeVektet = 4.0, ekvTimer = 0) {
    (se advarselen i autolyse-boksen).                                          */
 function autolyseFaktor(minutter) {
   const m = Math.max(0, +minutter || 0);
-  if (!m) return { elt: 1, loft: 1, metning: 0, absorpsjon: 0, sukker: 0 };
-  // Metning: 0 ved 0 min, ~0,49 ved 30 min, ~0,74 ved 60 min, ~0,93 ved 120.
-  const metning = 1 - Math.exp(-m / 45);
+  if (!m) return { elt: 1, loft: 1, metning: 0, hydratert: 0, proteolyse: 0, absorpsjon: 0, sukker: 0 };
+  /* TO prosesser, ikke én.
+     Modellen hadde én tidskonstant på 45 minutter for alt, og da ble 30 minutter
+     nesten uten virkning — stikk i strid med hvorfor folk faktisk gjør det.
+     Autolyse er to ting som går i hver sin fart:
+
+       HYDRERING (rask). Melet drikker seg fullt og glutenet organiserer seg
+       passivt. Det meste skjer i løpet av 20–30 minutter, og det er dette som
+       gir kortere elting og en deig som kjennes mykere. τ ≈ 20 min: 78 % ferdig
+       etter en halvtime, 95 % etter én time.
+
+       PROTEOLYSE (langsom). Melets egne proteaser klipper glutenet og gjør
+       deigen mer strekkbar. Den bygger seg opp over timer, ikke minutter, og
+       er grunnen til at 2 timer kjennes annerledes enn 30 minutter — og til at
+       for lenge på svakt mel gir slapp deig i stedet for smidig. τ ≈ 90 min.
+
+     Med én felles konstant kunne modellen ikke skille disse to, og da måtte den
+     ta feil om minst én av dem. Effektstørrelsene under er anslag; retningen og
+     rekkefølgen er godt belagt, tallene er appens egen arbeidsverdi. */
+  const hydratert  = 1 - Math.exp(-m / 20);
+  const proteolyse = 1 - Math.exp(-m / 90);
   return {
-    elt: 1 - 0.30 * metning,     // inntil 30 % kortere elting
-    loft: 1 + 0.04 * metning,    // inntil +4 % løft — bevisst forsiktig
+    hydratert, proteolyse,
+    metning: hydratert,          // bakoverkompatibelt navn
+    elt: 1 - 0.30 * hydratert,   // inntil 30 % kortere elting — følger hydreringen
+    loft: 1 + 0.04 * proteolyse, // inntil +4 % løft — bevisst forsiktig, og sent
     /* Melet drikker seg fullt: samme vannmengde kjennes som en lavere
        hydrering, fordi vannet er bundet i stedet for å ligge fritt. Uttrykt som
-       prosentpoeng «opplevd» lavere hydrering, maks 3 pp. */
-    absorpsjon: 3 * metning,
+       prosentpoeng «opplevd» lavere hydrering, maks 3 pp. Følger hydreringen. */
+    absorpsjon: 3 * hydratert,
     /* Amylasen frigjør maltose mens melet ligger. Det gir gjæren mer mat sent i
        hevingen og mer skorpefarge — men det ENDRER IKKE hvor mye gjær du
-       trenger, for gjæren er ikke i deigen ennå og hevetiden er den samme. */
-    sukker: metning
+       trenger, for gjæren er ikke i deigen ennå og hevetiden er den samme.
+       Enzymarbeid er langsomt, så det følger proteolysekurven. */
+    sukker: proteolyse
   };
 }
 
@@ -1305,7 +1336,16 @@ const KALDGRENSE = 12;        // °C — skillet kaldt/varmt miljø (L-04: var h
    tabellen antar når han ikke har sagt noe annet. */
 const ROM_NOMINELL = 24;
 const KJOLSKAP_STD = 4;
-const KJEDE = { UTBAK: 45, ELT: 75, PREP: 30, RIST: 15, FORM: 25 };  // faste stegvarigheter (min)
+/* Faste stegvarigheter (min).
+   Tallene var satt på slump og bommet hver sin vei:
+     ELT 75 — nesten dobbelt. Selve eltingen er 10–15 minutter; resten er
+       veiing, sammenblanding og opprydding. Derfor er den nå ELT_FAST pluss den
+       eltetiden brukeren faktisk har satt, i stedet for ett tall for alle.
+     FORM 25 — for kort. Forforming, 15–20 minutters benkehvile og selve
+       formingen er alene 25; hele steget lander på ca. 40.
+     RIST 15 — for kort. Frøene skal ristes OG kjøles før de går i deigen; går
+       de varme i, drar de deigtemperaturen med seg. */
+const KJEDE = { UTBAK: 45, ELT_FAST: 25, PREP: 30, RIST: 25, FORM: 40 };
 const REF_FERDIG = Date.UTC(2026, 6, 30, 15, 0, 0);        // deterministisk testreferanse
 
 function forstTall(s) { const m = String(s).match(/\d+/); return m ? +m[0] : null; }
@@ -1347,7 +1387,21 @@ function kjede(state, r, ferdigMs) {
   // er «Bak ut og la hvile» rett, og gjør formingen der.
   const formIdx = trinn.findIndex(t => t.utbakt);
   const sisteUtbakt = trinn.length > 0 && trinn[trinn.length - 1].utbakt;
+  /* «Temperer og snitt · fra kjøl» forutsetter at emnet FAKTISK kommer fra kjøl.
+     Testen var bare `sisteUtbakt`, og på Samme dag og Ekspress er siste trinn en
+     utbakt etterheving ved romtemperatur — så steget sa «ta emnene rett fra
+     kjøl» om et emne som hadde stått på benken. */
+  const sisteKaldt = sisteUtbakt && trinn[trinn.length - 1].miljo <= KALDGRENSE;
   const POSTPROOF = sisteUtbakt ? 30 : KJEDE.UTBAK;   // temperer+snitt vs bak-ut-og-hvile
+
+  /* Formen bestemmer HVORDAN emnet hviler og hva teksten kan love.
+     `kjede()` leste aldri `state.form`, så «Uten form» fikk beskjed om å legge
+     emnet i hevekurv med god side ned — utstyr brukeren nettopp har sagt at han
+     ikke bruker. */
+  const formV = (typeof FORMER !== 'undefined' && FORMER.find(f => f.id === state.form)) || null;
+  const ingenKurv = !!(formV && formV.ingenKurv);
+  const iBrodform = !!(formV && formV.id === 'form');
+  const hvileSted = ingenKurv ? 'på melet klede eller brett' : iBrodform ? 'i brødformen' : 'i hevekurven med god side ned';
 
   // Ankerpunkter bakover fra ferdig.
   const innsetting = minus(ferdig, stekeMin);
@@ -1370,7 +1424,10 @@ function kjede(state, r, ferdigMs) {
       peker = formTid.start;
     }
   }
-  const eltStart = minus(peker, KJEDE.ELT);
+  /* Eltesteget varer så lenge eltingen din faktisk tar, pluss veiing og
+     opprydding rundt. Ett fast tall for alle maskiner var feil begge veier. */
+  const eltSteg = KJEDE.ELT_FAST + (r.eltMin || 13);
+  const eltStart = minus(peker, eltSteg);
   /* Autolyse ligger MELLOM forberedelse og elting: mel og vann blandes, hviler,
      og først da kommer salt og gjær i. Den har egen varighet og skyver derfor
      alt foran seg — derfor må den inn i kjeden og ikke bare stå som et råd i
@@ -1388,9 +1445,14 @@ function kjede(state, r, ferdigMs) {
     steg.push({
       id: 'ff', navn: 'Sett ' + r.ffT.navn.toLowerCase() + 'en', tid: ffStart, varighet: ff.timer * 60, tone: 'noytral',
       hoved: gram(ff.mel), hovedNote: 'mel i forfermenten', sideK: 'Modning', sideV: fmtTimer(ff.timer),
-      tall: [['Mel', gram(ff.mel)], ['Vann', gram(ff.vann)], ['Tørrgjær', fmt(ff.gjaer, 2) + ' g'],
+      tall: [['Mel', gram(ff.mel)], ['Vann', gram(ff.vann)],
+             ff.kultur
+               ? ['Moden starter', fmt(ff.starter, 0) + ' g (' + fmt(ff.podePct, 0) + ' % av melet)']
+               : ['Tørrgjær', fmt(ff.gjaer, 2) + ' g'],
              ['Temperatur', grader(ff.temp, 0)], ...(ff.salt > 0.05 ? [['Salt', fmt(ff.salt, 2) + ' g']] : [])],
-      gjor: 'Visp ut gjæren i vannet FØR melet — noen tiendedels gram fordeler seg ikke i tørt mel. ' +
+      gjor: ff.kultur
+        ? 'Rør ut ' + fmt(ff.starter, 0) + ' g moden surdeigsstarter i vannet, så melet i. Ingen kommersiell gjær her — det er kulturen som skal bygge levainen. Lokk på.'
+        : 'Visp ut gjæren i vannet FØR melet — noen tiendedels gram fordeler seg ikke i tørt mel. ' +
             (ff.hydrering <= 60 ? 'Bland bare til den er lurvete; rå melklumper er riktig i en stiv forferment. ' : 'Rør til jevn røre. ') + 'Lokk på.',
       // Tellene er ulike per type: surdeig og stiv biga leses IKKE som en poolish.
       // Flytetesten er bevisst utelatt for surdeig — appen fraråder den for deig
@@ -1467,7 +1529,7 @@ function kjede(state, r, ferdigMs) {
 
   // 3 · Elting
   steg.push({
-    id: 'elt', navn: 'Elt deigen', tid: eltStart, varighet: KJEDE.ELT, tone: 'accent',
+    id: 'elt', navn: 'Elt deigen', tid: eltStart, varighet: eltSteg, tone: 'accent',
     hoved: grader(state.startTemp ?? 24, 1), hovedNote: 'deigtemp ut av maskinen', sideK: 'Vann inn', sideV: grader(r.vannTemp, 1),
     /* Gjærmengden hører hjemme HER, i steget der den skal på vekta — og det er
        hoveddeigens gjær, ikke totalen. Med forferment er differansen opptil en
@@ -1499,7 +1561,7 @@ function kjede(state, r, ferdigMs) {
              ['Andel av hoveddeigens gjæring', pst(andel, 0)], ...(tr.utbakt ? [['Emnestørrelse', gram(r.totalVekt / antall) + ' × ' + antall]] : [['Mål stigning', riseTxt]])],
       gjor: kaldt
         ? (tr.utbakt
-            ? 'Emnene står UTILDEKKET i hevekurv på kjøl — utildekket gir skinn, og skinn gir blemmer og rent snitt. Mesteparten av gjæringen skjer de første 6 timene, mens deigen ennå kjøles ned.'
+            ? 'Emnene står UTILDEKKET ' + hvileSted + ' på kjøl — utildekket gir skinn, og skinn gir blemmer og rent snitt. Mesteparten av gjæringen skjer de første 6 timene, mens deigen ennå kjøles ned.'
             : 'Deigen står tett tildekket på kjøl. Mesteparten av gjæringen skjer de første 6 timene, mens den ennå kjøles ned.')
         : (i === 0 ? 'Brett i første halvdel, så ikke rør deigen etterpå. Bretting bygger struktur bare mens glutenet er tøyelig.'
                    : 'Følg emnene tett — hevevinduet er smalt når det er varmt.'),
@@ -1516,9 +1578,14 @@ function kjede(state, r, ferdigMs) {
       id: 'form', navn: 'Form emnene', tid: formTid.start, varighet: KJEDE.FORM, tone: 'accent',
       hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Benkehvile', sideV: '15–20 min',
       tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)],
-             ['Forforming', 'rund opp, hvil 15–20 min'], ['Forming', 'stram overflatespenning, i melet kurv med god side ned']],
-      gjor: 'Forform lett til runde emner, la dem hvile 15–20 min under klede, form så stramt og legg i hevekurven med god side ned. Håndter bare de ytterste millimeterne.',
-      sjekk: 'Emnet skal holde en stram kuppel og ikke flyte ut når du slipper det. Flyter det, trenger deigen mer struktur eller mindre vann.'
+             ['Forforming', 'rund opp, hvil 15–20 min'],
+             ['Forming', 'stram overflatespenning, ' + hvileSted],
+             ...(formV ? [['Form', formV.navn]] : [])],
+      gjor: 'Forform lett til runde emner, la dem hvile 15–20 min under klede, form så stramt og legg dem ' + hvileSted + '. Håndter bare de ytterste millimeterne.' +
+            (ingenKurv ? ' Uten kurv er det bare glutennettverket som holder fasongen — form strammere enn du ville gjort i en kurv, og la emnet stå kort.' : ''),
+      sjekk: ingenKurv
+        ? 'Emnet skal holde en stram kuppel av seg selv. Flyter det utover på brettet allerede nå, er det for vått eller for lite utviklet for fri heving — bruk kurv eller form neste gang.'
+        : 'Emnet skal holde en stram kuppel og ikke flyte ut når du slipper det. Flyter det, trenger deigen mer struktur eller mindre vann.'
     });
   }
 
@@ -1533,7 +1600,7 @@ function kjede(state, r, ferdigMs) {
 
   // Etter siste gjæringstrinn: enten kaldt snitt (utbakt emne) eller bak-ut+hvile
   // (bulk i boks som ennå ikke er formet). L-04/baker-review, kritisk.
-  if (sisteUtbakt) {
+  if (sisteUtbakt && sisteKaldt) {
     steg.push({
       id: 'snitt', navn: 'Temperer og snitt', tid: postStart, varighet: POSTPROOF, tone: 'noytral',
       hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Fra kjøl', sideV: POSTPROOF + ' min',
@@ -1541,12 +1608,22 @@ function kjede(state, r, ferdigMs) {
       gjor: 'Ta emnene rett fra kjøl, vend på plata med god side opp, og snitt kaldt — kald deig holder snittet bedre. IKKE form på nytt: da degasser du blæreskinnet du nettopp bygde.',
       sjekk: 'Snittet skal åpne seg rent. Emnet er kaldt og fast — det er riktig; ovnsløftet kommer i ovnen, ikke på benken.'
     });
+  } else if (sisteUtbakt) {
+    // Utbakt, men varmt: emnet står ferdig hevet på benken, ikke i skapet.
+    steg.push({
+      id: 'snitt', navn: 'Snitt og sett inn', tid: postStart, varighet: POSTPROOF, tone: 'noytral',
+      hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Fra benken', sideV: POSTPROOF + ' min',
+      tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)], ['Fra benken', 'romtemperert, ferdig hevet'], ['Benkestå', 'ingen ny heving']],
+      gjor: 'Emnet er ferdig hevet i romtemperatur. Vend det på plata med god side opp og snitt rett før det går inn. IKKE form på nytt: da degasser du det du nettopp bygde. Et romtemperert emne er mykere enn et kaldt, så bladet må være vått og draget bestemt.',
+      sjekk: 'Trykktest: gropen skal fylle seg langsomt igjen over 5–10 sekunder. Fyller den seg ikke, er emnet overhevet — sett det inn med én gang.'
+    });
   } else {
     steg.push({
       id: 'utbak', navn: 'Bak ut og la hvile', tid: postStart, varighet: POSTPROOF, tone: 'noytral',
       hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Benkehvile', sideV: POSTPROOF + ' min',
-      tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)], ['Benkehvile', POSTPROOF + ' min']],
-      gjor: 'Forform, hvil 15–20 min, form stramt og la hvile. Håndter bare de ytterste 1 cm. Ta av håndkleet 10 minutter før ovnen så skorpa tørker.',
+      tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)], ['Benkehvile', POSTPROOF + ' min'],
+             ...(formV ? [['Hviler', hvileSted]] : [])],
+      gjor: 'Forform, hvil 15–20 min, form stramt og la hvile ' + hvileSted + '. Håndter bare de ytterste 1 cm. Ta av håndkleet 10 minutter før ovnen så skorpa tørker.',
       sjekk: 'Trykktest: gropen skal fylle seg langsomt igjen over 5–10 sekunder og etterlate et synlig merke.'
     });
   }
@@ -1556,9 +1633,17 @@ function kjede(state, r, ferdigMs) {
     id: 'stek', navn: 'Stek', tid: innsetting, varighet: stekeMin, tone: 'accent',
     hoved: forstTall(prof.tid) + ' min', hovedNote: prof.inn + ' → ' + prof.ned + ' °C', sideK: 'Kjerne', sideV: prof.kjerne,
     tall: [['Inn på', prof.inn + ' °C'], ['Ned til', prof.ned + ' °C ' + (prof.nedNaar || '')], ['Damp', prof.damp], ['Rist', prof.rist]],
-    gjor: (prof.damp === 'ingen' || String(prof.damp).startsWith('ingen'))
+    /* «Lokket gjør jobben» gjelder bare når det FINNES et lokk.
+       Testen sto på damp-teksten, og både gryta og stekebrettet sier «ingen
+       tilsatt» — så et brød på stekebrett fikk beskjed om å legge på et lokk det
+       ikke har, og om at gryta ordner dampen. Da er rådet ikke bare unyttig, det
+       er villedende: på brett er det nettopp mangelen på damp man må gjøre noe
+       med. `lokket` står nå på profilen selv. */
+    gjor: prof.lokket
       ? 'Ingen damp å tilsette — lokket/gryta gjør jobben. Ett bestemt drag med buet blad før lokket på.'
-      : 'Kokende vann fra kjelen i det du setter inn. Ett bestemt drag med buet blad.',
+      : (prof.damp === 'ingen' || String(prof.damp).startsWith('ingen'))
+        ? 'Ingen forvarmet masse og ingen gryte her, så dampen må du lage selv: sett en form med kokende vann i bunnen av ovnen når du setter inn brødet, og ta den ut etter 15 minutter. Ett bestemt drag med buet blad før det går inn.'
+        : 'Kokende vann fra kjelen i det du setter inn. Ett bestemt drag med buet blad.',
     sjekk: 'Ovnsløftet varer 15–20 minutter, med 80 % levert i de første 10–12. Ikke åpne døra i den perioden.'
   });
 
@@ -1620,8 +1705,14 @@ function fmtTimer(t) {
   if (m === 60) return `${h + 1} t`;
   return m === 0 ? `${h} t` : `${h} t ${m} min`;
 }
+/* Ukedagen i STORE bokstaver, uten punktum: «FRE 19:57».
+   Med «fre. kl. 19:57» leste forkortelsen som et halvt ord med en skrivefeil i,
+   og punktumet midt i en tidsangivelse er bare støy. Store bokstaver sier at
+   det er en forkortelse, og gjør den lett å skille fra klokkeslettet ved siden
+   av — man skal kunne se hvilken dag et steg faller på i et blikk. */
 function klokke(dato) {
-  return dato.toLocaleString('nb-NO', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  const dag = dato.toLocaleDateString('nb-NO', { weekday: 'short' }).replace(/\.$/, '').toUpperCase();
+  return dag + ' ' + dato.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' });
 }
 
 /* Benevnelser skrives alltid bak tallet, ikke bare i kolonneoverskriften —

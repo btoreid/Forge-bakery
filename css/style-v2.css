@@ -415,13 +415,21 @@ input[type=range].skyver { width: 100%; margin: 12px 0 6px; height: 30px; }
 
 /* Start → ferdig-oppsummering (Tid): begge ender med ukedag og dato */
 .tid-oppsum { margin-top: 14px; border-top: 1px solid var(--color-neutral-200); padding-top: 12px; }
-.tid-rad { display: flex; align-items: center; gap: 10px; }
-.tid-merke { flex: 0 0 auto; font-size: .6rem; font-weight: 800; letter-spacing: .06em; padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
+/* Start- og ferdigraden er et RUTENETT med faste kolonner, ikke en tekstlinje.
+   Ukedagene har ulik lengde, så som løpende tekst forskjøv datoen og
+   klokkeslettet seg for hver rad og det fantes ingen kolonne å lese nedover.
+   Fire celler: merkelapp · ukedag · dato · klokkeslett — og undersetningen på
+   egen rad fra kolonne 2, så den ligger under teksten og ikke under lappen. */
+.tid-rad { display: grid; grid-template-columns: 5.6rem minmax(4.4em, auto) 1fr auto;
+  align-items: baseline; column-gap: 8px; row-gap: 2px; }
+.tid-merke { grid-column: 1; align-self: center; justify-self: start;
+  font-size: .6rem; font-weight: 800; letter-spacing: .06em; padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
 .tid-merke.start { background: var(--color-accent-2-100); color: var(--color-accent-2-700); }
 .tid-merke.ferdig { background: var(--color-accent-500); color: #fdf6ec; }
-.tid-tekst { min-width: 0; }
-.tid-tekst .d { font-weight: 700; font-size: .92rem; font-variant-numeric: tabular-nums; }
-.tid-tekst .s { font-size: .72rem; color: var(--color-neutral-600); margin-top: 1px; }
+.tid-dag { font-weight: 800; font-size: .9rem; white-space: nowrap; }
+.tid-dato { font-weight: 600; font-size: .86rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tid-kl { font-weight: 800; font-size: .95rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tid-under { grid-column: 2 / -1; font-size: .72rem; color: var(--color-neutral-600); }
 .tid-strek { margin: 6px 0 6px 18px; padding-left: 14px; border-left: 2px dashed var(--color-neutral-300); font-size: .72rem; color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }
 .tid-doegn { margin-top: 10px; background: var(--color-accent-2-100); color: var(--color-accent-2-700); border-radius: var(--radius-md); padding: 8px 11px; font-size: .76rem; line-height: 1.4; font-weight: 600; }
 

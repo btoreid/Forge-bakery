@@ -43,7 +43,7 @@
    cacher appikonet ved INSTALLASJON, og både service workeren og manifestet
    pekte på den gamle URL-en. Nytt filnavn er den eneste veien som treffer alle
    tre. Versjonen heves for å rydde bort den gamle cachen med de gamle ikonene. */
-const VERSJON = 'forgebakery-v4';
+const VERSJON = 'forgebakery-v5';
 
 /* Filene HTML-en laster, og som derfor skal versjonsstemples. */
 const APPFILER = [

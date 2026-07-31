@@ -493,3 +493,97 @@ Formuleringen er nå at klien **binder seg til glutenproteinene og hindrer dem i
 å bygge nettverk**, og at finere kli skader mer fordi den har mer overflate.
 
 Kilde: <https://www.sciencedirect.com/science/article/abs/pii/S0733521010000524>
+
+---
+
+## 31.07.2026 (kveld) — Autolyse: én tidskonstant kunne ikke være riktig for to prosesser
+
+Bjørn: «du kan ikke mene at det å ha autolyse i 30 minutter eller 1–2 timer har
+ingen effekt … Her må du sjekke fagstoffet.»
+
+Han hadde rett, og feilen var strukturell, ikke bare et tall som var satt for
+høyt. Modellen brukte **én** metningskurve, `1 − e^(−min/45)`, for alt autolysen
+gjør. Med den var 30 minutter bare 49 % «ferdig» — mens det er nettopp en
+halvtime de fleste faktisk bruker, og de bruker den fordi den virker.
+
+Autolyse er to prosesser som går i hver sin fart:
+
+| Prosess | Hva den gir | Tidskonstant | 30 min | 60 min | 120 min |
+|---|---|---|---|---|---|
+| **Hydrering** | melet drikker seg fullt, glutenet organiserer seg passivt → kortere elting, mykere deig | τ ≈ 20 min | 78 % | 95 % | ~100 % |
+| **Proteolyse** | melets egne proteaser klipper glutenet → mer strekkbar deig, litt mer løft | τ ≈ 90 min | 28 % | 49 % | 74 % |
+
+Hydreringen er rask og i praksis over etter en halvtime. Proteolysen bygger seg
+opp over timer, og det er den som er forskjellen mellom 30 minutter og 2 timer —
+og også grunnen til at for lenge på svakt mel gir slapp deig i stedet for smidig.
+
+Med én felles konstant kunne modellen ikke skille disse to, og måtte derfor ta
+feil om minst én av dem.
+
+**Effektstørrelsene er fortsatt appens egne arbeidsverdier** — inntil 30 %
+kortere elting (følger hydreringen) og inntil +4 % løft (følger proteolysen).
+Retningen og rekkefølgen er godt belagt; tallene er ikke kildet, og løftgevinsten
+er med vilje holdt så lav at den ikke kan lyve mye. Appen viser nå begge kurvene
+hver for seg, slik at valget mellom en halvtime og to timer er et opplyst valg.
+
+---
+
+## 31.07.2026 (kveld) — Hydreringstaket målte «tåler» og «trenger» i ulike enheter
+
+Taket var `74 + (styrkeVektet − 3) · 6` — bare styrke. Grovt mel har svakere
+gluten, så styrkeleddet dro taket ned mot 75 % samtidig som kli og fullkorn
+suger 16–19 % mer vann og deigen faktisk **trenger** over 80 %. Appen advarte
+altså mot nettopp den hydreringen den burde anbefalt.
+
+Nå: `(79 + (styrkeVektet − 4) · 4) · absorpsjonsfaktor`, klemt til 70–92 %.
+Ankeret er middels siktet butikkmel (styrkeVektet 4, absorpsjon 1,00) → 79 %,
+som er der den gamle formelen lå for siktet hvete. Hvetebrødene oppfører seg
+derfor som før; det er de grove blandingene som endrer seg, og de var de eneste
+formelen tok feil på.
+
+Anbefalt hydrering er `74 % · absorpsjonsfaktor`, klemt til taket. Over
+grovhetstrappa gir det 75 → 77 → 78 → 81 → 84 → 86 %.
+
+`absorpsjon` i `FLOURS` er fortsatt **appens egen arbeidsverdi** og ikke en
+publisert måling — se toppen av `data.js`. Det som er nytt er at den nå brukes
+konsekvent: samme tall styrer både hva som anbefales og hva som advares mot.
+
+---
+
+## 31.07.2026 (kveld) — Forfermentens gjærdose fikk et tak
+
+Modellen holder modningstiden fast og løser gjærmengden mot temperaturen. Det er
+riktig matematikk og umulig bakverk når man setter en 12-timers poolish i
+kjøleskapet: dosen løp opp i **5,3 % tørrgjær av forfermentens mel — 15,9 %
+fersk**. En kald biga kjøres på ca. 1 % fersk over 18–24 timer.
+
+Taket er satt til **2 % fersk gjær** av forfermentens eget mel
+(`FF_GJAER_TAK_FERSK`), som er den vanlige faglige grensen for når en forferment
+begynner å smake gjær. Over den er den ikke lenger en smakskilde.
+
+Advarselen i appen sto på **2** og ble sammenlignet med en **tørrgjærprosent** —
+altså 6 % fersk, tre ganger for høyt, så den slo aldri inn i praksis.
+
+Taket nekter ikke: dosen klemmes, underskuddet flagges, og appen tilbyr den ene
+løsningen som faktisk finnes — lengre modningstid, eller varmere plass.
+
+---
+
+## 31.07.2026 (kveld) — Rommet og kjøleskapet er målinger, ikke valg
+
+Bjørn: «jeg skjønner ikke hvor du har det fra; rommet ditt er 22 grader … det
+endrer seg hele tiden», og «det å endre temperaturen på rommet må jo ikke endre
+planen til å være en egendefinert tidsplan».
+
+Plantabellens temperaturer (bulk 24 °C, kjøleskap 3,5 °C) er **nominelle**.
+Eneste vei til å endre dem var å redigere heveplanen — som merket planen
+«egendefinert», altså straffet brukeren for å svare ærlig på hva termometeret
+viser.
+
+Nå forskyves varme trinn med `romTemp − 24`, slik at et trinn planen legger to
+grader over romtemp fortsatt ligger to grader over **ditt** rom. Kalde trinn
+settes rett til `kjolskapTemp`. Har brukeren redigert planen selv, står hans egne
+tall — da er de valgt, ikke arvet.
+
+Forfermenten holder rommets eller kjøleskapets temperatur, ikke sin egen: den
+har ingen egen temperatur før den har stått en stund, og ingen måler den.

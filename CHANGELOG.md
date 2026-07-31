@@ -7,6 +7,150 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 31.07.2026 (kveld) — Bakefaglig review: fire ting appen sa som ville ødelagt brød
+
+Bakeren, den tekniske revieweren og databasereviewen leverte hver sin liste. Dette er
+oppgjøret med de bakefaglige kritikalitetene — de som ikke bare irriterer, men gir et
+dårligere brød.
+
+### 1 · Hevemålet var hardkodet 60–72 % for ALT
+
+`kjede()` skrev «Mål stigning 60–72 %» i hvert eneste gjæringstrinn, uansett brød.
+Det er riktig for en loff og direkte skadelig for et grovt brød: grovt mel har mindre
+sammenhengende gluten å holde på gassen, og heves det til 70 % har man ikke et luftig
+brød, man har et som faller sammen i ovnen.
+
+`maalHeveProsent()` i `engine.js` har regnet det riktige tallet hele tiden — V2 spurte
+aldri. Nå gjør den det, mot deigtemperatur, hydrering, grovandel, melstyrke og om
+deigen skal på kjøl:
+
+| grovhet | mål stigning |
+|---|---|
+| 0 % (loff) | 54–65 % |
+| 25 % | 41–49 % |
+| 50 % | 33–39 % |
+| 100 % | 18–22 % |
+
+### 2 · Hydreringen fulgte ikke melblandingen
+
+Appen anbefalte **74 %** uansett hva som lå i bollen, og advarte om «over taket» fra
+rundt 75 % på grove blandinger. Kli og fullkorn suger 16–19 % mer vann enn siktet
+hvete, så på 100 % grovt er 74 % en stram, tørr deig — og appen advarte altså mot
+nettopp den hydreringen den selv burde anbefalt.
+
+Anbefaling og tak følger nå blandingens absorpsjonsfaktor. Over grovhetstrappa:
+75 → 77 → 78 → 81 → 84 → 86 % anbefalt, med taket 3–4 poeng over. Merkelappene
+STRAMT / TRYGT / I VINDUET / LØST / OVER TAKET måles mot melet i stedet for mot faste
+tall, så en 86 % fullkorndeig leses som «i vinduet» mens en 86 % loff fortsatt leses
+som over taket. Skyveren går til 88 %, siden 86 ikke lenger var nok til å nå appens
+egen anbefaling.
+
+`hydLoftFaktor` hadde i tillegg en kant: det flate optimumet sluttet på hardkodet 78 %
+selv når melets tak lå lavere, så en svak blanding fikk full uttelling til 78 og et
+fall på fem løftpoeng over ett prosentpoeng vann. Optimumet slutter nå ved 78 **eller**
+taket, det som kommer først.
+
+### 3 · Gjærmengden var totalen — også når forfermenten hadde tatt en tredel
+
+Med forferment viste appen `gjaerTotal` som «gjær». Veide man opp det tallet i
+hoveddeigen, fikk man **inntil 35 % for mye gjær**, fordi forfermenten allerede hadde
+tatt sitt. `gjaerHoved` fantes i motoren og ble vist ingen steder.
+
+Eltesteget sier nå «Tørrgjær nå» med hoveddeigens dose først, og forfermentens i
+parentes under. Deigregnskapet viser tre linjer i stedet for én: hoveddeigen,
+forfermenten, totalen.
+
+### 4 · Kjøleskapsknappen på forfermenten ga 15,9 % fersk gjær
+
+Modellen holder modningstiden fast og løser gjæren mot temperaturen. Setter man en
+12-timers poolish i kjøleskapet, er svaret matematisk riktig og bakefaglig umulig:
+5,3 % tørrgjær av forfermentens mel. En kald biga kjøres på ca. **1 %** fersk.
+
+Dosen har nå et tak på 2 % fersk. Advarselen som skulle fanget dette sto på «2» og ble
+sammenlignet med en *tørrgjærprosent* — altså 6 % fersk, tre ganger for høyt, så den
+slo aldri inn. Appen klemmer dosen, sier at forfermenten da blir mindre moden enn
+planen regner med, og tilbyr den ene løsningen som finnes: lengre modningstid (ny
+`ffTimer`) eller varmere plass.
+
+### Og de mindre, men like konkrete
+
+- **Autolysesteget ba deg blande ALT melet** — også forfermentens, som står i en bøtte
+  og modner. Nå hoveddeigens mel.
+- **«Temperer og snitt · fra kjøl» sto på varme planer.** På Samme dag og Ekspress er
+  siste trinn en utbakt etterheving i romtemperatur. Eget steg nå: «Snitt og sett inn».
+- **Stekesteget sa «lokket/gryta gjør jobben»** for stekebrettet, fordi testen sto på
+  damp-teksten og både gryta og brettet sier «ingen tilsatt». Profilene har nå et
+  `lokket`-flagg, og brettet får rådet det trenger: lag dampen selv.
+- **`kjede()` leste aldri `state.form`.** «Uten form» fikk beskjed om å legge emnet i
+  hevekurv med god side ned. Alle stegtekstene følger nå formvalget.
+- **Brødform pekte på åpen steking på stein ved 270 °C.** Den peker nå på `brett`,
+  som er det oppsettet en brødform faktisk står i.
+- **Stegvarighetene var satt på slump:** elting 75 min (nesten dobbelt — nå 25 min pluss
+  din egen eltetid), forming 25 min (nå 40), risting av frø 15 min (nå 25, de skal
+  kjøles også).
+- **Wh/kg-dommen sto på håndelting.** Målsonen 3–8,3 Wh/kg er fra spiralelting; for hånd
+  er tallet lavt av natur, og «under målsonen» leste som en feil å rette — der svaret
+  ville vært å elte hardere, som er nøyaktig feil råd.
+- **Surdeigsvalget doserte tørrgjær i levainen.** En levain med tørrgjær i er ikke en
+  levain. Den podes nå med moden starter, 20 % av levainens mel.
+
+### Autolyse: én tidskonstant kunne ikke være riktig for to prosesser
+
+Bjørn: «du kan ikke mene at det å ha autolyse i 30 minutter eller 1–2 timer har ingen
+effekt … Her må du sjekke fagstoffet.»
+
+Modellen brukte én metningskurve for alt. Autolyse er to ting i hver sin fart:
+**hydrering** (τ ≈ 20 min — 78 % ferdig etter en halvtime; gir kortere elting og mykere
+deig) og **proteolyse** (τ ≈ 90 min — 28 % etter en halvtime, 74 % etter to timer; gir
+strekkbarhet). Med én felles konstant måtte modellen ta feil om minst én av dem.
+Panelet viser nå begge, så valget mellom en halvtime og to timer er opplyst.
+Se `PARAMETERREVISJON.md`.
+
+### Rommet og kjøleskapet er målinger, ikke valg
+
+Bjørn: «det å endre temperaturen på rommet må jo ikke endre planen til å være en
+egendefinert tidsplan», og «rommet mitt er ikke 22 grader hele tiden».
+
+Plantabellens temperaturer er nominelle. Eneste vei til å endre dem gikk gjennom
+heveplan-editoren — som merket planen «egendefinert», altså straffet deg for å svare
+ærlig på hva termometeret viser. Varme trinn forskyves nå med `romTemp − 24`, kalde
+trinn settes til `kjolskapTemp` (ny innstilling), og ingen av delene rører planen.
+
+Forfermenten holder rommets eller kjøleskapets temperatur — ikke sin egen. Den har
+ingen egen før den har stått en stund, og ingen måler den.
+
+### Delt maskinkalibrering
+
+Friksjonstallene i `MASKIN_INFO` er klasseanslag, ikke målinger — for Ooni Halo Pro
+finnes ingen produsentoppgitt verdi i det hele tatt. Panelet viste dem likevel som om
+de var maskinens egne. Det står nå **«mangler kalibrering»** til noen faktisk har målt.
+
+Har man målt sin egen, kan målingen deles: ny tabell `maskinkalibrering` i Supabase,
+lesbar for alle innloggede, skrivbar bare for e-posten som eier repoet (RLS, og ingen
+slettepolicy). Rangeringen i motoren er egen måling → delt måling → anslag.
+
+### Datoer og ukedager
+
+- Start/ferdig-oppsummeringen er nå et rutenett med faste kolonner: ukedag under ukedag,
+  dato under dato, klokkeslett under klokkeslett. Som løpende tekst forskjøv alt seg
+  fordi ukedagene har ulik lengde.
+- «du starter fre og er ferdig lør» skrives ut: **fredag**, **lørdag**.
+- Stegtidene sto som «fre. kl. 19:57». Nå «FRE 19:57» — store bokstaver sier at det er
+  en forkortelse, og punktumet midt i en tidsangivelse var bare støy.
+
+### Tester
+
+Ny suite `tester/test-r5.js` (33 sjekker) vokter hvert tall over: hevemålet per
+grovhet, hydreringsanbefaling og tak mot melblandingen, at løftkurven ikke har kant,
+hoveddeigens gjærdose, forfermentens tak, at levainen ikke får gjær, at rom- og
+kjøleskapstemperatur flytter trinnene uten å gjøre planen egendefinert, og at
+stegtekstene ikke lover utstyr man ikke har. `test-v2` og `test-r4` er oppdatert der
+de festet seg til tall som nå er blandingsavhengige. Alle 9 suitene grønne.
+
+Service worker til `forgebakery-v5`.
+
+---
+
 ## 31.07.2026 (natt) — Innlogging først, flimring, og svarene på de fem spørsmålene
 
 ### Innlogging er nå en port foran hele appen

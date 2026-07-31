@@ -161,15 +161,15 @@ const SOAKERS = [
    ANBEFALING, ikke en del av profilen. ★-merkene i navnene er fjernet av samme
    grunn — de så ut som en rangering av brødtyper, ikke av oppsett. */
 const BAKE_PROFILES = [
-  { id:'brod_gryte', navn:'Støpejernsgryte med lokk', anbefaltTil:'frittstående brød', vekt:'800–900 g', hydrering:'70–75 %',
+  { id:'brod_gryte', lokket:true, navn:'Støpejernsgryte med lokk', anbefaltTil:'frittstående brød', vekt:'800–900 g', hydrering:'70–75 %',
     inn:260, ned:230, nedNaar:'straks døra lukkes', damp:'ingen tilsatt — brødet damper seg selv', dampTid:'lokk på 20 min',
     rist:'nederste tredel', tid:'45–50 min', kjerne:'96–99 °C', luft:'lokk av etter 20 min, dørspalte siste 5 min',
     notat:'Best enkeltinvestering for ovnsløft hjemme. Løser damp og bunnvarme i én gjenstand. Over 270 °C setter skorpa seg før brødet er ferdig utvidet.' },
-  { id:'brod_apen', navn:'Åpen steking på stein/stål', anbefaltTil:'frittstående brød med eget dampkar', vekt:'800–900 g', hydrering:'70–75 %',
+  { id:'brod_apen', lokket:false, navn:'Åpen steking på stein/stål', anbefaltTil:'frittstående brød med eget dampkar', vekt:'800–900 g', hydrering:'70–75 %',
     inn:270, ned:240, nedNaar:'straks døra lukkes, så 230 etter 25 min', damp:'50–75 ml KOKENDE vann i forvarmet støpejernspanne', dampTid:'15–20 min',
     rist:'nederste tredel', tid:'45–50 min', kjerne:'96–99 °C', luft:'ta ut dampkaret etter 18 min',
     notat:'Brød lavt i ovnen: bunnvarmen driver løftet, og du trenger takhøyde — et brød spretter 8–12 cm og setter skorpa for tidlig hvis toppen er nær elementet.' },
-  { id:'brod_600', navn:'Åpen steking, mindre emner', anbefaltTil:'brød rundt 600 g', vekt:'600 g', hydrering:'70–75 %',
+  { id:'brod_600', lokket:false, navn:'Åpen steking, mindre emner', anbefaltTil:'brød rundt 600 g', vekt:'600 g', hydrering:'70–75 %',
     inn:260, ned:230, nedNaar:'straks', damp:'som over', dampTid:'15 min',
     rist:'nederste tredel', tid:'35–40 min', kjerne:'96–98 °C', luft:'damp ut etter 17 min', notat:'' },
   /* Vanlig ovnssteking — stekebrett eller brødform, ingen forvarmet masse og
@@ -183,7 +183,7 @@ const BAKE_PROFILES = [
      Brettet er altså i praksis tomt etter noen sekunder, og bunnen får varme
      fra ovnslufta i stedet for fra kontakt. Da er 270 °C ikke til hjelp: toppen
      setter seg lenge før bunnen er ferdig. Lavere og lengre, nederste rille.  */
-  { id:'brod_brett', navn:'Vanlig steking i ovnen', anbefaltTil:'stekebrett eller brødform, uten stein, stål eller gryte',
+  { id:'brod_brett', lokket:false, navn:'Vanlig steking i ovnen', anbefaltTil:'stekebrett eller brødform, uten stein, stål eller gryte',
     vekt:'700–900 g', hydrering:'65–72 %',
     inn:240, ned:210, nedNaar:'etter 15 min', damp:'ingen tilsatt — eventuelt en form med kokende vann i bunnen',
     dampTid:'15 min hvis du bruker vannform',
@@ -195,7 +195,7 @@ const BAKE_PROFILES = [
   // denne profilen var det eneste stedet som sa noe annet.
   // Vekten er satt ned til 700–800 g av samme grunn som utstyrslista oppgir:
   // innvendig 21,5 × 13,5 cm blir trangt for et 900 g emne etter ovnsløftet.
-  { id:'brod_glass_stal', navn:'Glassgryte PÅ 15 mm stål', anbefaltTil:'frittstående brød med Pyrex + stål', vekt:'700–800 g', hydrering:'72–78 %',
+  { id:'brod_glass_stal', lokket:true, navn:'Glassgryte PÅ 15 mm stål', anbefaltTil:'frittstående brød med Pyrex + stål', vekt:'700–800 g', hydrering:'72–78 %',
     inn:230, ned:230, nedNaar:'hold den der', damp:'ingen tilsatt — gryta holder på brødets eget damp', dampTid:'lokk på 20 min',
     rist:'gryta står oppå det forvarmede stålet, nederste tredel', tid:'45–50 min', kjerne:'96–99 °C', luft:'lokk av etter 20 min, dørspalte siste 5 min',
     notat:'Stålet leverer ca. 213 °C kontakttemperatur til bunnen ved 230-graders ovn (232-tallet gjelder 250 °C, som Pyrexen ikke tåler), glasset leverer dampen. Glasset alene gir bare ~140 °C mot bunnen — det er der ovnsløftet forsvinner. Forvarm stålet 90–120 min. LES ADVARSELEN om termisk sjokk under Utstyr før du forvarmer glasset.' },
@@ -215,21 +215,21 @@ const BAKE_PROFILES = [
      da er det andre sjokket — kald deig mot varm glassflate, ~254 °C differanse
      ved 260 °C — fortsatt over de 220 glasset tåler. Derfor har den profilen
      ingen `varm`, med vilje. */
-  { id:'brod_kloke', navn:'På stålet, glasset som klokke over', anbefaltTil:'frittstående brød med Pyrex + stål', vekt:'700–800 g', hydrering:'72–78 %',
+  { id:'brod_kloke', lokket:true, navn:'På stålet, glasset som klokke over', anbefaltTil:'frittstående brød med Pyrex + stål', vekt:'700–800 g', hydrering:'72–78 %',
     inn:230, ned:230, nedNaar:'hold den der', damp:'brødets eget, fanget under glasset', dampTid:'glasset av etter 20 min',
     varm:{ inn:260, ned:230, nedNaar:'straks døra lukkes',
       forutsetning:'Forutsetter at Pyrexen står i ovnen og varmes opp sammen med den. Går glasset kaldt inn i en varm ovn, gjelder 230 °C.' },
     rist:'direkte på stålet, nederste tredel', tid:'45–50 min', kjerne:'96–99 °C', luft:'glasset av etter 20 min',
     notat:'Teoretisk det sterkeste oppsettet: full stålkontakt mot deigen OG et lukket dampkammer. Krever at gryta er dyp nok til å dekke brødet uten å røre det. King Arthurs egen sammenligning kåret nettopp «støpejern + kokende vann + opp-ned bolle over brødet» til vinner. MAKS 230 °C med Pyrex som klokke — glasset tåler 220 °C termisk sprang, så det skal aldri inn i en varmere ovn enn det. LES ADVARSELEN om termisk sjokk under Utstyr før du forvarmer glasset.' },
-  { id:'ciabatta', navn:'Midt i ovnen på stål, kort og varmt', anbefaltTil:'ciabatta og andre flate, våte emner', vekt:'200–300 g biter', hydrering:'80–85 %',
+  { id:'ciabatta', lokket:false, navn:'Midt i ovnen på stål, kort og varmt', anbefaltTil:'ciabatta og andre flate, våte emner', vekt:'200–300 g biter', hydrering:'80–85 %',
     inn:260, ned:230, nedNaar:'straks', damp:'50 ml kokende vann i forvarmet støpejern', dampTid:'10–12 min',
     rist:'MIDTEN', tid:'20–25 min', kjerne:'97–99 °C', luft:'ta ut dampkaret etter 12 min',
     notat:'Ciabatta midt i ovnen fordi bunnflaten mot volumet er ca. 3× et rundbrøds — den svir seg før krummen setter seg. Trenger heller ikke bunnkick, den utvider seg sidelengs.' },
-  { id:'baguette', navn:'Nedre-midt med kraftig damp', anbefaltTil:'baguetter og avlange småbrød', vekt:'250–350 g', hydrering:'68–73 %',
+  { id:'baguette', lokket:false, navn:'Nedre-midt med kraftig damp', anbefaltTil:'baguetter og avlange småbrød', vekt:'250–350 g', hydrering:'68–73 %',
     inn:260, ned:240, nedNaar:'straks', damp:'75 ml kokende vann i støpejern på ovnsbunnen', dampTid:'12–15 min',
     rist:'nedre-midt', tid:'22–28 min', kjerne:'96–98 °C', luft:'damp ut 15 min. Valgfritt: slå av ovnen, sett døra 5 cm på gløtt og kjøl ned i ovnen for maks sprøhet.',
     notat:'Baguetter skal ikke langtidsheve — kjør 3–4 timer bulk. Poolish gjør smaksjobben.' },
-  { id:'focaccia', navn:'I oljet form, uten damp', anbefaltTil:'focaccia og annet som hever i form', vekt:'~700 g / 25 cm form', hydrering:'75–85 %',
+  { id:'focaccia', lokket:false, navn:'I oljet form, uten damp', anbefaltTil:'focaccia og annet som hever i form', vekt:'~700 g / 25 cm form', hydrering:'75–85 %',
     inn:240, ned:220, nedNaar:'straks', damp:'ingen', dampTid:'—',
     rist:'nederste tredel', tid:'25–30 min (snu etter 15)', kjerne:'94 °C', luft:'—',
     notat:'Bunnskorpa lages av ledningsvarme nedenfra pluss nok olje i formen til at den frityrsteker seg. Salamoia (like deler vann og olivenolje + 2 % salt, pisket) helles i søylepyttene rett før steking.' }
@@ -436,7 +436,11 @@ const FORMER = [
     advarsel:'' },
 
   { id:'form', navn:'Brødform', kort:'når deigen er for slapp', ikon:'▭',
-    kFaktor:0, maal:'', utstyr:'apen',
+    /* Brødform pekte på `apen` — åpen steking på stein ved 270 °C. Det er ikke
+       hva en brødform er: den står på et brett eller en rist, uten forvarmet
+       masse under seg og med vegger som bærer deigen. `brett` er nettopp det
+       oppsettet, og profilen bak den steker 240 → 210 i stedet for 270. */
+    kFaktor:0, maal:'', utstyr:'brett',
     om:'Formen bærer deigen, så du kan kjøre grovere og våtere enn et frittstående brød tåler. Over 40 % grovt eller 25 % rug er dette det ærlige valget.',
     snitt:'Ett langsgående snitt, eller ingen — en formdeig som er riktig hevet sprekker pent av seg selv langs kanten.',
     advarsel:'' }
@@ -591,8 +595,13 @@ const FF_TYPER = [
     merke:'MEST LØFT',
     plus:['Mest deigstyrke av alle forfermentene','Dypere, mer vinøs smak','Tåler lang modning uten å bli slapp'],
     minus:['Vil ha 16–18 °C, som er vanskelig hjemme om sommeren','Vanskeligere å lese enn poolish','Gir mest når melet er svakt/middels — på veldig sterkt mel (W300+) mangler du ekstensibilitet, ikke styrke, og poolish kan gå forbi'] },
+  /* `kultur:true` betyr at forfermenten podes med MODEN SURDEIGSSTARTER, ikke
+     med kommersiell gjær. Uten flagget doserte motoren tørrgjær i levainen —
+     og et levain med tørrgjær i er ikke et levain, det er en poolish.
+     `podePct` er starter i prosent av levainens eget mel. */
   { id:'surdeig', navn:'Surdeig', kort:'Levain · 100 % vann · ungt og aktivt',
     pctMel:20, hyd:100, timer:8, temp:24, salt:false, loftBase:3.0, refAndel:0.20, syre:true,
+    kultur:true, podePct:20,
     hvorfor:'Et levain av surdeigskultur i stedet for kommersiell gjær. Fortrinnet er smak, aroma, holdbarhet og fordøyelighet — IKKE løft. Kommersiell gjær gir mest volum; et ungt, velstyrt levain (nylig toppet, mild pH ~4,2) lander på poolish-nivå. Går byggingen for lenge, våkner proteasene og syren degraderer glutenet — da synker løftet.',
     merke:'MEST SMAK OG HOLDBARHET',
     plus:['Dybde og syrlig aroma ingen gjærforferment matcher','Lengst holdbarhet — syre og dekstriner bremser staling og mugg','Lavere glykemisk indeks og bedre fordøyelighet (fytinsyre brytes ned)'],
