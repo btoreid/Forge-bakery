@@ -170,7 +170,10 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await page.click('#bunnmeny button:has-text("Deig")');
   await page.waitForTimeout(200);
   const melrad = await page.locator('.melrad2:has-text("Regal")').first().innerText();
-  ok('Deig viser favoritt-pille, ikke dobbel stjerne', melrad.includes('FAVORITT') || melrad.includes('favoritt'));
+  /* Favoritten vises som ★ BAK melnavnet (Bjørns valg 31.07), ikke som pille.
+     Den skal ikke kunne bli dobbel: de hardkodede ★-ene i tre melnavn er ute. */
+  ok('Deig viser favorittstjerne bak melnavnet', melrad.includes('★'), melrad.replace(/\n/g, ' | '));
+  ok('ingen dobbel stjerne', (melrad.match(/★/g) || []).length === 1, melrad.replace(/\n/g, ' | '));
   ok('ingen «★ Regal…★»-dobling', !/★\s*Regal/.test(melrad), melrad.split('\n')[0]);
 
   // 4 + 9: deigregnskap — åpne, sjekk avvikseksjonen, lukk ved å trykke PÅ arket

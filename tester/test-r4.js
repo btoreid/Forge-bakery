@@ -568,7 +568,10 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     kloke: JSON.stringify(UTSTYR) + JSON.stringify(BAKE_PROFILES),
     former: JSON.stringify(FORMER)
   }));
-  ok('«kloke», ikke «klokke», i utstyr og profiler', !/klokke/.test(tekster.kloke));
+  /* Bjørn ombestemte seg: det skal stå «klokke», ikke «kloke». Testen vokter nå
+     at det er konsistent — ikke at ett bestemt av de to ordene er brukt. */
+  ok('«klokke» brukt konsistent i utstyr og profiler',
+    !/\bkloke\b/.test(tekster.kloke), (tekster.kloke.match(/\bkloke\b/) || ['—'])[0]);
 
   console.log(pageErrors.length ? '  ✗ JS-feil: ' + pageErrors.join(' | ') : '  ✓ ingen JS-feil på siden');
   if (pageErrors.length) feil++;

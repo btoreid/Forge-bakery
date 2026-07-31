@@ -747,13 +747,20 @@ function ffLoftFaktor(ffType, andel, styrkeVektet = 4.0, ekvTimer = 0) {
    (se advarselen i autolyse-boksen).                                          */
 function autolyseFaktor(minutter) {
   const m = Math.max(0, +minutter || 0);
-  if (!m) return { elt: 1, loft: 1, metning: 0 };
-  // Metning: 0 ved 0 min, ~0,63 ved 45 min, ~0,86 ved 90 min.
+  if (!m) return { elt: 1, loft: 1, metning: 0, absorpsjon: 0, sukker: 0 };
+  // Metning: 0 ved 0 min, ~0,49 ved 30 min, ~0,74 ved 60 min, ~0,93 ved 120.
   const metning = 1 - Math.exp(-m / 45);
   return {
     elt: 1 - 0.30 * metning,     // inntil 30 % kortere elting
     loft: 1 + 0.04 * metning,    // inntil +4 % løft — bevisst forsiktig
-    metning
+    /* Melet drikker seg fullt: samme vannmengde kjennes som en lavere
+       hydrering, fordi vannet er bundet i stedet for å ligge fritt. Uttrykt som
+       prosentpoeng «opplevd» lavere hydrering, maks 3 pp. */
+    absorpsjon: 3 * metning,
+    /* Amylasen frigjør maltose mens melet ligger. Det gir gjæren mer mat sent i
+       hevingen og mer skorpefarge — men det ENDRER IKKE hvor mye gjær du
+       trenger, for gjæren er ikke i deigen ennå og hevetiden er den samme. */
+    sukker: metning
   };
 }
 
@@ -1040,7 +1047,19 @@ function regn(state) {
   // Heveplanen kan være redigert av brukeren (state.heveplan); ellers planens standard.
   const planTrinn = (Array.isArray(state.heveplan) && state.heveplan.length ? state.heveplan : plan.plan).map(s => ({ ...s }));
   if (planTrinn.length) planTrinn[0].temp = state.startTemp ?? 24;
-  const pff = ffPaa ? forferment.pctMel / 100 : 0;
+  /* Forfermentens EFFEKTIVE andel, ikke bare melandelen.
+     `maalDoseFor` senket måldosen ut fra hvor stor andel av melet som ligger i
+     forfermenten — som om en forferment alltid er ferdig moden. Den er den ikke:
+     står den kaldt, har den knapt gjæret, og da har den heller ikke gjort den
+     jobben hoveddeigen slipper å gjøre.
+
+     Aktiviteten måles mot forfermentens egen referansetemperatur: full uttelling
+     ved den temperaturen typen er kalibrert for, mindre når den står kaldere.
+     Uten dette sto hoveddeigens gjærmengde helt stille enten forfermenten stod
+     på 26 eller på 4 grader — og det var åpenbart galt. */
+  const ffRef = forferment.standardTemp || 21;
+  const ffAktiv = ffPaa ? Math.max(0, Math.min(1, rateFactor(forferment.temp) / Math.max(rateFactor(ffRef), 1e-6))) : 0;
+  const pff = ffPaa ? (forferment.pctMel / 100) * ffAktiv : 0;
   const maalDose = maalDoseFor(r.grovMelAndel, pff);
   const opt = { lokk: !!state.lokk, fulltKjol: !!state.fulltKjol, antall: state.antall || 1 };
   let torr = gjaerForDose(maalDose, planTrinn, r.masseKg, opt), gjaerUnderskudd = 0;
@@ -1118,6 +1137,7 @@ function regn(state) {
     hyd, saltPct,
     gjaerTorr: torr, maalDose, gjaerUnderskudd,
     doseProfil, loft,
+    ffAktiv, ffAndelEffektiv: pff,
     prof, eltMin, vannTemp: dt.vannTemp, friksjon: dt.friksjonsOkning, wh: dt.friksjonsOkning / ELTING.GRAD_PER_WH,
     // Anbefalt eltetid MED autolysen: melet er alt hydrert og glutenet delvis
     // organisert, så samme utvikling nås på kortere tid.

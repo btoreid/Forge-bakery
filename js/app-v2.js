@@ -39,6 +39,7 @@ const STANDARD = {
   brodInfo: null,             // hvilken brødtype som har ⓘ-utfellingen åpen
   melEndring: null,           // ventende gramendring på mel: {i, gram, fra}
   kompSporsmal: false,        // kompensasjonsmodalen er reist av en endring
+  melVelger: false,           // meltype-velgeren er åpen
   ffTemp: null,               // forfermentens temperatur; null = planens forslag
   autolyseMin: 0,             // autolyse i minutter; 0 = av
   handlelisteOk: false,       // «dette må være i huset» er kvittert bort
@@ -119,7 +120,7 @@ function last() {
    noen appen sist». */
 const UI_FELT = ['skjerm', 'paramInfo', 'tilleggInfo', 'melInfo', 'meltallInfo', 'aktivSteg',
   'regnskapAapen', 'byttBekreft', 'lgRediger', 'lgSlett', 'bildeVis', 'oppslag', 'oppslagSok',
-  'brodInfo', 'kompVist', 'melEndring', 'kompSporsmal', 'handlelisteOk'];
+  'brodInfo', 'kompVist', 'melEndring', 'kompSporsmal', 'handlelisteOk', 'melVelger'];
 function dataAvtrykk(s) {
   const kopi = {};
   Object.keys(s).forEach(k => { if (k !== 'oppdatert' && UI_FELT.indexOf(k) < 0) kopi[k] = s[k]; });
@@ -129,19 +130,46 @@ function dataAvtrykk(s) {
    ville aller første lagring alltid talt som en endring — og det er nettopp den
    som skjer når man blar til Logg for å logge inn. */
 let _sisteAvtrykk = dataAvtrykk(S);
+
+/* ---------- Opplastingsporten ----------
+   ÉN betingelse styrer om noe får gå opp i skyen, og den er streng med vilje.
+   Databasereviewen fant fire varianter av samme feilform, og alle ender i at en
+   dårligere tilstand skriver over en bedre:
+
+     `_synkOk`      — vi har hentet ned og flettet mot skyen for DENNE kontoen.
+                      Uten den kunne et mislykket nedlastingsforsøk (fryst
+                      Supabase-prosjekt, halvdød wifi) etterfølges av en push
+                      som la en uflettet logg over historikken.
+     `_trygtAaSynke`— feilgrensa i render() har ikke nullstilt tilstanden. Et
+                      nullstilt state som lastes opp er nøyaktig like ille som
+                      de to hendelsene som allerede har skjedd i dag.
+
+   I tillegg lastes det bare opp når DATAENE faktisk er endret. Før gikk en full
+   opplasting ved hver navigasjon — som både kostet megabyte og flyttet skyens
+   tidsstempel, slik at skyen systematisk så nyere ut enn den var. */
+let _synkOk = false;
+let _trygtAaSynke = true;
+function kanSynke() {
+  return typeof Sky !== 'undefined' && Sky.klar() && Sky.bruker() && _synkOk && _trygtAaSynke;
+}
 function lagre() {
   // Tidsstempel når DATAENE endrer seg: det er dette synken sammenligner når
   // samme konto brukes fra to enheter (nyeste vinner).
   const avtrykk = dataAvtrykk(S);
-  if (avtrykk === null || avtrykk !== _sisteAvtrykk) {
+  const endret = (avtrykk === null || avtrykk !== _sisteAvtrykk);
+  if (endret) {
     S.oppdatert = Date.now();
     _sisteAvtrykk = avtrykk;
   }
-  try { localStorage.setItem(LAGER, JSON.stringify(S)); } catch (e) {}
-  // Lokalt først: localStorage er sannheten mens du bruker appen. Er du
-  // innlogget, speiles den opp til skyen (debouncet inne i Sky).
-  if (typeof Sky !== 'undefined' && Sky.klar() && Sky.bruker()) Sky.lagreOpp(S);
+  try { localStorage.setItem(LAGER, JSON.stringify(S)); }
+  catch (e) {
+    // Full kvote feilet før i stillhet: appen så ut til å lagre, og ved neste
+    // omstart var dagens arbeid borte.
+    if (String(e && e.name) === 'QuotaExceededError') _lagringFull = true;
+  }
+  if (endret && kanSynke()) Sky.lagreOpp(S);
 }
+let _lagringFull = false;
 
 /* ---------- DOM-hjelper ---------- */
 function h(tag, attrs, ...kids) {
@@ -304,10 +332,22 @@ function render() {
   _rendrer = true;
   try { renderInner(); }
   catch (e) {
-    // Feilgrense: en korrupt tilstand skal aldri gi en blank app (teknisk #4).
+    /* Feilgrense: en korrupt tilstand skal aldri gi en blank app (teknisk #4).
+       MEN den skal heller ikke kaste bort data. Før slettet den localStorage og
+       lot neste trykk laste den tomme tilstanden opp i skyen — samme utfall som
+       de to datatapene i dag, bare med en render-exception som utløser.
+
+       Nå: originalen tas vare på under en krasjnøkkel, og opplasting stenges til
+       appen har flettet mot skyen igjen. */
     if (typeof console !== 'undefined') console.error('render feilet, nullstiller', e);
+    try {
+      const raa = localStorage.getItem(LAGER);
+      if (raa) localStorage.setItem(LAGER + '.krasj', raa);
+    } catch (e2) {}
+    _trygtAaSynke = false;
     S = nyStandard();
-    try { localStorage.removeItem(LAGER); } catch (e2) {}
+    _sisteAvtrykk = dataAvtrykk(S);
+    try { localStorage.setItem(LAGER, JSON.stringify(S)); } catch (e2) {}
     try { renderInner(); } catch (e3) { byId('innhold').textContent = 'Noe gikk galt — appen ble nullstilt.'; }
   }
   finally { _rendrer = false; }
@@ -844,12 +884,21 @@ function tegnDeigen(r) {
     const flour = FLOURS.find(f => f.id === m.id) || {};
     const bidrag = info && GLUTENBIDRAG_TEKST[info.glutenbidrag] ? GLUTENBIDRAG_TEKST[info.glutenbidrag].navn : '';
     const fav = erFavoritt('mel', m.id);
-    // Favoritt vises som egen merkelapp, ikke ★ foran navnet — flere melnavn
-    // har allerede ★ i seg (kvalitetsmerke), og to stjerner leste som støy.
+    /* Stjerna står BAK navnet, som en merkelapp på melet — ikke som en pille.
+       Den er brukerens egen (satt i Oppslag → Mel & korn), aldri hardkodet:
+       ★-ene som lå i tre av melnavnene er fjernet nettopp derfor. */
     melBoks.appendChild(h('div', { class: 'melrad2' + (i === 0 ? ' forst' : '') },
       h('div', { class: 'm-navn' },
-        h('div', { class: 'n' }, m.navn, fav ? h('span', { class: 'fav-pille' }, 'favoritt') : null),
-        h('div', { class: 'sub' }, [bidrag, flour.protein != null ? fmt(flour.protein, 1) + ' g protein' : null].filter(Boolean).join(' · '))),
+        h('div', { class: 'n' }, m.navn, fav ? h('span', { class: 'fav-stjerne', title: 'Favoritt' }, '★') : null),
+        h('div', { class: 'sub' }, melUndertekst(m, flour, bidrag)),
+        // × på selve raden. Løsrevne «fjern»-piller under lista var vanskelige
+        // å knytte til riktig mel.
+        r.mel.length > 1 ? h('button', { class: 'm-fjern', 'aria-label': 'Fjern ' + m.navn,
+          onClick: () => {
+            const liste = (gyldigOverstyring(S.melOverstyr) || r.melListe).filter((_, j) => j !== i);
+            S.melOverstyr = liste.length ? liste : null;
+            oppdater();
+          } }, '✕') : null),
       // Gram er redigerbart. Har du 500 g igjen av en melsort, skriver du 500 —
       // i stedet for å regne ut hvilken andel det blir. Selve omregningen ligger
       // i engine.js (settMelGram), som itererer fordi melmengden avhenger av
@@ -973,6 +1022,18 @@ function tegnDeigen(r) {
   return wrap;
 }
 
+/* Undertekst per mel: hva det GIR først, hva det koster etterpå.
+   Linja sa før bare glutenbidraget — «Fortynner», «Bryter ned» — så et helt
+   melbibliotek leste som en liste over ting som ødelegger brødet. Hver meltype
+   er valgt av en grunn, og den grunnen skal stå først. `MEL_INFO.plus[0]` er
+   melets egen begrunnelse; glutenbidraget følger etter som kostnaden. */
+function melUndertekst(m, flour, bidrag) {
+  const info = (typeof MEL_INFO !== 'undefined') && MEL_INFO[m.id];
+  const gir = info && info.plus && info.plus.length ? info.plus[0] : null;
+  const deler = [gir, bidrag, flour.protein != null ? fmt(flour.protein, 1) + ' g protein' : null];
+  return deler.filter(Boolean).join(' · ');
+}
+
 /* Legg til en meltype, og fjern en du ikke vil ha.
    Skriver til `S.melOverstyr`, samme mekanisme som gramredigeringen: fra det
    øyeblikket man rører blandingen er den brukerens, og grovhetstrinnene styrer
@@ -981,40 +1042,53 @@ function tegnMelLeggTil(r) {
   const boks = h('div', { style: 'margin-top:12px' });
   const brukt = new Set(r.mel.map(m => m.id));
   const ledige = FLOURS.filter(f => !brukt.has(f.id));
-  if (r.mel.length > 1) {
-    boks.appendChild(h('div', { class: 'felt-label' }, 'Fjern en meltype'));
-    boks.appendChild(h('div', { class: 'piller', style: 'flex-wrap:wrap;margin-top:6px' },
-      ...r.mel.map((m, i) => h('button', { style: 'font-size:.74rem',
-        'aria-label': 'Fjern ' + m.navn,
-        onClick: () => {
-          const liste = (gyldigOverstyring(S.melOverstyr) || r.melListe).filter((_, j) => j !== i);
-          S.melOverstyr = liste.length ? liste : null;
-          oppdater();
-        } }, '✕ ' + m.navn))));
-  }
   if (!ledige.length) return boks;
-  boks.appendChild(h('div', { class: 'felt-label', style: 'margin-top:10px' }, 'Legg til meltype'));
-  const velger = h('select', { class: 'sok', style: 'margin-top:6px', 'aria-label': 'Velg meltype å legge til' },
-    h('option', { value: '' }, 'Velg meltype …'));
+
+  if (!S.melVelger) {
+    boks.appendChild(h('button', { class: 'btn', style: 'width:100%;font-size:.84rem',
+      onClick: () => { S.melVelger = true; oppdater(); } }, '+ Legg til meltype'));
+    return boks;
+  }
+  /* ETT trykk legger melet inn. Første utgave hadde en nedtrekksliste og en
+     «legg til»-knapp: man måtte velge, og så bekrefte valget man nettopp gjorde.
+     Nå er lista selve handlingen. Favoritter øverst, fordi det er dem man
+     som regel er ute etter. */
+  boks.appendChild(h('div', { style: 'display:flex;align-items:baseline;gap:8px' },
+    h('div', { class: 'felt-label', style: 'flex:1;font-weight:800' }, 'Velg meltype å legge til'),
+    h('button', { class: 'btn-ghost', style: 'font-size:.78rem', onClick: () => { S.melVelger = false; oppdater(); } }, 'Avbryt')));
+
+  const leggTil = id => {
+    /* Ny meltype kommer inn på 10 % og de andre skaleres til 90 %, så summen
+       blir 100 uansett hva den var. 0 % ville gitt en rad som ikke gjorde noe. */
+    const grunn = (gyldigOverstyring(S.melOverstyr) || r.melListe).map(m => ({ ...m }));
+    const sum = grunn.reduce((s2, m) => s2 + m.pct, 0) || 100;
+    S.melOverstyr = grunn.map(m => ({ id: m.id, pct: m.pct / sum * 90 })).concat([{ id, pct: 10 }]);
+    S.melVelger = false;
+    oppdater();
+  };
+  const liste = h('div', { class: 'melvelger' });
+  const favs = ledige.filter(f => erFavoritt('mel', f.id));
+  const rad = f => h('button', { class: 'melvelger-rad', onClick: () => leggTil(f.id) },
+    kornTegning(f.id),
+    h('span', { style: 'flex:1;min-width:0;text-align:left' },
+      h('span', { style: 'display:block;font-weight:700;font-size:.86rem' },
+        f.navn, erFavoritt('mel', f.id) ? h('span', { class: 'fav-stjerne' }, '★') : null),
+      h('span', { style: 'display:block;font-size:.72rem;color:var(--color-neutral-600)' },
+        f.gruppe + ' · ' + fmt(f.protein, 1) + ' g protein')),
+    h('span', { style: 'color:var(--color-accent-700);font-weight:800;font-size:1.1rem' }, '+'));
+  if (favs.length) {
+    liste.appendChild(h('div', { class: 'felt-label', style: 'margin-top:6px' }, 'Favorittene dine'));
+    favs.forEach(f => liste.appendChild(rad(f)));
+  }
   let gruppe = '';
-  ledige.forEach(f => {
-    if (f.gruppe !== gruppe) { gruppe = f.gruppe; velger.appendChild(h('optgroup', { label: gruppe })); }
-    velger.lastChild.appendChild(h('option', { value: f.id }, (erFavoritt('mel', f.id) ? '★ ' : '') + f.navn));
+  ledige.filter(f => !erFavoritt('mel', f.id)).forEach(f => {
+    if (f.gruppe !== gruppe) {
+      gruppe = f.gruppe;
+      liste.appendChild(h('div', { class: 'felt-label', style: 'margin-top:8px' }, gruppe));
+    }
+    liste.appendChild(rad(f));
   });
-  boks.appendChild(velger);
-  boks.appendChild(h('button', { class: 'btn', style: 'margin-top:8px;width:100%;font-size:.82rem',
-    onClick: () => {
-      const id = velger.value;
-      if (!id) return;
-      /* Ny meltype kommer inn på 10 % og de andre skaleres ned til 90 %, så
-         summen blir 100 uansett hva den var. Å legge den inn på 0 % ville gitt
-         en rad som ikke gjorde noe, og krevd et ekstra steg for å bli synlig. */
-      const grunn = (gyldigOverstyring(S.melOverstyr) || r.melListe).map(m => ({ ...m }));
-      const sum = grunn.reduce((s2, m) => s2 + m.pct, 0) || 100;
-      const skalert = grunn.map(m => ({ id: m.id, pct: m.pct / sum * 90 }));
-      S.melOverstyr = skalert.concat([{ id, pct: 10 }]);
-      oppdater();
-    } }, 'Legg til i blandingen'));
+  boks.appendChild(liste);
   return boks;
 }
 
@@ -1306,10 +1380,30 @@ function tegnAutolyse(r) {
     ...[[0, 'Av'], [30, '30 min'], [60, '1 time'], [120, '2 timer'], [180, '3 timer']].map(([v, navn]) =>
       h('button', { class: min === v ? 'paa' : '', onClick: () => { S.autolyseMin = v; oppdater(); } }, navn))));
   if (paa) boks.appendChild(stepperRad('Minutter', min, 'autolyseMin', 10, 240, 15));
-  boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' }, paa
-    ? ['Mel og vann blandes og hviler ', h('b', null, fmtTimer(min / 60)), ' før salt og gjær kommer i. Det legger ',
-       h('b', null, fmtTimer(min / 60)), ' til totaltiden, og du ser steget under Prosess.']
-    : 'Av. Mel, vann, salt og gjær blandes samtidig.'));
+  /* Hva autolysen FAKTISK gjør, med tall for den lengden som er valgt.
+     Uten dette så 30 minutter og 2 timer helt like ut, og valget virket som en
+     tidsluke uten innhold. Alle tallene kommer fra `autolyseFaktor()` — ingen
+     parallell utregning her. */
+  if (paa) {
+    const a = r.autolyse || { elt: 1, loft: 1, absorpsjon: 0, metning: 0 };
+    const utenAuto = regn(Object.assign({}, S, { autolyseMin: 0 }));
+    const eltUten = S.eltMin || 13;
+    boks.appendChild(h('div', { style: 'margin-top:12px' },
+      h('div', { class: 'felt-label', style: 'font-weight:800' }, 'Dette gjør ' + fmtTimer(min / 60) + ' autolyse'),
+      tallrad('Elting du trenger', eltUten + ' → ' + r.eltMinAnbefalt + ' min'),
+      tallrad('Løftindeks', utenAuto.loft.loft + ' → ' + r.loft.loft),
+      tallrad('Deigen kjennes som', 'ca. ' + fmt(S.hyd - a.absorpsjon, 0) + ' % vann (du har ' + S.hyd + ' %)'),
+      tallrad('Effekt oppnådd', fmt(a.metning * 100, 0) + ' % av det autolysen kan gi')));
+    boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
+      'Legger ', h('b', null, fmtTimer(min / 60)), ' til totaltiden. Effekten flater ut: ',
+      'en halvtime gir omtrent halvparten av gevinsten, en time tre firedeler, og etter to timer er det lite igjen å hente.'));
+    boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
+      h('b', null, 'Gjærmengden endres ikke — og det er riktig. '),
+      'Gjæren er ikke i deigen under autolysen, og hevetiden etterpå er den samme, så det er ingenting for gjæren å ta igjen. Det autolysen gir, er at melet er ferdig hydrert og glutenet delvis bygget FØR eltingen begynner. Amylasen frigjør samtidig litt maltose, som gir mer skorpefarge og mat til gjæren sent i hevingen.'));
+  } else {
+    boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' },
+      'Av. Mel, vann, salt og gjær blandes samtidig.'));
+  }
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
     'Autolyse er mel og vann alene, uten salt og gjær. Melet drikker seg fullt, og enzymene begynner å bryte ned proteinet — glutenet bygger seg selv, så du trenger kortere elting for samme nettverk. Saltet holdes utenfor fordi det strammer glutenet og bremser enzymene; gjæren fordi gjæringen ikke skal starte ennå.'));
   /* Begge samtidig ER meningsfullt, og det er verdt å si HVORDAN — ellers ser
@@ -2330,8 +2424,11 @@ function loggSlettBekreft(b, i) {
         onClick: () => {
           // Gravsteinen er det som gjør sletting varig: uten den ville posten
           // kommet tilbake neste gang en annen enhet synket sin kopi opp.
+          /* Filtrer på ID, ikke indeks. En synk fra en annen enhet kan bytte
+             ut hele lista mens bekreftelsesdialogen står åpen, og da peker
+             indeksen på en helt annen post enn den man ba om å slette. */
           S.loggSlettet = (S.loggSlettet || []).concat([b.id]);
-          S.loggListe = S.loggListe.filter((_, j) => j !== i);
+          S.loggListe = S.loggListe.filter(x => x.id !== b.id);
           S.lgSlett = null; oppdater();
         } }, 'Ja, slett'),
       h('button', { class: 'btn', style: 'flex:1;font-size:.82rem', onClick: () => { S.lgSlett = null; oppdater(); } }, 'Avbryt')));
@@ -2341,11 +2438,11 @@ function loggSlettBekreft(b, i) {
    endres i ettertid — da ville loggen sluttet å være et ærlig referansepunkt. */
 function loggRediger(b, i) {
   const settFelt = (felt, verdi) => {
-    const liste = S.loggListe.slice();
-    // `endret` stemples her fordi det er den som avgjør hvem som vinner når
-    // samme post er redigert på to enheter.
-    liste[i] = Object.assign({}, liste[i], { [felt]: verdi, endret: Date.now() });
-    S.loggListe = liste;
+    // På ID, av samme grunn som slettingen: indeksen kan ha flyttet seg.
+    // `endret` stemples fordi det er den som avgjør hvem som vinner når samme
+    // post er redigert på to enheter.
+    S.loggListe = S.loggListe.map(x =>
+      x.id === b.id ? Object.assign({}, x, { [felt]: verdi, endret: Date.now() }) : x);
   };
   const inpFil = h('input', { type: 'file', accept: 'image/*', style: 'display:none',
     'aria-label': 'Velg bilde', onchange: e => leggTilBilde(e.target.files && e.target.files[0], i) });
@@ -2450,9 +2547,12 @@ function leggTilBilde(fil, loggIdx) {
       if (loggIdx == null) {
         S.lgBilder = (S.lgBilder || []).concat([data]);
       } else if (S.loggListe[loggIdx]) {
-        const liste = S.loggListe.slice();
-        liste[loggIdx] = Object.assign({}, liste[loggIdx], { bilder: (liste[loggIdx].bilder || []).concat([data]) });
-        S.loggListe = liste;
+        // `endret` MÅ stemples: flettingen avgjør duellen på det feltet, og en
+        // post med nytt bilde tapte mot en uendret kopi på en annen enhet.
+        const maalId = S.loggListe[loggIdx].id;
+        S.loggListe = S.loggListe.map(x => x.id === maalId
+          ? Object.assign({}, x, { bilder: (x.bilder || []).concat([data]), endret: Date.now() })
+          : x);
       }
       oppdater();
     };
@@ -2860,6 +2960,15 @@ function skrivArkiv(uid, poster, slettet) {
   try { localStorage.setItem(LOGG_ARKIV(uid), JSON.stringify({ poster: poster || [], slettet: slettet || [] })); } catch (e) {}
 }
 
+/* Hvilken konto den lokale tilstanden tilhører.
+   `S` bar ingen uid, så ved kontobytte på samme enhet ble forrige brukers
+   innstillinger, standardbrød, favoritter og bildeutkast behandlet som den nye
+   kontoens — og lastet opp i deres rad. Loggen var vernet av flettingen; resten
+   var det ikke. */
+const UID_LAGER = 'forgebakery.v2.uid';
+function lagretUid() { try { return localStorage.getItem(UID_LAGER); } catch (e) { return null; } }
+function settLagretUid(uid) { try { uid ? localStorage.setItem(UID_LAGER, uid) : localStorage.removeItem(UID_LAGER); } catch (e) {} }
+
 const ANON_LAGER = 'forgebakery.v2.utenkonto';
 function naaKonto() {
   const b = (typeof Sky !== 'undefined' && Sky.klar() && Sky.bruker()) || null;
@@ -2988,8 +3097,16 @@ async function synkVedInnlogging() {
   const flettet = flettLogg(mine, skyState.loggListe, gravsteiner);
   if (skyMs > lokaltMs) {
     try {
+      /* Skyen vinner på INNSTILLINGER, aldri på hvor du står.
+         Uten dette adopterte appen også `skjerm`, åpne utfellinger og
+         søkefeltet fra den andre enheten: gikk du til Logg mens en synk kom
+         inn, ble du kastet til Oppslag fordi det var der PC-en sto sist.
+         Visningstilstand tilhører enheten du holder i hånda. */
+      const beholdUI = {};
+      UI_FELT.forEach(k => { beholdUI[k] = S[k]; });
       localStorage.setItem(LAGER, JSON.stringify(skyState));
       S = last();
+      Object.keys(beholdUI).forEach(k => { if (beholdUI[k] !== undefined) S[k] = beholdUI[k]; });
       if (window.__FB) window.__FB.S = S;
     } catch (e) {}
   }
