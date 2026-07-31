@@ -354,6 +354,19 @@ function kornTegning(flourId) {
 
 let _nullstillScroll = false;
 let _rendrer = false;
+
+/* SCROLL-ANKER: en re-render bygger hele skjermen på nytt, og trykker du f.eks.
+   «Honning» dukker kompensasjonskortet opp ØVERST i tillegg-seksjonen samtidig
+   som raden vokser. Med bare bevart `scrollTop` sklir raden du nettopp traff
+   langt nedover — «masse spretter på skjermen». Løsningen: rett før tilstanden
+   endres noterer vi det trykte elementets plass i vinduet (via `data-anker`), og
+   etter re-render justeres scrollen så SAMME element ligger der fingeren var.
+   Vi bruker performance.now() i stedet for Date.now() så det er trygt overalt. */
+let _anker = null;   // { id, top, tid }
+document.addEventListener('click', e => {
+  const el = e.target && e.target.closest ? e.target.closest('[data-anker]') : null;
+  if (el) _anker = { id: el.getAttribute('data-anker'), top: el.getBoundingClientRect().top, tid: performance.now() };
+}, true);
 function render() {
   // Re-entrans-vern: når replaceChildren fjerner et fokusert felt, fyrer
   // nettleseren en ekte blur MIDT i renderen — og feltets onblur ville startet
@@ -471,6 +484,15 @@ function renderInner() {
   const tegner = { brodet: tegnBrodet, deigen: tegnDeigen, tid: tegnTid, prosess: tegnProsess, logg: tegnLogg, oppslag: tegnOppslag }[S.skjerm];
   innhold.replaceChildren(tegner(r, K));
   innhold.scrollTop = scroll;
+  /* Hold det trykte elementet i ro: fant vi et anker rett før denne renderen,
+     flytt scrollen så elementet havner tilbake der det var da man traff det.
+     Da glir ikke raden vekk selv om et kort dukker opp over den. */
+  if (!_nullstillScroll && _anker && performance.now() - _anker.tid < 700) {
+    let na = null;
+    try { na = innhold.querySelector('[data-anker="' + (window.CSS && CSS.escape ? CSS.escape(_anker.id) : _anker.id) + '"]'); } catch (e) {}
+    if (na) innhold.scrollTop += na.getBoundingClientRect().top - _anker.top;
+  }
+  _anker = null;
   _nullstillScroll = false;
 
   if (fokusN) {
@@ -1385,7 +1407,7 @@ function tilleggRad(t, r) {
   const status = paa
     ? fmt(pct, 1) + ' % · ' + veiG(gramV) + (erSmak ? '' : ' · ' + behandlingOrd(t.id)) + soneOrd
     : 'trykk for å legge til (' + fmt(t.pct, 1) + ' %)';
-  const rad = h('div', { class: 'tillegg-rad' + (paa ? ' paa' : '') + sone },
+  const rad = h('div', { class: 'tillegg-rad' + (paa ? ' paa' : '') + sone, 'data-anker': 'tillegg-' + t.id },
     h('div', { style: 'display:flex;align-items:center;gap:8px' },
       // Trykkbar toggle: av → legg til på anbefalt verdi, på → fjern.
       h('button', { class: 'tillegg-toggle', 'aria-pressed': paa ? 'true' : 'false', onClick: () => togglTillegg(t) },
