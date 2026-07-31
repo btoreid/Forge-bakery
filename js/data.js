@@ -611,7 +611,10 @@ const FF_TYPER = [
     plus:['Ingen planlegging dagen før','Ett kar mindre å vaske','Fungerer greit til hverdagsbrød'],
     minus:['Tydelig grunnere smak','Trenger mer gjær, som gir mer gjærpreg','Svakere deig ved høy hydrering'] },
   { id:'poolish', navn:'Poolish', kort:'Tynn røre · 100 % vann · 21 °C',
-    pctMel:25, hyd:100, timer:12, temp:21, salt:false, loftBase:3.5, refAndel:0.25, syre:false,
+    // romTidBase: timer i romtemp FØR kjøl når forfermenten retarderes (kald-
+    // start-holdet). Referanse 21 °C, ~0,7 % fersk gjær. Skaleres med romtemp i
+    // motoren. Gjelder bare når forfermenten faktisk settes kaldt.
+    pctMel:25, hyd:100, timer:12, temp:21, romTidBase:1.5, salt:false, loftBase:3.5, refAndel:0.25, syre:false,
     hvorfor:'Like deler mel og vann — en tynn røre. Gir ekstensibilitet og en kremet, mildt vinøs smak. Lettest å lese av alle forfermentene: den er klar når kuppelen akkurat begynner å synke i midten.',
     merke:'MEST EKSTENSIBILITET',
     plus:['Trives på 20–22 °C, altså vanlig romtemperatur','Du ser når den er klar — kuppelen synker','Mest ekstensibilitet: deigen strekker seg lett — og på sterkt mel (W300+) gir det faktisk mest løft'],
@@ -621,7 +624,7 @@ const FF_TYPER = [
     // upraktisk om sommeren, men full romtemp (22–24) gjærer den for fort. Motoren
     // klemmer derfor din romtemp inn i dette båndet som standard — og gjærdosen
     // løses uansett mot den faktiske temperaturen, så tallet er trygt å nudge.
-    pctMel:30, hyd:50, timer:16, temp:18, tempMin:16, tempMax:20, salt:false, loftBase:5.0, refAndel:0.30, syre:false,
+    pctMel:30, hyd:50, timer:16, temp:18, tempMin:16, tempMax:20, romTidBase:2.0, salt:false, loftBase:5.0, refAndel:0.30, syre:false,
     hvorfor:'Stiv forferment på 45–55 % hydrering. Gir styrke og ekstensibilitet samtidig, og en dypere, mer vinøs smak enn poolish. Den stive matrisen beskytter glutenet og bremser proteasene, så den tåler tid bedre. Veien til høyest løft på butikkmel.',
     merke:'MEST LØFT',
     plus:['Mest deigstyrke av alle forfermentene','Dypere, mer vinøs smak','Tåler lang modning uten å bli slapp'],

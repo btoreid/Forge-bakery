@@ -302,16 +302,20 @@ function stivhetsMultiplikator(hydrering) {         // 1,0 ved ≥70 %, 2,5 ved 
    Denne returnerer gjennomsnittlig ratefaktor langs den faktiske temperaturbanen
    fra blandetemp til miljøtemp. Er de like (forferment i rommet), er svaret bare
    rateFactor(miljo) — isotermt, som før. */
-function kjolebaneRate(timer, blandeTemp, miljo, masseKg) {
+function kjolebaneRate(timer, blandeTemp, miljo, masseKg, romTid = 0) {
   if (!(timer > 0)) return rateFactor(miljo);
   if (Math.abs(blandeTemp - miljo) < 0.3) return rateFactor(miljo);   // står i rommet: ingen nedkjøling
   const tau = tauHours(Math.max(masseKg || 0.35, 0.05), { lokk: true });
+  const rt = Math.max(0, Math.min(romTid || 0, timer));              // romtemp-hold FØR kjøl
   const steg = 120;
   const dt = timer / steg;
   let sum = 0;
   for (let i = 0; i < steg; i++) {
     const tMid = (i + 0.5) * dt;
-    sum += rateFactor(doughTempAt(tMid, blandeTemp, miljo, tau)) * dt;
+    // Fase 1: står i rommet (isotermt ved blandetemp). Fase 2: settes i kjøl og
+    // kjøler ned derfra. Nedkjølingsklokka starter når den går inn i skapet.
+    const T = tMid <= rt ? blandeTemp : doughTempAt(tMid - rt, blandeTemp, miljo, tau);
+    sum += rateFactor(T) * dt;
   }
   return sum / timer;
 }
@@ -327,8 +331,8 @@ function kjolebaneRate(timer, blandeTemp, miljo, masseKg) {
    temperaturen den blandes ved (romtemp), og `masseKg` dens masse — begge trengs
    for kjølebanen. Uten dem faller den tilbake på isoterm beregning. */
 function forfermentGjaerPct(timer, temp, o = {}) {
-  const { hydrering = 1.0, type = 'torr', blandeTemp = temp, masseKg = 0.35 } = o;
-  const effRate = kjolebaneRate(timer, blandeTemp, temp, masseKg);
+  const { hydrering = 1.0, type = 'torr', blandeTemp = temp, masseKg = 0.35, romTid = 0 } = o;
+  const effRate = kjolebaneRate(timer, blandeTemp, temp, masseKg, romTid);
   const tempJust = effRate / rateFactor(FERM.POOLISH_TREF);
   let ferskPct = (FERM.POOLISH_K / Math.pow(Math.max(timer, 1), FERM.POOLISH_N)) / tempJust;
   ferskPct *= stivhetsMultiplikator(hydrering);
@@ -585,7 +589,7 @@ function beregnOppskrift(inn) {
     const ffGjaerPct = forfermentGjaerPct(forferment.timer, forferment.temp, {
       hydrering: forferment.hydrering / 100, type: gjaerType,
       blandeTemp: (forferment.mikstemp != null && isFinite(forferment.mikstemp)) ? forferment.mikstemp : forferment.temp,
-      masseKg: ffMasseKg
+      masseKg: ffMasseKg, romTid: forferment.romTid || 0
     });
     /* Taket på forfermentens egen gjærdose.
        Modellen holder tiden fast og løser gjærmengden mot temperaturen. Det gir
@@ -626,6 +630,9 @@ function beregnOppskrift(inn) {
       gjaerPaaTaket: !medKultur && ffGjaerPct > ffPctBrukt + 1e-9,
       gjaerTakPct: gjaerKonverter(FF_GJAER_TAK_FERSK, 'fersk', gjaerType),
       salt: ffMel * 0.0015,                       // 0,15 % mot proteaseoppløsning
+      // Romtemp-holdet før kjøl (0 når forfermenten står varmt eller går rett i kjøl).
+      romTid: forferment.romTid || 0, romTidStd: forferment.romTidStd || 0,
+      egenRomTid: !!forferment.egenRomTid, mikstemp: forferment.mikstemp,
       // Starteren er også masse som går i bollen, og den skal telle i totalen.
       total: ffMel + ffVann + ffGjaer + ffStarter,
       brukTidligst: Math.max(1, forferment.timer - 2),
@@ -1290,6 +1297,27 @@ function regnKjerne(state) {
     egenTemp: state.ffTemp != null
   };
 
+  /* ROMTEMP-HOLD FØR KJØL. En retardert poolish/biga får en kald-start i rommet
+     før den settes kaldt: gjærkolonien kommer i gang mens den ennå er varm, så
+     bremses den i skapet mens syre og aroma bygger seg. Baker-validering:
+     poolish ~1,5 t, biga ~2 t ved 21 °C, skalert med romtemp (±8 °C halverer/
+     dobler, Q10). Grenser 0,5–3 t. Rett i kjøl (0 t) for lange retarderinger
+     (>18 t, ellers overmodner den) eller varmt rom (>26 °C). Gjelder BARE når
+     forfermenten faktisk står kaldt — en varm forferment står jo alt i rommet. */
+  const ffErKald = forferment.temp <= KALDGRENSE;
+  const romTidBase = isFinite(ffT.romTidBase) ? ffT.romTidBase : 1.5;
+  let romTidStd = ffErKald ? romTidBase * Math.pow(2, (21 - ffRomT) / 8) : 0;
+  romTidStd = Math.max(0.5, Math.min(3, romTidStd));
+  if (forferment.timer > 18 || ffRomT > 26) romTidStd = 0;        // rett i kjøl
+  if (!ffErKald) romTidStd = 0;
+  forferment.romTidStd = romTidStd;
+  forferment.egenRomTid = state.ffRomTid != null;
+  forferment.romTid = ffErKald
+    ? ((state.ffRomTid != null && isFinite(state.ffRomTid))
+        ? Math.max(0, Math.min(+state.ffRomTid, forferment.timer))
+        : romTidStd)
+    : 0;
+
   // Frøgram avhenger av melTotal og melTotal av frøgram. Det er en AFFIN likning,
   // ikke en som skal itereres: naiv Picard-iterasjon DIVERGERER når frølasten er
   // tung (teknisk review, kritisk — ga melTotal = 0 og NaN i hele oppskriften).
@@ -1369,7 +1397,7 @@ function regnKjerne(state) {
   // Aktiviteten måles langs kjølebanen, ikke isotermt: en kald forferment gjærer
   // godt mens den kjøles ned, så den er mer moden enn en ren rate(4 °C) skulle si.
   const ffMasseKg = r.forferment ? (r.forferment.mel + r.forferment.vann) / 1000 : 0.35;
-  const ffEffRate = ffPaa ? kjolebaneRate(forferment.timer, forferment.mikstemp, forferment.temp, ffMasseKg) : 0;
+  const ffEffRate = ffPaa ? kjolebaneRate(forferment.timer, forferment.mikstemp, forferment.temp, ffMasseKg, forferment.romTid) : 0;
   const ffAktiv = ffPaa ? Math.max(0, Math.min(1, ffEffRate / Math.max(rateFactor(ffRef), 1e-6))) : 0;
   const pff = ffPaa ? (forferment.pctMel / 100) * ffAktiv : 0;
   const maalDose = maalDoseFor(r.grovMelAndel, pff);
@@ -1639,6 +1667,14 @@ function kjede(state, r, ferdigMs) {
   if (r.ffPaa && r.forferment) {
     const ff = r.forferment;
     const ffStart = minus(eltStart, ff.timer * 60);
+    // Romtemp-hold før kjøl (kald-start): står ff.romTid t i rommet, så resten kaldt.
+    const harHold = ff.romTid > 0.05;
+    const kjolDel = Math.max(0, ff.timer - ff.romTid);
+    const holdTekst = harHold
+      ? ' La den så stå ca. ' + fmtTimer(ff.romTid) + ' i romtemp (' + grader(ff.mikstemp, 0) +
+        ') til de FØRSTE boblene viser seg — da er gjæren i gang — og sett den deretter i kjøleskapet (' +
+        grader(ff.temp, 0) + ') resten av tiden, ' + fmtTimer(kjolDel) + '.'
+      : '';
     steg.push({
       id: 'ff', navn: 'Sett ' + r.ffT.navn.toLowerCase() + 'en', tid: ffStart, varighet: ff.timer * 60, tone: 'noytral',
       hoved: gram(ff.mel), hovedNote: 'mel i forfermenten', sideK: 'Modning', sideV: fmtTimer(ff.timer),
@@ -1646,11 +1682,15 @@ function kjede(state, r, ferdigMs) {
              ff.kultur
                ? ['Moden starter', fmt(ff.starter, 0) + ' g (' + fmt(ff.podePct, 0) + ' % av melet)']
                : ['Tørrgjær', fmt(ff.gjaer, 2) + ' g'],
-             ['Temperatur', grader(ff.temp, 0)], ...(ff.salt > 0.05 ? [['Salt', fmt(ff.salt, 2) + ' g']] : [])],
-      gjor: ff.kultur
+             ...(harHold
+                 ? [['Romtemp-start', fmtTimer(ff.romTid) + ' ved ' + grader(ff.mikstemp, 0)],
+                    ['Så i kjøl', fmtTimer(kjolDel) + ' ved ' + grader(ff.temp, 0)]]
+                 : [['Temperatur', grader(ff.temp, 0)]]),
+             ...(ff.salt > 0.05 ? [['Salt', fmt(ff.salt, 2) + ' g']] : [])],
+      gjor: (ff.kultur
         ? 'Rør ut ' + fmt(ff.starter, 0) + ' g moden surdeigsstarter i vannet, så melet i. Ingen kommersiell gjær her — det er kulturen som skal bygge levainen. Lokk på.'
         : 'Visp ut gjæren i vannet FØR melet — noen tiendedels gram fordeler seg ikke i tørt mel. ' +
-            (ff.hydrering <= 60 ? 'Bland bare til den er lurvete; rå melklumper er riktig i en stiv forferment. ' : 'Rør til jevn røre. ') + 'Lokk på.',
+            (ff.hydrering <= 60 ? 'Bland bare til den er lurvete; rå melklumper er riktig i en stiv forferment. ' : 'Rør til jevn røre. ') + 'Lokk på.') + holdTekst,
       // Tellene er ulike per type: surdeig og stiv biga leses IKKE som en poolish.
       // Flytetesten er bevisst utelatt for surdeig — appen fraråder den for deig
       // (flytepunktet inntreffer alt ved 11–17 % stigning), og et flytende levain

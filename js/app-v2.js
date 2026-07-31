@@ -42,6 +42,7 @@ const STANDARD = {
   melVelger: false,           // meltype-velgeren er åpen
   ffTemp: null,               // forfermentens temperatur; null = planens forslag
   ffRomTemp: null,            // romtemp der forfermenten står/blandes; null = følg romTemp
+  ffRomTid: null,             // timer i romtemp før kjøl (kald-start); null = motorens standard
   autolyseMin: 0,             // autolyse i minutter; 0 = av
   handlelisteOk: false,       // «dette må være i huset» er kvittert bort
   krukkeStart: null,          // startnivået du merker av i målekrukka (valgfritt)
@@ -1568,6 +1569,22 @@ function tegnFfTemp(r, f) {
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:2px' },
     'Eget tall for forfermenten, uavhengig av rommet der deigen hever (under Tid).'));
 
+  /* ROMTEMP-HOLD FØR KJØL (kald-start). Bare når forfermenten står kaldt: den
+     står en tid i rommet så gjæren kommer i gang, og settes så kaldt. Redigerbar,
+     med motorens temperatur-skalerte standard (poolish ~1,5 t, biga ~2 t ved
+     21 °C). 0 t = rett i kjøl. */
+  if (kald) {
+    const rtStd = f.romTidStd || 0;
+    const rtNaa = f.romTid || 0;
+    boks.appendChild(stepperRad('Timer i romtemp før kjøl', rtNaa, 'ffRomTid', 0, 6, 0.5));
+    boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:2px' },
+      rtNaa > 0.05
+        ? 'La den stå ca. ' + fmtTimer(rtNaa) + ' i romtemp til de FØRSTE boblene viser seg, sett den så i kjøleskapet. Kald-starten får gjæren i gang før kulda bremser den.'
+        : 'Rett i kjøl — ingen romtemp-start. Passer lange retarderinger og varme kjøkken.'));
+    if (f.egenRomTid && Math.abs(rtNaa - rtStd) > 0.05) boks.appendChild(anbefaltKnapp(rtNaa, rtStd,
+      v => { S.ffRomTid = v; oppdater(); }, ' t'));
+  }
+
   boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' },
     kald
       ? 'Forfermenten settes i kjøleskapet på ' + grader(f.temp, 0) + '. Er skapet ditt kaldere eller varmere, still det under Tid.'
@@ -2785,7 +2802,7 @@ function tegnLogg(r) {
    ikke «hele S minus litt»: visningstilstand, logg, favoritter og kontoting har
    ingenting i en oppskrift å gjøre, og en svarteliste ville sluppet gjennom
    hvert nytt felt som legges til senere. */
-const OPPSKRIFT_FELT = ['brotype', 'grov', 'hyd', 'tid', 'ff', 'ffType', 'ffTemp', 'ffRomTemp', 'ffTimer', 'ffKjol',
+const OPPSKRIFT_FELT = ['brotype', 'grov', 'hyd', 'tid', 'ff', 'ffType', 'ffTemp', 'ffRomTemp', 'ffRomTid', 'ffTimer', 'ffKjol',
   'tillegg', 'antall', 'vekt', 'startTemp', 'melTemp', 'maskin', 'eltMin', 'romTemp', 'kjolskapTemp',
   'stekeProfil', 'stekeProfilManuell', 'lokk', 'fulltKjol', 'form', 'utstyr', 'pyrexIOvn',
   'saltPct', 'heveplan', 'melOverstyr', 'okDeig'];

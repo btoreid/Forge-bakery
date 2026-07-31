@@ -92,9 +92,9 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     S.ffTemp = 4; FB.oppdater();
     await new Promise(r => setTimeout(r, 200));
     const kald = regn(S);                              // 4 °C, planens tid (16 t)
-    S.ffTimer = 6;
-    const kaldKort = regn(S);                          // 4 °C, kort (6 t) — ekstremt
-    S.ffTimer = null;
+    // Kald BIGA (stiv, tregere) er et realistisk krevende tilfelle som fortsatt
+    // klemmes på taket selv med romtemp-holdet — så tak-logikken er dekket.
+    const bigaKald = regn(Object.assign({}, S, { ffType: 'biga', ffTemp: 4 }));
     const K = kjede(S, kald, Date.now() + 864e5);
     const elt = K.find(s => s.id === 'elt');
     return {
@@ -102,7 +102,7 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
       varmFersk: varm.forferment.gjaerPctAvFfMel * 3,
       kaldFersk: kald.forferment.gjaerPctAvFfMel * 3,
       paaTaket: kald.forferment.gjaerPaaTaket,
-      kortPaaTaket: kaldKort.forferment.gjaerPaaTaket,
+      bigaPaaTaket: bigaKald.forferment.gjaerPaaTaket,
       eltTekst: JSON.stringify(elt.tall) + elt.gjor
     };
   });
@@ -117,8 +117,8 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   ok('kald poolish ligger fornuftig under 2 %-taket', gj.kaldFersk < 2.0,
     gj.kaldFersk.toFixed(2) + ' % fersk');
   ok('en vanlig kald over-natta-poolish står IKKE på taket', !gj.paaTaket);
-  // Men en ekstremt kort/kald kombinasjon klemmes fortsatt — taket lever.
-  ok('en ekstremt kort kald forferment klemmes på taket', gj.kortPaaTaket);
+  // En kald biga (stiv, mer krevende) klemmes fortsatt på taket — taket lever.
+  ok('en kald biga klemmes fortsatt på taket', gj.bigaPaaTaket);
 
   // Et levain podes med starter, ikke med tørrgjær.
   const surdeig = await page.evaluate(() => {
