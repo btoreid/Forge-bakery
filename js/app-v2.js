@@ -44,6 +44,7 @@ const STANDARD = {
   autolyseMin: 0,             // autolyse i minutter; 0 = av
   handlelisteOk: false,       // «dette må være i huset» er kvittert bort
   krukkeStart: null,          // startnivået du merker av i målekrukka (valgfritt)
+  timere: [],                 // aktive baketimere [{id, navn, slutt, stegId, ringt}]
   friksjonKalibrert: false,   // kalibreringsboksen er besvart eller avvist
   kalib: {},                  // {foer, etter, min} — målingene fra kalibreringen
   kurvMaal: {},               // brukerens kurvstørrelser i cm, per form-id
@@ -129,7 +130,7 @@ function last() {
 const UI_FELT = ['skjerm', 'paramInfo', 'tilleggInfo', 'melInfo', 'meltallInfo', 'aktivSteg',
   'regnskapAapen', 'byttBekreft', 'lgRediger', 'lgSlett', 'bildeVis', 'oppslag', 'oppslagSok',
   'brodInfo', 'kompVist', 'melEndring', 'kompSporsmal', 'handlelisteOk', 'melVelger',
-  'visMaskiner', 'aktivSteg', 'aktivStegId', 'krukkeStart',
+  'visMaskiner', 'aktivSteg', 'aktivStegId', 'krukkeStart', 'timere',
   /* Delte maskinmålinger er HENTET, ikke skrevet. De hører hjemme i den delte
      tabellen, ikke i din rad — teller de som data, ville hver nedlasting sett ut
      som en endring og stemplet `oppdatert` på nytt. */
@@ -2453,8 +2454,43 @@ function flyttFerdig(min) {
 /* ============================================================
    4 · PROSESS
    ============================================================ */
+/* Timer-panelet: pågående baketimere med levende nedtelling. Ligger øverst på
+   prosess-skjermen så «hvor lenge igjen» er ett blikk unna. */
+function tegnTimerpanel() {
+  const now = Date.now();
+  const timere = (S.timere || []).slice().sort((a, b) => a.slutt - b.slutt);
+  if (!timere.length) return null;
+  const boks = h('div', { class: 'timer-panel' },
+    h('div', { class: 'seksjonstittel', style: 'margin:2px 2px 6px' }, timere.length > 1 ? timere.length + ' timere' : 'Timer'),
+    ...timere.map(t => {
+      const ferdig = t.slutt <= now;
+      return h('div', { class: 'timerrad' + (ferdig ? ' ferdig' : '') },
+        h('div', { style: 'flex:1;min-width:0' },
+          h('div', { class: 'timer-navn' }, t.navn),
+          h('div', { class: 'timer-tid', 'data-timer': t.id }, ferdig ? 'ferdig' : timerTekst(t.slutt - now))),
+        ferdig ? null : h('button', { class: 'timer-juster', 'aria-label': 'Fem minutter mindre', onClick: () => justerTimer(t.id, -5) }, '−5'),
+        ferdig ? null : h('button', { class: 'timer-juster', 'aria-label': 'Fem minutter mer', onClick: () => justerTimer(t.id, 5) }, '+5'),
+        h('button', { class: 'timer-avbryt', 'aria-label': ferdig ? 'Fjern timer' : 'Avbryt timer', onClick: () => avbrytTimer(t.id) }, '×'));
+    }));
+  // Ærlig om hva som skal til for at det faktisk ringer på telefonen.
+  if (varslingStottes() && Notification.permission === 'default') {
+    boks.appendChild(h('button', { class: 'btn btn-primary', style: 'width:100%;margin-top:8px;font-size:.82rem',
+      onClick: async () => { await beOmVarsling(); (S.timere || []).forEach(planleggVarsel); oppdater(); } },
+      '🔔 Slå på varsling — så ringer det på telefonen'));
+  } else if (varslingStottes() && Notification.permission === 'denied') {
+    boks.appendChild(h('div', { class: 'timer-hint' },
+      'Varsling er avslått for denne siden — timeren teller ned her, men ringer ikke. Slå den på igjen i nettleserens innstillinger.'));
+  } else if (Notification.permission === 'granted' && !planlagteVarslerStottes()) {
+    boks.appendChild(h('div', { class: 'timer-hint' },
+      'Nettleseren støtter ikke planlagte varsler — hold appen åpen, så ringer den når tiden er ute.'));
+  }
+  return boks;
+}
+
 function tegnProsess(r, K) {
   const wrap = h('div');
+  const tp = tegnTimerpanel();
+  if (tp) wrap.appendChild(tp);
   /* «Dette må være i huset» er steg null: å oppdage at melet ikke rekker etter
      at forfermenten står, hjelper ingen. Den lå som et sammenklappet kort
      NEDERST — altså etter alt man skulle gjort med varene.
@@ -2627,6 +2663,21 @@ function stegKort(steg, status) {
   // Målekrukka: bare på gjæringstrinn der man faktisk kan følge stigningen, og
   // bare på det AKTIVE steget (status satt) — ikke i hele-prosessen-lista.
   if (steg.krukke && steg.maalRise && status) kropp.appendChild(tegnKrukke(steg));
+  // Timer for det aktive steget: setter en nedtelling på stegets varighet, som
+  // ringer på telefonen når det er tid å sjekke. Ikke på forvarmingen (den
+  // overlapper), og ikke der en timer alt er satt for steget.
+  if (status && steg.varighet >= 1 && steg.id !== 'ovn') {
+    const alt = (S.timere || []).some(t => t.stegId === steg.id);
+    const navn = steg.id === 'stek' ? 'Brødet er ferdig — sjekk kjernetemperaturen'
+               : steg.id === 'kjol' ? 'Brødet er avkjølt — nå kan du skjære'
+               : (steg.krukke ? 'Sjekk deigen: ' : '') + steg.navn;
+    kropp.appendChild(h('div', { style: 'margin-top:12px' },
+      alt
+        ? h('div', { class: 'timer-satt' }, '⏰ Timer i gang — se øverst på skjermen')
+        : h('button', { class: 'btn timer-start', style: 'width:100%',
+            onClick: () => startTimer(navn, Math.round(steg.varighet), steg.id) },
+            '⏰ Sett timer på ' + fmtTimer(steg.varighet / 60))));
+  }
   const pilleBg = status === 'I GANG' ? 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)' : 'background:var(--color-neutral-200);color:var(--color-neutral-700)';
   return h('div', { class: 'stegkort ' + (steg.tone || 'noytral') },
     h('div', { style: 'display:flex;align-items:center;padding:14px 16px 2px' },
@@ -3526,6 +3577,158 @@ document.addEventListener('keydown', e => {
   if (bedt && SKJERMER.some(s => s.id === bedt)) { S.skjerm = bedt; if (bedt === 'prosess') S.aktivSteg = 0; }
 })();
 
+/* ============================================================
+   BAKETIMERE — nedtelling med varsel på telefonen
+   ============================================================
+   Under bakingen står man ofte og venter på ett tall: når skal jeg sjekke
+   deigen igjen, når er stekingen ferdig. Timerne løser det, og det viktige er
+   at de RINGER på telefonen selv om appen er lukket.
+
+   Hvordan det faktisk ringer når appen er borte: en PWA kan ikke kjøre en
+   `setTimeout` i bakgrunnen — service workeren blir drept. Den eneste veien til
+   et varsel på et framtidig klokkeslett UTEN en egen push-server er
+   Notification Triggers (`showTrigger` + `TimestampTrigger`): et varsel som
+   planlegges på OS-nivå og fyres av Android selv om appen er helt lukket.
+   Støttes det ikke, faller vi tilbake på et varsel + lyd mens appen er åpen, og
+   sier tydelig fra i grensesnittet at appen da må stå på. Ærlig framfor stille
+   svikt: en baketimer som ikke ringer er verre enn ingen timer. */
+
+function varslingStottes() { return typeof Notification !== 'undefined' && 'serviceWorker' in navigator; }
+function planlagteVarslerStottes() { return varslingStottes() && 'showTrigger' in Notification.prototype; }
+
+async function beOmVarsling() {
+  if (typeof Notification === 'undefined') return 'unsupported';
+  if (Notification.permission === 'granted') return 'granted';
+  if (Notification.permission === 'denied') return 'denied';
+  try { return await Notification.requestPermission(); } catch (e) { return 'denied'; }
+}
+
+/* Planlegg et OS-nivå varsel som fyrer selv om appen er lukket. */
+async function planleggVarsel(t) {
+  if (!planlagteVarslerStottes() || Notification.permission !== 'granted') return;
+  let reg; try { reg = await navigator.serviceWorker.ready; } catch (e) { return; }
+  try {
+    await reg.showNotification('Forge Bakery', {
+      tag: 'baketimer-' + t.id, body: t.navn,
+      icon: 'icons/icon-192-v2.png', badge: 'icons/icon-192-v2.png',
+      vibrate: [300, 120, 300, 120, 300], requireInteraction: true, renotify: true,
+      showTrigger: new TimestampTrigger(t.slutt),
+      data: { stegId: t.stegId || null, timerId: t.id }
+    });
+  } catch (e) {}
+}
+
+/* Vis varselet MED EN GANG (brukes når appen er åpen og timeren går ut, og
+   planlagte varsler ikke støttes). Samme tag, så det aldri dobles. */
+async function visVarselNaa(t) {
+  if (!varslingStottes() || Notification.permission !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification('Forge Bakery', {
+      tag: 'baketimer-' + t.id, body: t.navn, icon: 'icons/icon-192-v2.png', badge: 'icons/icon-192-v2.png',
+      vibrate: [300, 120, 300, 120, 300], requireInteraction: true,
+      data: { stegId: t.stegId || null, timerId: t.id }
+    });
+  } catch (e) {}
+}
+
+async function avlysVarsel(id) {
+  if (!varslingStottes()) return;
+  let reg; try { reg = await navigator.serviceWorker.ready; } catch (e) { return; }
+  for (const opt of [{ tag: 'baketimer-' + id, includeTriggered: true }, { tag: 'baketimer-' + id }]) {
+    try { (await reg.getNotifications(opt)).forEach(n => n.close()); return; } catch (e) {}
+  }
+}
+
+/* Kort pip + vibrasjon når appen er åpen, så man hører det uten å se skjermen. */
+let _lydCtx = null;
+function pip() {
+  try { if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 300]); } catch (e) {}
+  try {
+    _lydCtx = _lydCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _lydCtx; if (ctx.state === 'suspended') ctx.resume();
+    [0, 0.55, 1.1].forEach(dt => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = 880;
+      o.connect(g); g.connect(ctx.destination);
+      const t0 = ctx.currentTime + dt;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.35, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4);
+      o.start(t0); o.stop(t0 + 0.42);
+    });
+  } catch (e) {}
+}
+
+function timerId() { return 't' + Date.now().toString(36) + Math.floor(Math.random() * 1e5).toString(36); }
+async function startTimer(navn, minutter, stegId) {
+  const tillat = await beOmVarsling();
+  const t = { id: timerId(), navn: navn || 'Timer', slutt: Date.now() + Math.round(minutter * 60000), stegId: stegId || null, ringt: false };
+  S.timere = (S.timere || []).concat([t]);
+  if (tillat === 'granted') planleggVarsel(t);
+  oppdater();
+}
+function avbrytTimer(id) {
+  S.timere = (S.timere || []).filter(t => t.id !== id);
+  avlysVarsel(id);
+  oppdater();
+}
+function justerTimer(id, deltaMin) {
+  const t = (S.timere || []).find(x => x.id === id); if (!t) return;
+  t.slutt = Math.max(Date.now() + 1000, t.slutt + deltaMin * 60000);
+  t.ringt = false;
+  avlysVarsel(id).then(() => planleggVarsel(t));
+  oppdater();
+}
+
+function timerTekst(ms) {
+  if (ms <= 0) return 'ferdig';
+  const s = Math.round(ms / 1000), t = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sek = s % 60;
+  if (t > 0) return t + ' t ' + String(m).padStart(2, '0') + ' min';
+  return String(m).padStart(2, '0') + ':' + String(sek).padStart(2, '0');
+}
+
+/* Tikker hvert sekund: oppdaterer bare nedtellings-tekstene i DOM-en (ikke full
+   re-render, som ville stjålet fokus), og fyrer alarmen når en timer går ut. */
+let _timerTikk = null;
+function tikkTimere() {
+  const now = Date.now();
+  let ringte = false;
+  (S.timere || []).forEach(t => {
+    const el = document.querySelector('[data-timer="' + t.id + '"]');
+    if (el) el.textContent = timerTekst(t.slutt - now);
+    if (!t.ringt && now >= t.slutt) {
+      t.ringt = true; ringte = true;
+      pip();
+      // Planlagte varsler har allerede fyrt på OS-nivå; ellers vis det nå.
+      if (!planlagteVarslerStottes()) visVarselNaa(t);
+    }
+  });
+  if (ringte) { lagre(); if (S.skjerm === 'prosess') render(); }
+}
+
+function initTimere() {
+  if (typeof Notification === 'undefined') { S.timere = []; return; }
+  const now = Date.now();
+  // Rydd bort timere som gikk ut for mer enn en time siden; behold nye/pågående.
+  S.timere = (S.timere || []).filter(t => t && isFinite(t.slutt) && t.slutt > now - 3600000);
+  S.timere.forEach(t => {
+    if (now >= t.slutt) t.ringt = true;                 // alt utgått: ikke pip på nytt ved lasting
+    else if (Notification.permission === 'granted') planleggVarsel(t);   // re-arm etter omstart
+  });
+  if (_timerTikk == null) _timerTikk = setInterval(tikkTimere, 1000);
+  // Trykk på varselet åpner prosess-skjermen på riktig steg.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data && e.data.type === 'timer-klikk') {
+        S.skjerm = 'prosess';
+        if (e.data.stegId) { S.aktivStegId = e.data.stegId; S.aktivSteg = 0; }
+        oppdater();
+      }
+    });
+  }
+}
+
 /* ---------- Start ---------- */
 if (typeof Sky !== 'undefined' && Sky.klar()) {
   Sky.paaEndring(() => { render(); if (Sky.bruker()) synkVedInnlogging(); });
@@ -3541,10 +3744,12 @@ if (typeof Sky !== 'undefined' && Sky.klar()) {
   });
 }
 render();
+// Baketimere: rydd utgåtte, re-arm pågående varsler, og start sekund-tikken.
+try { initTimere(); } catch (e) {}
 // Grunntilstand i historikken, så første tilbaketrykk har noe å falle tilbake på.
 try { history.replaceState({ skjerm: S.skjerm }, ''); } catch (e) {}
 /* Testkroken. `flettLogg` er eksponert fordi den er ren og fordi den er den
    viktigste funksjonen i appen å ha dekket: det er den som gjør at bakeloggen
    ikke kan forsvinne i en synk. */
-window.__FB = { S, render, oppdater, flettLogg, oppskriftAvtrykk };
+window.__FB = { S, render, oppdater, flettLogg, oppskriftAvtrykk, startTimer, justerTimer, avbrytTimer };
 })();
