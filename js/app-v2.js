@@ -1341,7 +1341,9 @@ function tegnKompensasjon(r, iModal) {
                       : kort('Hva vil du gjøre med endringen?', null);
   boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:6px' },
     'Tilleggene tar plass i deigen: uten kompensasjon faller melet ',
-    h('b', null, g0(tap)), ' (fra ' + g0(r0.melTotal) + ' til ' + g0(rRa.melTotal) + '). Vannet er allerede justert for det frøene binder.'));
+    h('b', null, g0(tap)), ' (fra ' + g0(r0.melTotal) + ' til ' + g0(rRa.melTotal) + ').',
+    // Bare nevn frø-vann-justeringen når det faktisk er frø/korn som binder vann.
+    r.froAbsorbert > 0.5 ? ' Vannet er allerede justert for det frøene binder.' : ''));
   // Ett valg med to tilstander, ikke to knapper som «gjør» noe hver gang de
   // trykkes. Før var «Øk deigen» en handling som skrev til brødvekten — og siden
   // den nye vekten ble grunnlag for neste utregning, kunne den trykkes i det
@@ -1916,6 +1918,12 @@ function vannGuide(hyd, anb, tak) {
 }
 function vannKonsekvens(r) {
   const froPp = (r.oppgittHydrering - r.effektivHydrering) * 100;
+  /* «Etter at frøene har tatt sitt» skal BARE opp når det faktisk er frø/korn i
+     deigen som binder vann. Uten tillegg er effektiv = oppgitt hydrering, og da
+     var setningen bare forvirrende — den snakket om frø i et brød uten frø. */
+  if (froPp <= 0.1) {
+    return 'Deigen ligger på ' + pst(r.oppgittHydrering * 100, 1) + ' hydrering.';
+  }
   let s = 'Effektiv hydrering ' + pst(r.effektivHydrering * 100, 1) + ' etter at frøene har tatt sitt.';
   if (froPp > 1.5) s += ' Frøene stjeler ' + fmt(froPp, 1) + ' prosentpoeng — kompenser med litt mer vann om deigen kjennes stram.';
   return s;
