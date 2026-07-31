@@ -8,6 +8,9 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  /* Innloggingsporten (31.07) står foran hele appen. Denne kroken er den
+     eneste veien forbi den, og settes kun her — aldri i produksjonskode. */
+  await page.addInitScript(() => { window.__FB_TEST_INGEN_PORT = true; });
   const errs = []; page.on('pageerror', e => errs.push(String(e)));
   await page.goto('http://localhost:8123/');
   await page.waitForTimeout(400);

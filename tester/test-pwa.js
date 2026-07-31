@@ -9,6 +9,9 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  /* Innloggingsporten (31.07) står foran hele appen. Kroken settes på HELE
+     konteksten her, fordi disse suitene åpner flere sider. Kun i tester. */
+  await ctx.addInitScript(() => { window.__FB_TEST_INGEN_PORT = true; });
   const page = await ctx.newPage();
   const errs = []; page.on('pageerror', e => errs.push(String(e)));
   await page.goto(B);

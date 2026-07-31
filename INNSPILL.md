@@ -113,9 +113,8 @@ må vise seg når endringen skjer.
 > «under heveplanen er det noen problemer rundt lufta i romtempboksen. Under varme
 > balanse, der det blir litt trangt.»
 
-Layout. IKKE gjort ennå — jeg finner ikke sikkert hvilken boks du mener på
-skjermbildene mine. Trenger en peker: er det trinn-kortene i heveplanen, eller
-romtemp-stepperen under Varmebalanse?
+Løst sammen med 36: ny vertikal rytme på stepperne, og tallfeltet utvidet fordi
+«24,0 °C» ble klippet til «24,0 °».
 
 ### 12 · Hastighet på eltemaskinen, med faser — `levert` · bøtte: ui + innhold
 
@@ -124,32 +123,37 @@ romtemp-stepperen under Varmebalanse?
 > det kan også være at man skal kjøre lav hastighet i en periode, og så høy hastighet i
 > en periode. Da må man også si det.»
 
-`fart`-feltet i `MASKIN_INFO` finnes, men er én setning prosa. Må bli en faseplan med
-minutter, som følger den utregnede eltetiden.
+`faser` i `MASKIN_INFO`: hastighetsplan med minutter regnet av den eltetiden du har
+satt. Prosasetningen ligger under som begrunnelse.
 
 ### 13 · Validere friksjonstallet for Ooni Halo Pro — `levert` · bøtte: innhold
 
 > «har du mulighet til å gjøre en research på Oni Halo Pro og validere om den
 > varmegenereringen er riktig?»
 
-Friksjonstallet (°C deigoppvarming per minutt) styrer vanntemperaturen i hele appen.
-Skal etterprøves mot kilder og føres inn i `PARAMETERREVISJON.md`.
+Etterprøvd og ført inn i `PARAMETERREVISJON.md`. 0,40 °C/min er et klasseanslag —
+Ooni oppgir ingen verdi, publiserte spiraltall gir 0,42–0,63 for bakerimaskiner.
+**Tallet er ikke endret**; i stedet ber appen deg kalibrere din egen (se 38).
 
 ### 14 · Gjæringsgrafen: 30 grader akkumulert gjæring i kjøleskap? — `levert` · bøtte: ui
 
 > «grafen gjæring over tid. Kan du forklare hvordan man kan nå tretti grader på den
 > akkumulerte gjæringen når ting står i kjøleskapet?»
 
-Spørsmål, men ser ut som en ekte lesefeil i grafen: to akser med ulik betydning som
-leses som samme skala.
+Ikke en regnefeil. To skalaer deler tegneflate: venstre er deigtemperatur (0–30°),
+høyre er akkumulert gjæring (0–100 %). Den grønne kurven ligger på HØYRE akse og er
+normalisert mot sin egen sluttverdi, så den ender alltid på taket — som tilfeldigvis
+er samme høyde som «30°»-streken. Aksene er nå farget som hver sin kurve og heter
+«°C deig» og «% gjæring».
 
 ### 15 · «Har du alt i huset?» som steg 1 i prosessen — `levert` · bøtte: ui
 
 > «punktet. Dette må være i huset; bør egentlig komme som nummer én i prosessen der man
 > sjekker at man har alt man trenger.»
 
-En sjekk av ingredienser og utstyr før man starter. Merk: `kjede()` eier de TIDSATTE
-stegene — et steg uten varighet må ikke inn der, ellers forskyves alt som leser den.
+Ligger nå øverst i Prosess, med «Jeg har alt»-kvittering. Bevisst UTENFOR `kjede()`:
+kjeden eier de tidsatte stegene, og et steg uten varighet der ville forskjøvet
+klokkeslettene i alt som leser den.
 
 ### 16 · Bunnlinja dekker ikke Androids gestlinje — `levert` · bøtte: ui
 
@@ -262,7 +266,46 @@ Løser også 11. Ny rytme på stepperne, og tallfeltet utvidet — «24,0 °C» 
 > «pila nedover … bør være en tydeligere pil som peker oppover … Det bør også i det
 > panelet legges inn gjæring over tid-grafen.»
 
-### 17 · Bedre appikon — `venter på Bjørn` · bøtte: infra
+### 38 · Kalibrering, førstegangsverdier, kurvmål, autolyse+ff, fire tidsplaner — `levert`
+
+Bjørns svar på de fem spørsmålene fra forrige runde:
+
+> «2 lag et punkt at kalibrering trengs, så gjør jeg det første gang. 3. er siste man
+> gjorde som innlogget bruker lagret? Da er det best å bare følge det. For første gangs
+> bruk kan du bare bruke 0% grovt og ingen tillegg som standard. Sett også standard
+> brødstørrelse til 800 gram. 4. gjør det mulig å sette egne mål og be brukeren sette
+> målet første gang. 5. er det noe poeng å ha begge samtidig?»
+
+- **Kalibrering:** egen boks under Varmebalanse som regner (etter − før) ÷ minutter og
+  setter din egen friksjon. Vises til den er besvart eller avvist.
+- **Førstegangsverdier:** 0 % grovt, ingen tillegg, 800 g. Har du bakt før, kommer din
+  egen siste tilstand tilbake gjennom synken.
+- **Kurvmål:** appen SPØR første gang, og advarslene gjelder først når målet er ditt.
+- **Autolyse + forferment:** ja, det har et poeng, og appen sier nå hvilket — forfermenten
+  modnes for seg, autolysen gjelder resten av melet. Klassisk baguettemetode.
+- **Fire tidsplaner:** Ekspress · Samme dag · Over natta · Optimal. `kort` er fjernet og
+  lagret tilstand migreres.
+
+### 39 · Flimring på mobil — `levert` · bøtte: ui
+
+> «flere plasser i appen så er det flickringsfeil både ved trykk og ikke trykk»
+
+Videoen lot seg ikke dekode her, så feilen ble funnet i koden. Fire kilder, alle rettet:
+`100dvh` (adressefeltet på Android endrer den kontinuerlig under scroll) → `100svh` ·
+Androids grå tap-highlight → av · modal og bakteppe ble revet ned og bygget opp igjen
+ved HVER render, så inn-animasjonen spilte av på nytt for hvert trykk → gjenbrukes ·
+`contain: layout paint` på innholdsfeltet.
+
+### 40 · Innlogging først — `levert` · bøtte: infra + ui
+
+> «tenker vi må legge login først, sånn at alt skjer under innlogget konto database. Det
+> gjør mindre forvirring og hindrer problematikk.»
+
+Riktig, og det fjerner hele eierskapsproblematikken fra 18/26/27: finnes det ingen
+utlogget bruk, finnes det ingen logg uten eier. **Merk prisen:** appen kan ikke lenger
+brukes uten konto, og aller første gang kreves nett.
+
+### 17 · Bedre appikon — `levert` · bøtte: infra
 
 > «ikonet til appen er litt dårlig. Brødbakeikonet. Prøv å lage et bedre ikon som er litt
 > kulere. Har du noen skills som kan gjøre det? Eller connections? MCP-greier?»
@@ -304,13 +347,14 @@ meltypene. Skal bli et valg — hvilken meltype som gir etter, eller om deigen s
 
 ---
 
-Higgsfield-koblingen kom inn underveis, og fire forslag ble generert. Bjørn valgte ett
-(ambolt, glødende snittet boule, flammer). **Blokkert:** proxyen i dette miljøet nekter
-CONNECT til Higgsfields CDN (403), så PNG-en kan ikke hentes ned hit.
+Higgsfield-koblingen laget fire forslag; Bjørn valgte ett (ambolt, glødende snittet
+boule, flammer) og lastet det opp selv, siden proxyen her nekter CONNECT til Higgsfields
+CDN. Et håndtegnet SVG-alternativ ble laget underveis og forkastet av ham («ikke i
+nærheten av å være det samme»).
 
-Et håndtegnet SVG-alternativ ble laget og forkastet av Bjørn («ikke i nærheten av å være
-det samme») — rullet tilbake, det gamle ikonet står. **Venter på at PNG-en legges i
-`icons/` på grenen**, så kobles den opp i manifestet.
+Kilden ligger som `icons/kilde-ikon.png` (1024×1024) og skaleres av
+`tester/lag-ikoner.js` til 192, 512, maskable 512 og apple-touch 180. Maskable-varianten
+har motivet krympet til 72 % så det overlever Androids ikonmaske.
 
 ---
 

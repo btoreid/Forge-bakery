@@ -9,6 +9,9 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  /* Innloggingsporten (31.07) står foran hele appen. Denne kroken er den
+     eneste veien forbi den, og settes kun her — aldri i produksjonskode. */
+  await page.addInitScript(() => { window.__FB_TEST_INGEN_PORT = true; });
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push(String(e)));
   await page.goto(URL);
@@ -83,7 +86,11 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await page.click('#bunnmeny button:has-text("Deig")');
   await page.waitForTimeout(200);
 
-  // 8: soner — standard solsikke 6 % = grønn; skru til 12 % = gul; 16 % = rød
+  /* 8: soner — solsikke på anbefalt dose = grønn, 12 % = gul, 16 % = rød.
+     Fabrikkverdiene har ingen tillegg fra 31.07 (kveld), så raden må slås PÅ
+     først; finjusteringsfeltene vises bare når tillegget er aktivt. */
+  await page.locator('.tillegg-rad:has-text("Solsikkekjerner") .tillegg-toggle').click();
+  await page.waitForTimeout(250);
   const sol = page.locator('.tillegg-rad:has-text("Solsikkekjerner")');
   ok('solsikke 6 % er grønn (ingen gul/rød klasse)', (await sol.getAttribute('class')).indexOf('gul') < 0);
   const solInp = sol.locator('input[aria-label="Solsikkekjerner prosent"]');

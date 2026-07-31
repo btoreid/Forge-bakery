@@ -10,6 +10,9 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  /* Innloggingsporten (31.07) står foran hele appen. Denne kroken er den
+     eneste veien forbi den, og settes kun her — aldri i produksjonskode. */
+  await page.addInitScript(() => { window.__FB_TEST_INGEN_PORT = true; });
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push(String(e)));
   await page.goto(URL);

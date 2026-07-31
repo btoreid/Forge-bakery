@@ -11,6 +11,9 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  /* Innloggingsporten (31.07) står foran hele appen. Denne kroken er den
+     eneste veien forbi den, og settes kun her — aldri i produksjonskode. */
+  await page.addInitScript(() => { window.__FB_TEST_INGEN_PORT = true; });
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push(String(e)));
   await page.goto(URL);
@@ -336,9 +339,10 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     /* Sett oppskriften tilbake til fabrikk GJENNOM appen, ikke ved å skrive i
        localStorage: det er den veien en ekte «start på nytt» går, og det er
        tilstanden `erFabrikkOppskrift()` skal kjenne igjen ved neste oppstart. */
-    S.grov = 40; S.hyd = 75; S.vekt = 900; S.brotype = 'grovbrod'; S.tid = 'lang';
+    // Fabrikkverdiene er 0 % grovt, ingen tillegg og 800 g fra 31.07 (kveld).
+    S.grov = 0; S.hyd = 75; S.vekt = 800; S.brotype = 'grovbrod'; S.tid = 'lang';
     S.antall = 4; S.saltPct = null; S.heveplan = null; S.ff = false; S.ffType = 'poolish';
-    S.tillegg = { solsikke: 6, linfro: 3 }; S.melOverstyr = null; S.okDeig = false;
+    S.tillegg = {}; S.melOverstyr = null; S.okDeig = false; S.autolyseMin = 0;
     FB.oppdater();
     await new Promise(r => setTimeout(r, 120));
     return { lagret, fantKnapp, lagretIStore: !!localStorage.getItem('forgebakery.v2') };
@@ -478,17 +482,23 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     S.autolyseMin = 0; S.skjerm = 'brodet'; S.form = 'ingen'; FB.oppdater();
     await new Promise(r => setTimeout(r, 150));
     const utenForm = /Uten form/.test(document.body.innerText);
+    // Uten eget mål SPØR appen i stedet for å advare — advarselen ville da vært
+    // målt mot en antatt standardstørrelse, ikke mot kurven på kjøkkenet.
     S.form = 'avlang'; S.vekt = 1600; S.kurvMaal = {}; FB.oppdater();
+    await new Promise(r => setTimeout(r, 150));
+    const spoer = /Hvor stor er kurven din/i.test(document.body.innerText);
+    S.kurvMaal = { avlang: 20 }; FB.oppdater();
     await new Promise(r => setTimeout(r, 150));
     const forLiten = /kurven din er/i.test(document.body.innerText);
     S.kurvMaal = { avlang: 60 }; FB.oppdater();
     await new Promise(r => setTimeout(r, 150));
     const okNaa = !/kurven din er/i.test(document.body.innerText);
-    return { utenForm, forLiten, okNaa,
+    return { utenForm, spoer, forLiten, okNaa,
       ingenDittVanlige: !/ditt vanlige/i.test(JSON.stringify(FORMER)) };
   });
   ok('«Uten form» finnes som valg', former.utenForm);
-  ok('appen sier fra når emnet er for stort for kurven', former.forLiten);
+  ok('appen spør om kurvmålet første gang', former.spoer);
+  ok('appen sier fra når emnet er for stort for DIN kurv', former.forLiten);
   ok('egen kurvstørrelse fjerner advarselen', former.okNaa);
   ok('«ditt vanlige» er ute av formbeskrivelsene', former.ingenDittVanlige);
 
@@ -537,8 +547,11 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
      18 · Tidsplanene heter noe man kan skille
      --------------------------------------------------------------- */
   const planNavn = await page.evaluate(() => TIDSPLANER.map(t => t.navn));
-  ok('planene heter Optimal/Over natta/Samme dag/Ettermiddag/Ekspress',
-    planNavn.join(',') === 'Optimal,Over natta,Samme dag,Ettermiddag,Ekspress', planNavn.join(','));
+  ok('fire planer: Optimal/Over natta/Samme dag/Ekspress',
+    planNavn.join(',') === 'Optimal,Over natta,Samme dag,Ekspress', planNavn.join(','));
+  await page.evaluate(() => { localStorage.setItem('forgebakery.v2', JSON.stringify({ tid: 'kort' })); });
+  await page.reload(); await page.waitForTimeout(400);
+  ok('lagret «kort» migreres til «dag»', await page.evaluate(() => window.__FB.S.tid) === 'dag');
 
   /* ---------------------------------------------------------------
      19 · Skrivefeil og hardkodede formuleringer

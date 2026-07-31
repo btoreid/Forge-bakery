@@ -58,6 +58,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 button { font-family: inherit; }
+/* Androids grå «tap highlight» blinker over hele knappeflaten ved hvert trykk.
+   Den er ikke tilbakemelding — appen har sin egen :active — men den LESES som
+   flimring, særlig på kort med bakgrunnsfarge. */
+button, a, label, summary, input, .valgkort, .brodvalg, .tillegg-rad {
+  -webkit-tap-highlight-color: transparent;
+}
 :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 input[type=number]::-webkit-outer-spin-button,
@@ -69,11 +75,17 @@ input[type=range] { accent-color: var(--color-accent); }
    Bare .innhold scroller, mens topp, bunnlinje og bunnmeny står fast — som en
    ekte app, ikke en scrollende nettside. 100dvh følger mobilnettleserens
    dynamiske høyde (adressefelt som gjemmer seg), med 100vh som fallback. */
+/* 100svh, IKKE 100dvh.
+   `dvh` følger nettleserens dynamiske høyde — den endrer seg kontinuerlig mens
+   adressefeltet på Android glir inn og ut under scroll. Rammen er `height` og
+   `overflow:hidden`, så hver eneste piksel adressefeltet flytter seg utløser en
+   ny layout av hele appen: det er den flimringen man ser uten å ta på noe.
+   `svh` er den MINSTE høyden (adressefelt synlig) og står stille. */
 #telefon {
   max-width: 430px;
   margin: 0 auto;
   height: 100vh;
-  height: 100dvh;
+  height: 100svh;
   background: var(--color-bg);
   display: flex;
   flex-direction: column;
@@ -82,7 +94,7 @@ input[type=range] { accent-color: var(--color-accent); }
 }
 @media (min-width: 460px) {
   body { padding: 18px 0; }
-  #telefon { height: calc(100vh - 36px); height: calc(100dvh - 36px); border-radius: 40px; box-shadow: var(--shadow-lg); }
+  #telefon { height: calc(100vh - 36px); height: calc(100svh - 36px); border-radius: 40px; box-shadow: var(--shadow-lg); }
 }
 
 /* ---------- Topp ---------- */
@@ -106,7 +118,15 @@ input[type=range] { accent-color: var(--color-accent); }
 /* min-height:0 er nødvendig for at en flex-barn faktisk skal kunne scrolle
    internt i stedet for å dytte rammen større. -webkit-overflow-scrolling for
    myk treghetsscroll på iOS. */
-.innhold { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px 16px 8px; }
+.innhold {
+  flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px 16px 8px;
+  /* `contain` isolerer omtegningen til innholdsfeltet. Uten den må nettleseren
+     regne om hele rammen hver gang skjermen bygges på nytt (replaceChildren),
+     og på mobil-GPU synes det som et blink. `overscroll-behavior` stopper at
+     draget forplanter seg til siden bak og gir gummistrikk-effekt. */
+  contain: layout paint;
+  overscroll-behavior: contain;
+}
 
 /* ---------- Bunnlinje (deigregnskap) ---------- */
 .bunnlinje {
@@ -498,6 +518,16 @@ svg.kornsvg .s2 { fill: none; stroke: var(--kk); stroke-width: 1; stroke-linecap
 .fart-fase .ff-fart { font-weight: 800; }
 .fart-fase .ff-min { font-variant-numeric: tabular-nums; color: var(--color-accent-700); font-weight: 800; }
 .fart-fase .ff-hva { flex: 1 1 100%; color: var(--color-neutral-600); padding-left: 26px; line-height: 1.35; }
+
+/* ---------- Innloggingsporten ---------- */
+.port { display: flex; flex-direction: column; align-items: center; padding: 24px 4px 8px; }
+.port-logo img { border-radius: 22px; display: block; box-shadow: var(--shadow-md); }
+.port-tittel { font-family: var(--font-heading); font-weight: 400; font-size: 1.7rem; margin: 14px 0 0; }
+.port-under {
+  font-size: .86rem; color: var(--color-neutral-700); text-align: center;
+  line-height: 1.5; margin: 8px 0 4px; max-width: 320px;
+}
+.port .kort { width: 100%; }
 
 /* ---------- Modal ----------
    Ligger inne i telefonrammen (position:absolute mot #telefon), ikke i

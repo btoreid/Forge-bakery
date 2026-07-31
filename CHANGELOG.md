@@ -7,6 +7,75 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 31.07.2026 (natt) — Innlogging først, flimring, og svarene på de fem spørsmålene
+
+### Innlogging er nå en port foran hele appen
+
+Bjørn: «tenker vi må legge login først, sånn at alt skjer under innlogget konto
+database. Det gjør mindre forvirring og hindrer problematikk.»
+
+Det er riktig, og det fjerner en hel klasse problemer med ett grep: finnes det ingen
+utlogget bruk, finnes det ingen loggpost uten eier, ingen sammenblanding på delte
+enheter og ingen «hvem tilhører denne posten». Alt eierskapsarbeidet fra i dag
+(gravsteiner, enhetsbøtte, arkiv per konto) står igjen som sikkerhetsnett, men det er
+nå situasjoner man normalt ikke havner i.
+
+`skalKreveInnlogging()` tegner porten i STEDET for appen — ikke oppå den. Da finnes det
+ingen vei rundt og ingen halvferdig tilstand bak et overlegg.
+
+**Prisen, som er verdt å vite:** appen kan ikke lenger brukes uten konto, og aller
+første gang kreves nett. Etter innlogging holder Supabase økten ved like, så offline
+fungerer som før.
+
+Testene kommer forbi porten med `window.__FB_TEST_INGEN_PORT`, satt med Playwrights
+`addInitScript`. Ingen produksjonskode setter den.
+
+### Flimringen
+
+Meldt som «flere plasser i appen så er det flickringsfeil både ved trykk og ikke trykk».
+Videoen lot seg ikke dekode i dette miljøet (Chromium mangler H.264), så feilen ble
+funnet i koden. Fire kilder:
+
+1. **`height: 100dvh` på telefonrammen.** `dvh` følger nettleserens dynamiske høyde, og
+   den endrer seg kontinuerlig mens adressefeltet på Android glir inn og ut under
+   scroll. Rammen har fast `height` og `overflow:hidden`, så hver piksel adressefeltet
+   flytter seg utløste en ny layout av HELE appen. Det er flimringen uten å ta på noe.
+   → `100svh`, den minste høyden, som står stille.
+2. **Androids tap-highlight.** Et grått felt som blinker over hele knappeflaten ved
+   trykk. Appen har sin egen `:active`. → av.
+3. **Modal og bakteppe ble revet ned og bygget opp igjen ved HVER render**, så
+   inn-animasjonen spilte av på nytt for hvert trykk. → gjenbrukes; bare innholdet
+   byttes.
+4. **Ingen `contain` på innholdsfeltet**, så hele rammen måtte regnes om ved hver
+   `replaceChildren`. → `contain: layout paint`.
+
+### Svarene på de fem spørsmålene
+
+- **Kalibrering av eltemaskinen** er nå en egen boks under Varmebalanse: tre tall inn
+  (temp før, temp etter, minutter), `(etter − før) ÷ min` ut, og knappen setter din
+  egen friksjon. Den vises til den er besvart eller avvist. Bakgrunnen er
+  Ooni-gjennomgangen: 0,40 °C/min er et klasseanslag, ikke en måling.
+- **Førstegangsverdier:** 0 % grovt, ingen tillegg, 800 g per brød. Sto på 40 % grovt
+  med solsikke og linfrø — altså en ferdig oppfatning om hva brukeren skulle bake,
+  servert som «standard».
+- **Kurvmål:** appen SPØR første gang i stedet for å måle mot en antatt standard, og
+  advarselen «emnet er for stort for kurven» gjelder først når målet er ditt.
+- **Autolyse og forferment samtidig** har et poeng, og appen sier nå hvilket:
+  forfermenten modnes for seg og gir smak, autolysen gjelder RESTEN av melet og bygger
+  gluten uten at gjæringen starter. Klassisk baguettemetode.
+- **Fire tidsplaner, ikke fem:** Ekspress · Samme dag · Over natta · Optimal. «Én dag»
+  (8–9 t) og «Kort» (4–5 t) beskrev omtrent samme sak. `kort` er fjernet, og lagret
+  tilstand med `tid:'kort'` migreres til `dag` i `last()`.
+
+### Appikonet
+
+Bjørn lastet opp motivet han valgte. Kilden ligger som `icons/kilde-ikon.png`
+(1024×1024) og skaleres av `tester/lag-ikoner.js` til 192, 512, maskable 512 og
+apple-touch 180. Maskable-varianten har motivet krympet til 72 % så det overlever
+Androids ikonmaske.
+
+---
+
 ## 31.07.2026 (kveld) — Sytten punkter til, og loggen som endelig hører til kontoen
 
 Bjørn matet inn tilbakemeldinger fortløpende gjennom hele økta. Alle 38 står i

@@ -11,10 +11,15 @@
 const LAGER = 'forgebakery.v2';
 const STANDARD = {
   skjerm: 'brodet',
-  brotype: 'grovbrod', grov: 40, hyd: 75, tid: 'lang',
+  /* Førstegangsverdier: et enkelt brød uten tillegg.
+     Sto på 40 % grovt med solsikke og linfrø — altså en ferdig oppfatning om hva
+     brukeren skulle bake, servert som «standard». Nå starter appen nøytralt, og
+     den som har bakt før får uansett sin egen siste tilstand tilbake gjennom
+     synken (eller et lagret standardbrød). */
+  brotype: 'grovbrod', grov: 0, hyd: 75, tid: 'lang',
   ff: false, ffType: 'poolish',
-  tillegg: { solsikke: 6, linfro: 3 },
-  antall: 4, vekt: 900,
+  tillegg: {},
+  antall: 4, vekt: 800,
   startTemp: 24, melTemp: 21, maskin: 'spiralHjemme', eltMin: 13, romTemp: 22,
   stekeProfil: 'brod_kloke', stekeProfilManuell: false, lokk: true, fulltKjol: false,
   form: 'rund', utstyr: 'stal15', vektTrinn: 1, egenFriksjon: 0.4, pyrexIOvn: false,
@@ -37,6 +42,8 @@ const STANDARD = {
   ffTemp: null,               // forfermentens temperatur; null = planens forslag
   autolyseMin: 0,             // autolyse i minutter; 0 = av
   handlelisteOk: false,       // «dette må være i huset» er kvittert bort
+  friksjonKalibrert: false,   // kalibreringsboksen er besvart eller avvist
+  kalib: {},                  // {foer, etter, min} — målingene fra kalibreringen
   kurvMaal: {},               // brukerens kurvstørrelser i cm, per form-id
   kompVist: false             // kompensasjonspanelet er åpnet av en endring
 };
@@ -75,6 +82,9 @@ function last() {
   s.favoritter = s.favoritter.filter(x => typeof x === 'string')
     .map(x => x.indexOf(':') > 0 ? x : 'mel:' + x);
   if (s.melOverstyr != null && !Array.isArray(s.melOverstyr)) s.melOverstyr = null;
+  // Tidsplanen «kort» (Ettermiddag) er slått sammen med «dag» (Samme dag).
+  // Uten denne linja ville lagret tilstand falt tilbake på første plan i lista.
+  if (s.tid === 'kort') s.tid = 'dag';
   /* Standardbrødet legges på når oppskriften ennå er fabrikkinnstillingen —
      altså «dersom det ikke ligger noe annet der fra før av». Har man begynt på
      noe, skal appen ikke overkjøre det. */
@@ -199,7 +209,7 @@ const SKJERMER = [
 /* Brødtypene som designet viser dem — «Brød» er én type der grovheten settes i
    deigen (loff = grov 0), de tre andre er kalibrerte forvalg. */
 const BTYPER = [
-  { id: 'grovbrod', navn: 'Brød', undertittel: 'Fra loff til ekstra grovt — du setter grovheten i deigen', rute: 'bygg', antall: 4, vekt: 900,
+  { id: 'grovbrod', navn: 'Brød', undertittel: 'Fra loff til ekstra grovt — du setter grovheten i deigen', rute: 'bygg', antall: 4, vekt: 800,
     om: 'Ett frittstående brød der du styrer alt selv: grovhet, vann, frø og tidsplan. Grunnformen er alltid den samme — elt, bulkhev varmt, form emnet stramt, kaldhev i kurv, stek varmt med damp.' },
   { id: 'ciabatta', navn: 'Ciabatta', undertittel: 'Stiv biga, åpen krumme · kalibrert deig', rute: 'preset', antall: 8, vekt: 280,
     om: 'Italiensk, svært vått brød på sterkt mel. En stiv biga modnes over natta og gir styrke og smak; deigen bulkheves, kjøles i boks og DELES i biter i stedet for å formes — luftigheten er hele poenget. Stekes kort og varmt midt i ovnen.' },
@@ -294,7 +304,53 @@ function render() {
   }
   finally { _rendrer = false; }
 }
+/* ---------- Innloggingsport ----------
+   Bjørns beslutning 31.07: «legg login først, sånn at alt skjer under innlogget
+   konto database. Det gjør mindre forvirring og hindrer problematikk.»
+
+   Det fjerner hele eierskapsspørsmålet: finnes det ingen utlogget bruk, finnes
+   det heller ingen logg uten eier, ingen sammenblanding på delte enheter og
+   ingen «hvem tilhører denne posten».
+
+   Prisen er verdt å vite: appen kan ikke lenger brukes uten konto, og
+   aller første gang kreves nett. Etter innlogging holder Supabase økten ved
+   like (`persistSession`), så den fungerer offline som før.
+
+   Porten hopper man over når sky ikke er konfigurert i det hele tatt — ellers
+   ville appen vært ubrukelig fra `file://` og i testene. */
+function skalKreveInnlogging() {
+  /* Eneste vei forbi porten er en testkrok som INGEN produksjonskode setter —
+     den finnes bare fordi regresjonen ellers ville måttet logge inn mot ekte
+     Supabase for å teste noe som helst. Settes med Playwrights addInitScript. */
+  if (window.__FB_TEST_INGEN_PORT) return false;
+  return typeof Sky !== 'undefined' && Sky.klar() && !Sky.bruker();
+}
+function tegnPort() {
+  const wrap = h('div', { class: 'port' });
+  wrap.appendChild(h('div', { class: 'port-logo' }, h('img', { src: 'icons/icon-192.png', alt: '', width: 88, height: 88 })));
+  wrap.appendChild(h('h1', { class: 'port-tittel' }, 'Forge Bakery'));
+  wrap.appendChild(h('div', { class: 'port-under' },
+    'Logg inn for å bake. Bakeloggen, oppskriftene og bildene dine ligger på kontoen og følger deg til alle enhetene dine.'));
+  const konto = tegnKonto();
+  if (konto) wrap.appendChild(konto);
+  wrap.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:14px;text-align:center' },
+    'Første gang trenger du nett. Etterpå virker appen offline.'));
+  return wrap;
+}
+
 function renderInner() {
+  // Porten tegnes i stedet for appen, ikke oppå den: da finnes det ingen vei
+  // rundt, og ingen halvferdig tilstand bak et overlegg.
+  if (skalKreveInnlogging()) {
+    byId('topp').replaceChildren();
+    byId('innhold').replaceChildren(tegnPort());
+    byId('bunnlinje').replaceChildren();
+    byId('bunnlinje').className = 'bunnlinje';
+    byId('bunnmeny').replaceChildren();
+    fjernBakteppe();
+    const km = byId('kompmodal'); if (km) km.remove();
+    return;
+  }
   const r = regn(S);
   const K = kjede(S, r, S.ferdigMs != null ? S.ferdigMs : standardFerdig());
   const sk = SKJERMER.find(s => s.id === S.skjerm) || SKJERMER[0];
@@ -347,8 +403,11 @@ function standardFerdig() {
 function fjernBakteppe() { const b = byId('bakteppe'); if (b) b.remove(); }
 function tegnBunnlinje(r, K) {
   const bl = byId('bunnlinje');
-  fjernBakteppe();
-  if (['logg', 'oppslag'].includes(S.skjerm)) { bl.replaceChildren(); bl.className = 'bunnlinje'; S.regnskapAapen = false; return; }
+  /* Bakteppet fjernes bare når arket faktisk skal LUKKES. Før ble det revet ned
+     og bygget opp igjen ved hver render, og fade-inn-animasjonen spilte av på
+     nytt hver gang — et blink for hvert trykk mens regnskapet stod åpent. */
+  if (!S.regnskapAapen) fjernBakteppe();
+  if (['logg', 'oppslag'].includes(S.skjerm)) { bl.replaceChildren(); bl.className = 'bunnlinje'; S.regnskapAapen = false; fjernBakteppe(); return; }
   bl.className = 'bunnlinje' + (S.regnskapAapen ? ' open' : '');
   const stripe = h('button', { class: 'stripe', 'aria-expanded': S.regnskapAapen ? 'true' : 'false', onClick: () => { S.regnskapAapen = !S.regnskapAapen; oppdater(); } },
     h('b', null, g0(r.totalVekt)), ' deig', sep(),
@@ -394,8 +453,9 @@ function tegnBunnlinje(r, K) {
       // sier hvordan den kommer dit. Samme funksjon som på Tid, i mini-format —
       // samme data, ingen ny matematikk.
       regnskapGraf(r, K)));
-    // Bakteppe over innholdet — lukker ved trykk.
-    byId('telefon').appendChild(h('div', { class: 'regnskap-bakteppe', id: 'bakteppe',
+    // Bakteppe over innholdet — lukker ved trykk. Gjenbrukes hvis det allerede
+    // står der, ellers spilles fade-inn om igjen ved hver render.
+    if (!byId('bakteppe')) byId('telefon').appendChild(h('div', { class: 'regnskap-bakteppe', id: 'bakteppe',
       onClick: () => { S.regnskapAapen = false; oppdater(); } }));
   }
   bl.replaceChildren(...barn);
@@ -534,17 +594,28 @@ function tegnFormKurv(r, emneMasse) {
   // Kurvens mål som innstilling, og en ærlig sjekk mot emnet.
   if (f && f.standardMaal) {
     const mine = kurvMaal(f), cm = emneMaalCm(f, emneMasse);
+    const egetSatt = isFinite((S.kurvMaal || {})[f.id]);
+    /* Første gang SPØR appen i stedet for å bruke et tall den har funnet på.
+       Kurver finnes i mange størrelser, og advarselen «emnet er for stort for
+       kurven» er verdiløs — eller direkte feil — om den måles mot en antatt
+       standard i stedet for kurven som står på kjøkkenet. */
+    if (!egetSatt) boks.appendChild(h('div', { class: 'varsel' },
+      h('div', { style: 'font-weight:800;margin-bottom:2px' }, 'Hvor stor er kurven din?'),
+      h('div', { style: 'font-size:.8rem;line-height:1.45' },
+        'Mål innvendig ' + (f.maal === 'lengde' ? 'lengde' : 'tverrmål') + ' i centimeter. Uten det måler appen emnet mot ' +
+        fmt(f.standardMaal, 0) + ' cm — en vanlig størrelse, men ikke nødvendigvis din, og da blir advarslene under upålitelige.')));
     boks.appendChild(h('div', { class: 'gramrad' },
-      h('span', { class: 'gramrad-lab' }, f.maal === 'lengde' ? 'Kurvens lengde' : 'Kurvens tverrmål'),
+      h('span', { class: 'gramrad-lab' }, (f.maal === 'lengde' ? 'Kurvens lengde' : 'Kurvens tverrmål') +
+        (egetSatt ? '' : ' (antatt)')),
       gramFelt(mine, v => {
         S.kurvMaal = Object.assign({}, S.kurvMaal);
         if (v > 0) S.kurvMaal[f.id] = v; else delete S.kurvMaal[f.id];
         oppdater();
       }, 'Kurvens mål i cm'),
       h('span', { class: 'gramrad-enhet' }, 'cm')));
-    if (cm && cm > mine) boks.appendChild(h('div', { class: 'varsel' },
+    if (egetSatt && cm && cm > mine) boks.appendChild(h('div', { class: 'varsel' },
       'Emnet blir ca. ' + fmt(cm, 0) + ' cm og kurven din er ' + fmt(mine, 0) + ' cm. Del deigen i flere brød, eller bruk en større kurv — et emne som presses ned i en for kort kurv mister spenningen du nettopp bygget.'));
-    else if (cm && cm < mine * 0.6) boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
+    else if (egetSatt && cm && cm < mine * 0.6) boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
       'Emnet er ca. ' + fmt(cm, 0) + ' cm i en ' + fmt(mine, 0) + ' cm kurv. Det har god plass — men mye slark gjør at emnet flyter utover i stedet for å holdes oppreist.'));
   }
   if (f && f.advarsel) boks.appendChild(h('div', { class: 'varsel' }, f.advarsel));
@@ -946,10 +1017,18 @@ function tegnKompensasjon(r, iModal) {
    opp der blikket er, i det øyeblikket endringen skjer, og lukkes når man har
    svart. `S.kompSporsmal` settes av hver eneste vei inn i tilleggene. */
 function tegnKompModal(r) {
-  const gml = byId('kompmodal'); if (gml) gml.remove();
-  if (!S.kompSporsmal) return;
+  const gml = byId('kompmodal');
+  if (!S.kompSporsmal) { if (gml) gml.remove(); return; }
   const innmat = tegnKompensasjon(r, true);
-  if (!innmat) { S.kompSporsmal = false; return; }
+  if (!innmat) { S.kompSporsmal = false; if (gml) gml.remove(); return; }
+  /* Står modalen allerede oppe, byttes bare INNHOLDET. Å fjerne og legge til
+     ytterelementet på nytt ville spilt av inn-animasjonen ved hver render — og
+     hvert trykk inne i modalen utløser en render. Det er den flimringen. */
+  if (gml) {
+    const ark = gml.querySelector('.modal-ark');
+    if (ark) { ark.replaceChildren(innmat); return; }
+    gml.remove();
+  }
   const lukk = () => { S.kompSporsmal = false; oppdater(); };
   const lag = h('div', { class: 'modal-bakteppe', id: 'kompmodal', role: 'dialog', 'aria-modal': 'true',
     'aria-label': 'Hva vil du gjøre med endringen?', onClick: lukk },
@@ -1110,6 +1189,15 @@ function tegnAutolyse(r) {
     : 'Av. Mel, vann, salt og gjær blandes samtidig.'));
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
     'Autolyse er mel og vann alene, uten salt og gjær. Melet drikker seg fullt, og enzymene begynner å bryte ned proteinet — glutenet bygger seg selv, så du trenger kortere elting for samme nettverk. Saltet holdes utenfor fordi det strammer glutenet og bremser enzymene; gjæren fordi gjæringen ikke skal starte ennå.'));
+  /* Begge samtidig ER meningsfullt, og det er verdt å si HVORDAN — ellers ser
+     det ut som to overlappende måter å gjøre det samme på.
+     Forfermenten modnes for seg og tilfører smak og syre; autolysen gjelder
+     RESTEN av melet og vannet, og bygger gluten uten gjæring. De rører ikke
+     hverandre: forfermenten ankres til eltestart, autolysen ligger rett foran
+     den. Klassisk baguettemetode er nettopp begge. */
+  if (paa && S.ff) boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
+    'Du har både forferment og autolyse på, og det henger sammen: forfermenten modnes for seg og gir smak, mens autolysen gjelder ',
+    h('b', null, 'resten'), ' av melet og vannet og bygger gluten uten at gjæringen starter. Bland forfermenten inn først når autolysen er ferdig, sammen med salt og gjær. Det er den klassiske baguettemetoden.'));
   if (min >= 180) boks.appendChild(h('div', { class: 'varsel' },
     'Over ~3 timer begynner proteasene å bryte ned mer enn de bygger, og deigen blir slapp og klissete. Med gjærdeig er 1–3 timer trygt — surdeig tåler langt mindre fordi lav pH vekker proteasene.'));
   return boks;
@@ -1463,6 +1551,8 @@ function tegnTid(r, K) {
       S.maskin === 'egen' ? h('div', { style: 'margin-top:8px' },
         miniStepper('Din friksjon (°C per min)', S.egenFriksjon || 0.4, 'egenFriksjon', 0.05, 2, 0.05, '')) : null,
       maskinInfoPanel(r)));
+  const kal = tegnKalibrering(r);
+  if (kal) vb.appendChild(kal);
   wrap.appendChild(vb);
 
   // Gjæringsgraf — den ekte fart- og akkumuleringskurven bak dosen.
@@ -1531,6 +1621,49 @@ function fartFaser(faser, totalMin) {
   }
   return ut;
 }
+/* ---------- Kalibrering av maskinens friksjon ----------
+   Friksjonstallet styrer vanntemperaturen i hele appen, og tabellverdiene er
+   KLASSEANSLAG — for Ooni Halo Pro finnes det ingen produsentoppgitt verdi i
+   det hele tatt (se PARAMETERREVISJON.md, 31.07.2026). Å måle sin egen tar to
+   avlesninger, og da er tallet ekte i stedet for et snitt av andres maskiner.
+
+   Regnestykket er (etter − før) / minutter, og ingenting mer. Det ligger her og
+   ikke i engine.js fordi det ikke er en modell — det er en divisjon på to tall
+   brukeren nettopp har lest av. */
+function tegnKalibrering(r) {
+  if (S.friksjonKalibrert && S.maskin === 'egen') return null;
+  const k = S.kalib || {};
+  const gyldig = isFinite(k.foer) && isFinite(k.etter) && isFinite(k.min) && k.min > 0 && k.etter > k.foer;
+  const resultat = gyldig ? (k.etter - k.foer) / k.min : null;
+  const boks = h('div', { class: 'kort', style: 'margin-top:12px;background:var(--color-accent-2-100)' },
+    h('div', { class: 'kort-num' }, 'Kalibrer maskinen din'),
+    h('div', { class: 'hjelpetekst', style: 'margin-top:4px' },
+      'Tallene i lista er anslag for maskinTYPEN — for Ooni Halo Pro finnes ingen produsentoppgitt verdi. Mål din egen én gang, så treffer vanntemperaturen resten av tiden.'),
+    h('div', { class: 'hjelpetekst', style: 'margin-top:6px' },
+      h('b', null, 'Slik: '), 'stikk termometeret i deigen rett før du starter maskinen, elt som vanlig, og mål igjen med én gang du stopper.'));
+  const felt = (lab, nokkel, enhet) => h('div', { class: 'gramrad' },
+    h('span', { class: 'gramrad-lab' }, lab),
+    gramFelt(k[nokkel] != null ? k[nokkel] : '', v => { S.kalib = Object.assign({}, S.kalib, { [nokkel]: v }); oppdater(); }, lab),
+    h('span', { class: 'gramrad-enhet' }, enhet));
+  boks.appendChild(felt('Deigtemp før elting', 'foer', '°C'));
+  boks.appendChild(felt('Deigtemp etter elting', 'etter', '°C'));
+  boks.appendChild(felt('Minutter du eltet', 'min', 'min'));
+  if (resultat) {
+    boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' },
+      '(', h('b', null, fmt(k.etter, 1) + ' °C'), ' − ', h('b', null, fmt(k.foer, 1) + ' °C'), ') ÷ ',
+      h('b', null, k.min + ' min'), ' = ', h('b', null, fmt(resultat, 2) + ' °C/min')));
+    boks.appendChild(h('button', { class: 'btn btn-primary btn-full', style: 'margin-top:10px',
+      onClick: () => { S.egenFriksjon = Math.round(resultat * 100) / 100; S.maskin = 'egen'; S.friksjonKalibrert = true; oppdater(); } },
+      'Bruk ' + fmt(resultat, 2) + ' °C/min for maskinen min'));
+  } else {
+    boks.appendChild(h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:8px' },
+      'Fyll inn de tre tallene, så regner appen ut friksjonen.'));
+  }
+  boks.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:6px;font-size:.78rem',
+    onClick: () => { S.friksjonKalibrert = true; oppdater(); } }, 'Ikke nå — bruk tabellverdien'));
+  return boks;
+}
+
 function maskinInfoPanel(r) {
   const mid = S.maskin || 'spiralHjemme';
   const info = (typeof MASKIN_INFO !== 'undefined') && MASKIN_INFO[mid];
@@ -2414,7 +2547,9 @@ function tegnKonto() {
   // Utlogget: registrer / logg inn
   const erNy = skyForm.modus === 'ny';
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:6px' },
-    'Uten konto ligger alt kun i denne nettleseren. Logger du inn, lagres bakeloggen i skyen og følger deg til ny telefon eller PC.'));
+    skalKreveInnlogging()
+      ? 'Alt du lager ligger på kontoen din: bakeloggen, oppskriftene, bildene og innstillingene. Logger du inn på en annen enhet, er alt der.'
+      : 'Logger du inn, lagres bakeloggen i skyen og følger deg til ny telefon eller PC.'));
   boks.appendChild(h('div', { class: 'toggle2', style: 'margin-top:10px' },
     h('button', { class: !erNy ? 'paa' : '', onClick: () => { skyForm.modus = 'inn'; skyForm.feil = skyForm.melding = null; render(); } }, 'Logg inn'),
     h('button', { class: erNy ? 'paa' : '', onClick: () => { skyForm.modus = 'ny'; skyForm.feil = skyForm.melding = null; render(); } }, 'Ny konto')));

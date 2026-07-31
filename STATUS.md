@@ -173,9 +173,22 @@ tolket som «ingenting der oppe» → last opp lokalt. Rør ikke det skillet.
 - **Favoritt-id-er er navnerom-prefikset** (`mel:` · `utstyr:` · `steking:`). Uprefiksede
   id-er i lagret tilstand er meltyper og migreres i `last()`.
 
+## Innlogging er obligatorisk fra 31.07 (natt)
+
+`skalKreveInnlogging()` tegner en port i STEDET for appen når ingen er innlogget.
+Bjørns begrunnelse: alt skal skje under én konto, så det ikke oppstår tvil om hvem
+data tilhører. Konsekvens: **appen kan ikke brukes uten konto**, og første gang kreves
+nett. Testene passerer porten med `window.__FB_TEST_INGEN_PORT` (kun i `addInitScript`).
+
+Eierskapsmekanikken fra tidligere samme dag (gravsteiner, enhetsbøtte, arkiv per konto)
+står igjen som sikkerhetsnett — men med porten på plass er det situasjoner man normalt
+ikke havner i.
+
 ### Åpne V2-punkter
 
-**Ett**, og det venter på Bjørn: **appikonet** (#17). Higgsfield-koblingen laget fire
+**Ingen.** Alle 40 innspill i `INNSPILL.md` er levert.
+
+Tidligere åpent, nå lukket: **appikonet** (#17). Higgsfield-koblingen laget fire
 forslag og han valgte ett, men proxyen i dette miljøet nekter CONNECT til Higgsfields
 CDN (403), så PNG-en kan ikke hentes hit. Et håndtegnet SVG-alternativ ble laget og
 forkastet av ham. Venter på at filen legges i `icons/` på grenen.
