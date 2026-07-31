@@ -38,7 +38,12 @@
    Hev VERSJON ved endringer her; det er den som rydder gamle
    cacher i `activate`.
    ============================================================ */
-const VERSJON = 'forgebakery-v3';
+/* v4: ikonfilene fikk nye navn (`…-v2.png`).
+   Å bytte innholdet i en fil med samme navn er ikke nok for et ikon: Android
+   cacher appikonet ved INSTALLASJON, og både service workeren og manifestet
+   pekte på den gamle URL-en. Nytt filnavn er den eneste veien som treffer alle
+   tre. Versjonen heves for å rydde bort den gamle cachen med de gamle ikonene. */
+const VERSJON = 'forgebakery-v4';
 
 /* Filene HTML-en laster, og som derfor skal versjonsstemples. */
 const APPFILER = [
@@ -47,7 +52,7 @@ const APPFILER = [
 ];
 
 /* Appskallet — nok til at appen starter uten nett. */
-const SKALL = ['./', 'index.html', 'icons/icon-192.png', 'icons/icon-512.png', 'manifest.webmanifest'].concat(APPFILER);
+const SKALL = ['./', 'index.html', 'icons/icon-192-v2.png', 'icons/icon-512-v2.png', 'manifest.webmanifest'].concat(APPFILER);
 
 /* Same-origin-henting med revalidering.
    Bare URL + opsjoner: å bygge en Request fra den innkommende er en felle —

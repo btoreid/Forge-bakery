@@ -31,8 +31,8 @@ function side(px, maskable) {
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const jobber = [
-    ['icon-192.png', 192, false], ['icon-512.png', 512, false],
-    ['maskable-512.png', 512, true], ['apple-touch-icon.png', 180, false]
+    ['icon-192-v2.png', 192, false], ['icon-512-v2.png', 512, false],
+    ['maskable-512-v2.png', 512, true], ['apple-touch-icon-v2.png', 180, false]
   ];
   for (const [navn, px, maskable] of jobber) {
     const page = await browser.newPage({ viewport: { width: px, height: px }, deviceScaleFactor: 1 });

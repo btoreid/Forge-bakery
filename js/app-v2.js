@@ -346,13 +346,13 @@ function venterPaaSesjon() {
    om hen må logge inn, og appen vet det heller ikke. */
 function tegnSplash() {
   return h('div', { class: 'port' },
-    h('div', { class: 'port-logo' }, h('img', { src: 'icons/icon-192.png', alt: '', width: 88, height: 88 })),
+    h('div', { class: 'port-logo' }, h('img', { src: 'icons/icon-192-v2.png', alt: '', width: 88, height: 88 })),
     h('h1', { class: 'port-tittel' }, 'Forge Bakery'),
     h('div', { class: 'port-under' }, 'Henter kontoen din …'));
 }
 function tegnPort() {
   const wrap = h('div', { class: 'port' });
-  wrap.appendChild(h('div', { class: 'port-logo' }, h('img', { src: 'icons/icon-192.png', alt: '', width: 88, height: 88 })));
+  wrap.appendChild(h('div', { class: 'port-logo' }, h('img', { src: 'icons/icon-192-v2.png', alt: '', width: 88, height: 88 })));
   wrap.appendChild(h('h1', { class: 'port-tittel' }, 'Forge Bakery'));
   wrap.appendChild(h('div', { class: 'port-under' },
     'Logg inn for å bake. Bakeloggen, oppskriftene og bildene dine ligger på kontoen og følger deg til alle enhetene dine.'));
