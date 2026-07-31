@@ -562,11 +562,15 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     if (knapp) knapp.click();
     await new Promise(r => setTimeout(r, 150));
     return { foerstTekst: tekst.slice(0, 60), kvittert: FB.S.handlelisteOk,
-      sammenlagt: /Alt er i huset/.test(document.body.innerText) };
+      // Ny oppførsel: kvittert = linja forsvinner fra toppen (den lå bare i
+      // veien over stegene), og en diskré «Vis handlelista igjen» ligger nederst.
+      altErIHusetLinje: /Alt er i huset/.test(document.body.innerText),
+      visIgjen: /Vis handlelista igjen/.test(document.body.innerText) };
   });
   ok('handlelista ligger ØVERST i Prosess', /i huset/i.test(huset.foerstTekst), huset.foerstTekst);
   ok('«Jeg har alt» kvitterer den bort', huset.kvittert);
-  ok('kvittert lista blir én linje man kan åpne igjen', huset.sammenlagt);
+  ok('kvittert lista forsvinner fra toppen over stegene', !huset.altErIHusetLinje);
+  ok('men kan åpnes igjen fra en diskré knapp nederst', huset.visIgjen);
 
   /* ---------------------------------------------------------------
      18 · Tidsplanene heter noe man kan skille

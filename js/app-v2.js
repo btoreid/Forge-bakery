@@ -400,13 +400,13 @@ function venterPaaSesjon() {
    om hen må logge inn, og appen vet det heller ikke. */
 function tegnSplash() {
   return h('div', { class: 'port' },
-    h('div', { class: 'port-logo' }, h('img', { src: 'icons/icon-192-v2.png', alt: '', width: 88, height: 88 })),
+    h('div', { class: 'port-logo' }, h('img', { src: 'icons/icon-512-v2.png', alt: 'Forge Bakery', width: 132, height: 132 })),
     h('h1', { class: 'port-tittel' }, 'Forge Bakery'),
     h('div', { class: 'port-under' }, 'Henter kontoen din …'));
 }
 function tegnPort() {
   const wrap = h('div', { class: 'port' });
-  wrap.appendChild(h('div', { class: 'port-logo' }, h('img', { src: 'icons/icon-192-v2.png', alt: '', width: 88, height: 88 })));
+  wrap.appendChild(h('div', { class: 'port-logo' }, h('img', { src: 'icons/icon-512-v2.png', alt: 'Forge Bakery', width: 132, height: 132 })));
   wrap.appendChild(h('h1', { class: 'port-tittel' }, 'Forge Bakery'));
   wrap.appendChild(h('div', { class: 'port-under' },
     'Logg inn for å bake. Bakeloggen, oppskriftene og bildene dine ligger på kontoen og følger deg til alle enhetene dine.'));
@@ -434,9 +434,14 @@ function renderInner() {
   const K = kjede(S, r, S.ferdigMs != null ? S.ferdigMs : standardFerdig());
   const sk = SKJERMER.find(s => s.id === S.skjerm) || SKJERMER[0];
 
-  byId('topp').replaceChildren(h('h1', null,
+  const toppBarn = [h('h1', null,
     sk.steg ? h('span', { class: 'steg-tall' }, sk.steg + ' av ' + ANTALL_STEG) : null,
-    sk.tittel));
+    sk.tittel)];
+  // Aktiv timer bindes til topplinja, så den er synlig uansett hvilken skjerm
+  // man står på — og alarmen kan skrus av herfra.
+  const tt = tegnTopplinjeTimer();
+  if (tt) toppBarn.push(tt);
+  byId('topp').replaceChildren(...toppBarn);
 
   // Bevar scroll (teknisk #1) og fokus/markør (teknisk #2) over re-render.
   const innhold = byId('innhold');
@@ -2454,6 +2459,32 @@ function flyttFerdig(min) {
 /* ============================================================
    4 · PROSESS
    ============================================================ */
+/* Timer bundet til TOPPLINJA: alltid synlig, på alle skjermer, så lenge en
+   timer går. Ringer en timer, blir stripa en rød alarm med «Skru av». Ellers
+   viser den nærmeste nedtellingen, og et trykk tar deg til prosess-steget. */
+function tegnTopplinjeTimer() {
+  const timere = (S.timere || []).slice().sort((a, b) => a.slutt - b.slutt);
+  if (!timere.length) return null;
+  const now = Date.now();
+  const ringer = timere.filter(t => now >= t.slutt && !t.kvittert);
+  const gaaTil = t => { S.skjerm = 'prosess'; if (t.stegId) { S.aktivStegId = t.stegId; S.aktivSteg = 0; } oppdater(); };
+  if (ringer.length) {
+    const t = ringer[0];
+    return h('div', { class: 'topp-timer alarm' },
+      h('button', { class: 'topp-timer-hoved', onClick: () => gaaTil(t) },
+        h('span', { class: 'topp-timer-ikon', 'aria-hidden': 'true' }, '⏰'),
+        h('span', { class: 'topp-timer-navn' }, t.navn + (ringer.length > 1 ? '  +' + (ringer.length - 1) : ''))),
+      h('button', { class: 'topp-timer-av', onClick: () => avbrytTimer(t.id) }, 'Skru av'));
+  }
+  const t = timere[0];
+  return h('div', { class: 'topp-timer' },
+    h('button', { class: 'topp-timer-hoved', onClick: () => gaaTil(t) },
+      h('span', { class: 'topp-timer-ikon', 'aria-hidden': 'true' }, '⏰'),
+      h('span', { class: 'topp-timer-navn' }, t.navn),
+      h('span', { class: 'topp-timer-tid', 'data-timer': t.id }, timerTekst(t.slutt - now)),
+      timere.length > 1 ? h('span', { class: 'topp-timer-flere' }, '+' + (timere.length - 1)) : null));
+}
+
 /* Timer-panelet: pågående baketimere med levende nedtelling. Ligger øverst på
    prosess-skjermen så «hvor lenge igjen» er ett blikk unna. */
 function tegnTimerpanel() {
@@ -2498,7 +2529,8 @@ function tegnProsess(r, K) {
      Den ligger med vilje UTENFOR `kjede()`: kjeden eier de tidsatte stegene, og
      et steg uten varighet der ville forskjøvet klokkeslettene i alt som leser
      den (Tid, grafen, totaltiden). */
-  wrap.appendChild(tegnHandleliste(r));
+  const handleliste = tegnHandleliste(r);
+  if (handleliste) wrap.appendChild(handleliste);
   /* Aktivt steg identifiseres på ID, ikke posisjon.
      Slår man på autolyse eller et frøtillegg, settes et nytt steg inn FORAN i
      kjeden, og den lagrede indeksen pekte plutselig på et helt annet steg. */
@@ -2525,17 +2557,19 @@ function tegnProsess(r, K) {
     h('span', { style: 'flex:1;font-size:.86rem;font-weight:600' }, s.navn),
     h('span', { style: 'font-size:.74rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums' }, klokke(s.tid)))));
 
+  // Diskré vei tilbake til handlelista når den er kvittert bort — den skal ikke
+  // stå over stegene, men den skal fortsatt være å finne.
+  if (S.handlelisteOk) {
+    wrap.appendChild(h('button', { class: 'btn-ghost', style: 'margin-top:14px',
+      onClick: () => { S.handlelisteOk = false; oppdater(); } }, 'Vis handlelista igjen'));
+  }
+
   return wrap;
 }
 function tegnHandleliste(r) {
-  // Kvittert bort? Da er den én linje man kan åpne igjen. Ellers står den åpen.
-  if (S.handlelisteOk) {
-    return h('button', { class: 'valgkort', style: 'margin-bottom:12px;min-height:52px',
-      onClick: () => { S.handlelisteOk = false; oppdater(); } },
-      h('span', { style: 'flex:0 0 24px;height:24px;border-radius:999px;display:grid;place-items:center;background:var(--color-accent-2-500);color:#fff;font-weight:800;font-size:.72rem' }, '✓'),
-      h('span', { style: 'flex:1;font-size:.86rem;font-weight:700' }, 'Alt er i huset'),
-      h('span', { style: 'font-size:.74rem;color:var(--color-neutral-600)' }, 'se lista'));
-  }
+  // Kvittert bort? Da forsvinner den helt fra toppen — den lå bare i veien over
+  // stegene. En diskré vei tilbake ligger nederst på prosess-skjermen.
+  if (S.handlelisteOk) return null;
   const d = h('div', { class: 'kort', style: 'padding:0;margin-bottom:12px' });
   d.appendChild(h('div', { style: 'padding:14px 16px 0' },
     h('div', { class: 'kort-num' }, 'Før du starter · dette må være i huset'),
@@ -3640,25 +3674,28 @@ async function avlysVarsel(id) {
   }
 }
 
-/* Kort pip + vibrasjon når appen er åpen, så man hører det uten å se skjermen. */
-let _lydCtx = null;
-function pip() {
-  try { if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 300]); } catch (e) {}
+/* Alarmen skal RINGE, ikke pippe én gang og gi seg. Denne spiller et kort
+   triplett-pip + vibrasjon, og kalles gjentatte ganger av sekund-tikken så
+   lenge en timer står i alarm — helt til brukeren skrur den av. */
+let _lydCtx = null, _alarmTeller = 0;
+function alarmLyd() {
+  try { if (navigator.vibrate) navigator.vibrate([400, 150, 400]); } catch (e) {}
   try {
     _lydCtx = _lydCtx || new (window.AudioContext || window.webkitAudioContext)();
     const ctx = _lydCtx; if (ctx.state === 'suspended') ctx.resume();
-    [0, 0.55, 1.1].forEach(dt => {
+    [0, 0.26, 0.52].forEach(dt => {
       const o = ctx.createOscillator(), g = ctx.createGain();
-      o.type = 'sine'; o.frequency.value = 880;
+      o.type = 'square'; o.frequency.value = 880;
       o.connect(g); g.connect(ctx.destination);
       const t0 = ctx.currentTime + dt;
       g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(0.35, t0 + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4);
-      o.start(t0); o.stop(t0 + 0.42);
+      g.gain.exponentialRampToValueAtTime(0.28, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+      o.start(t0); o.stop(t0 + 0.22);
     });
   } catch (e) {}
 }
+function stoppLyd() { try { if (navigator.vibrate) navigator.vibrate(0); } catch (e) {} _alarmTeller = 0; }
 
 function timerId() { return 't' + Date.now().toString(36) + Math.floor(Math.random() * 1e5).toString(36); }
 async function startTimer(navn, minutter, stegId) {
@@ -3671,6 +3708,7 @@ async function startTimer(navn, minutter, stegId) {
 function avbrytTimer(id) {
   S.timere = (S.timere || []).filter(t => t.id !== id);
   avlysVarsel(id);
+  stoppLyd();               // stopp vibrasjon/alarm med en gang
   oppdater();
 }
 function justerTimer(id, deltaMin) {
@@ -3688,23 +3726,32 @@ function timerTekst(ms) {
   return String(m).padStart(2, '0') + ':' + String(sek).padStart(2, '0');
 }
 
-/* Tikker hvert sekund: oppdaterer bare nedtellings-tekstene i DOM-en (ikke full
-   re-render, som ville stjålet fokus), og fyrer alarmen når en timer går ut. */
+/* Tikker hvert sekund: oppdaterer nedtellings-tekstene i DOM-en (ikke full
+   re-render, som ville stjålet fokus), og driver alarmen. Alarmen LOOPER så
+   lenge en utgått timer ikke er skrudd av — det var nettopp det som manglet:
+   før ga den én kort lyd og ga seg selv. */
 let _timerTikk = null;
 function tikkTimere() {
   const now = Date.now();
-  let ringte = false;
+  let nyRing = false, alarmerer = false;
   (S.timere || []).forEach(t => {
-    const el = document.querySelector('[data-timer="' + t.id + '"]');
-    if (el) el.textContent = timerTekst(t.slutt - now);
-    if (!t.ringt && now >= t.slutt) {
-      t.ringt = true; ringte = true;
-      pip();
-      // Planlagte varsler har allerede fyrt på OS-nivå; ellers vis det nå.
-      if (!planlagteVarslerStottes()) visVarselNaa(t);
+    const tekst = t.slutt <= now ? 'ferdig' : timerTekst(t.slutt - now);
+    // querySelectorAll: samme timer kan vises både i topplinja og i panelet.
+    document.querySelectorAll('[data-timer="' + t.id + '"]').forEach(el => { el.textContent = tekst; });
+    if (now >= t.slutt && !t.kvittert) {
+      alarmerer = true;
+      if (!t.ringt) {
+        t.ringt = true; nyRing = true;
+        if (!planlagteVarslerStottes()) visVarselNaa(t);
+      }
     }
   });
-  if (ringte) { lagre(); if (S.skjerm === 'prosess') render(); }
+  // Ring hvert 3. sekund så lenge noe alarmerer.
+  if (alarmerer) { if (_alarmTeller % 3 === 0) alarmLyd(); _alarmTeller++; }
+  else _alarmTeller = 0;
+  // Full re-render bare når en NY timer nettopp gikk av — da må topplinja og
+  // panelet vise «Skru av»-knappen.
+  if (nyRing) { lagre(); render(); }
 }
 
 function initTimere() {
@@ -3723,6 +3770,8 @@ function initTimere() {
       if (e.data && e.data.type === 'timer-klikk') {
         S.skjerm = 'prosess';
         if (e.data.stegId) { S.aktivStegId = e.data.stegId; S.aktivSteg = 0; }
+        // Trykk på varselet = «jeg tar den» → skru av alarmen for den timeren.
+        if (e.data.timerId) { S.timere = (S.timere || []).filter(t => t.id !== e.data.timerId); stoppLyd(); }
         oppdater();
       }
     });

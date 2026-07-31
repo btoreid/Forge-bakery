@@ -43,9 +43,9 @@
    cacher appikonet ved INSTALLASJON, og både service workeren og manifestet
    pekte på den gamle URL-en. Nytt filnavn er den eneste veien som treffer alle
    tre. Versjonen heves for å rydde bort den gamle cachen med de gamle ikonene. */
-/* v9: baketimere. Service workeren håndterer nå trykk på et timer-varsel —
-   den henter appen fram (eller åpner den) og sier fra hvilket steg det gjaldt. */
-const VERSJON = 'forgebakery-v9';
+/* v10: timer-varselet sender med timer-id-en, så et trykk på varselet skrur av
+   alarmen for nettopp den timeren (ikke bare åpner steget). */
+const VERSJON = 'forgebakery-v10';
 
 /* Filene HTML-en laster, og som derfor skal versjonsstemples. */
 const APPFILER = [
@@ -136,7 +136,7 @@ self.addEventListener('notificationclick', e => {
     for (const c of alle) {
       if ('focus' in c) {
         await c.focus();
-        c.postMessage({ type: 'timer-klikk', stegId: data.stegId || null });
+        c.postMessage({ type: 'timer-klikk', stegId: data.stegId || null, timerId: data.timerId || null });
         return;
       }
     }
