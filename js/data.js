@@ -306,7 +306,7 @@ const PRESETS = [
       { navn:'Kjøleskap (utbakt i hevekurv)', timer:20, temp:24, miljo:3.5, utbakt:true }
     ],
     steking:'brod_apen',
-    notat:'Frøene teller ikke i hydreringen (samme konvensjon som regnearket ditt), men de stjeler ca. 340 g vann fra deigen. Se «effektiv hydrering».'
+    notat:'Frøene teller ikke i hydreringen (samme konvensjon som regnearket ditt), men de stjeler ca. 140 g vann fra deigen (96 g solsikke + 48 g lin). Se «effektiv hydrering».'
   },
   {
     id:'ciabatta',
@@ -616,8 +616,12 @@ const FF_TYPER = [
     merke:'MEST EKSTENSIBILITET',
     plus:['Trives på 20–22 °C, altså vanlig romtemperatur','Du ser når den er klar — kuppelen synker','Mest ekstensibilitet: deigen strekker seg lett — og på sterkt mel (W300+) gir det faktisk mest løft'],
     minus:['Mindre deigstyrke enn biga','Proteasene får friere spillerom i den våte røra','12 timer må inn i planen'] },
-  { id:'biga', navn:'Biga', kort:'Stiv · 50 % vann · 18 °C',
-    pctMel:30, hyd:50, timer:16, temp:18, salt:false, loftBase:5.0, refAndel:0.30, syre:false,
+  { id:'biga', navn:'Biga', kort:'Stiv · 50 % vann · 16–18 °C',
+    // tempMin/tempMax: bigaen vil stå KJØLIGERE enn rommet. 18 °C hardkodet var
+    // upraktisk om sommeren, men full romtemp (22–24) gjærer den for fort. Motoren
+    // klemmer derfor din romtemp inn i dette båndet som standard — og gjærdosen
+    // løses uansett mot den faktiske temperaturen, så tallet er trygt å nudge.
+    pctMel:30, hyd:50, timer:16, temp:18, tempMin:16, tempMax:20, salt:false, loftBase:5.0, refAndel:0.30, syre:false,
     hvorfor:'Stiv forferment på 45–55 % hydrering. Gir styrke og ekstensibilitet samtidig, og en dypere, mer vinøs smak enn poolish. Den stive matrisen beskytter glutenet og bremser proteasene, så den tåler tid bedre. Veien til høyest løft på butikkmel.',
     merke:'MEST LØFT',
     plus:['Mest deigstyrke av alle forfermentene','Dypere, mer vinøs smak','Tåler lang modning uten å bli slapp'],
