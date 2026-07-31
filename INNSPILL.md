@@ -102,13 +102,13 @@ anbefalingen.
 To ting: knappen må være et valg som kan slås av og på, ikke en akkumulator · panelet
 må vise seg når endringen skjer.
 
-### 10 · Forfermentens temperatur og kjøleskapsvalg — `åpen` · bøtte: ui + modell
+### 10 · Forfermentens temperatur og kjøleskapsvalg — `levert` · bøtte: ui + modell
 
 > «under forferment så må man kunne velge og sette hvordan temp man hever på. Det må
 > også være mulig å huke av at fermenteringen skal skje i kjøleskap, og at appen guider
 > deg gjennom hvordan dette påvirker tid og effekten av forfermenteringen»
 
-### 11 · Trangt i romtemp-boksen under heveplanen — `åpen` · bøtte: ui
+### 11 · Trangt i romtemp-boksen under heveplanen — `levert` · bøtte: ui
 
 > «under heveplanen er det noen problemer rundt lufta i romtempboksen. Under varme
 > balanse, der det blir litt trangt.»
@@ -117,7 +117,7 @@ Layout. IKKE gjort ennå — jeg finner ikke sikkert hvilken boks du mener på
 skjermbildene mine. Trenger en peker: er det trinn-kortene i heveplanen, eller
 romtemp-stepperen under Varmebalanse?
 
-### 12 · Hastighet på eltemaskinen, med faser — `åpen` · bøtte: ui + innhold
+### 12 · Hastighet på eltemaskinen, med faser — `levert` · bøtte: ui + innhold
 
 > «når det kommer til maskinkjøring av deg, så må det også komme noen indikasjoner til
 > hvordan hastighet man skal kjøre på: Lav hastighet · Medium hastighet · Høy hastighet
@@ -127,7 +127,7 @@ romtemp-stepperen under Varmebalanse?
 `fart`-feltet i `MASKIN_INFO` finnes, men er én setning prosa. Må bli en faseplan med
 minutter, som følger den utregnede eltetiden.
 
-### 13 · Validere friksjonstallet for Ooni Halo Pro — `åpen` · bøtte: innhold
+### 13 · Validere friksjonstallet for Ooni Halo Pro — `levert` · bøtte: innhold
 
 > «har du mulighet til å gjøre en research på Oni Halo Pro og validere om den
 > varmegenereringen er riktig?»
@@ -143,7 +143,7 @@ Skal etterprøves mot kilder og føres inn i `PARAMETERREVISJON.md`.
 Spørsmål, men ser ut som en ekte lesefeil i grafen: to akser med ulik betydning som
 leses som samme skala.
 
-### 15 · «Har du alt i huset?» som steg 1 i prosessen — `åpen` · bøtte: ui
+### 15 · «Har du alt i huset?» som steg 1 i prosessen — `levert` · bøtte: ui
 
 > «punktet. Dette må være i huset; bør egentlig komme som nummer én i prosessen der man
 > sjekker at man har alt man trenger.»
@@ -176,6 +176,92 @@ et steg på 0,5 prosentpoeng var malt (0,05–0,3 %) i praksis ujusterbar.
 
 Bekreftelse på 22. Behandlingen ligger nå på tilleggsradene og på vann- og saltkortet.
 
+### 25 · Sonefargen som bakgrunn, ikke kantstripe — `levert` · bøtte: ui
+
+> «jeg vil ikke ha denne kanten i det hele tatt, legge fargen som bakgrunnsfarge i boksene
+> istedenfor»
+
+Overstyrer 24. Kantstripa er fjernet; fargen ligger i bakgrunnen.
+
+### 26 · Loggen lå igjen etter utlogging — `levert` · bøtte: ui
+
+> «loggen ligger fortsatt i lista, selv om man har logget ut.»
+
+Eksisterende loggposter manglet `konto`-merket, og `!b.konto` leste dem som enhetens.
+Skillet går nå på om feltet FINNES: `konto: null` = bevisst uten konto (enhetens),
+felt som mangler = eldre post som hele tiden er synket til kontoen.
+
+### 27 · Lokal logg slettet ved utlogging, borte ved innlogging — `levert` · bøtte: ui
+
+> «den lokale loggen slettes selv om man har logget ut. Når man logger inn igjen, er den
+> borte. Det må knyttes til kontoen, ikke til den lokale sesjonen.»
+
+Alvorlig. `lagre()` speiler opp til skyen så lenge man er innlogget — så da loggen ble
+tømt lokalt FØR utloggingen, ble den tomme lista lagt i kø mot skyen og skrev over
+historikken der. Nå: last opp → verifiser → **logg ut** → så endre lokalt. Loggen
+ARKIVERES per konto (`forgebakery.v2.logg.<uid>`) i stedet for å slettes.
+
+### 28 · ⓘ må ligge inni brødtype-boksen — `levert` · bøtte: ui
+
+> «grafikken ikonet som ligger til høyre for boksen på "hva skal tilbake" må integreres i
+> selve boksene. Du kan også ta bort det check marken, sånn at du får plass.»
+
+### 29 · Kurver: generisk språk, egne mål, og «uten form» — `levert` · bøtte: innhold + ui
+
+> «og kurv, så er det dumt å bruke beskrivelsen ditt vanlige. Det her skal være en generisk
+> app. Det må også kunne legges inn hvor lang kurven er i centimeter som en setting. Det
+> samme gjelder for … den andre runde kurven. Det bør også være en egen form som er uten
+> form, så man bare kan bake brød uten å ha noen form rundt.»
+
+### 30 · Skrivefeil: «kloke», ikke «klokke» — `levert` · bøtte: innhold
+
+> «en skrivefeil på stålet: "glasset som kloke over," ikke "klokke over."»
+
+### 31 · Feil prosent i «tilbake til anbefalt blanding» — `levert` · bøtte: ui
+
+> «Det står 1 prosent når jeg gjør en test, i stedet for 10 prosent, som er det man
+> forventer.»
+
+Knappen viste `r.brodskala.pct`, altså brødskalaen for den OVERSTYRTE blandingen. Den
+viser nå grovhetstrinnet knappen faktisk gjenoppretter.
+
+### 32 · Kompensasjonspanelet som popup — `levert` · bøtte: ui
+
+> «Den boksen der må komme opp når man gjør en endring. Den må komme opp som en popup i
+> vinduet. Den bør ikke ligge på bunnen.»
+
+### 33 · Autolyse som egen boks — `levert` · bøtte: ui + modell
+
+> «under forfermentering, der må autolyse være en egen boks.»
+
+Den lå som en setning under «Ingen forferment», altså usynlig for alle som BRUKER en
+forferment. Nå eget valg med egen varighet i `kjede()`.
+
+### 34 · «Mot normalen» er feil ord — `levert` · bøtte: ui
+
+> «så kommer valgene dine mot normalen. Det er ikke noe normalt her. Det er mer hvordan
+> valgene i tilleggene påvirker det.»
+
+### 35 · Tidsplanene måtte kunne skilles — `levert` · bøtte: innhold
+
+> «under tid så er en dag og kort omtrent det samme, så det er bedre å si … ekspress,
+> samme dag, over natta og optimal.»
+
+Nå: Optimal · Over natta · Samme dag · Ettermiddag · Ekspress.
+
+### 36 · Luft i romtemp- og varmebalanse-boksene — `levert` · bøtte: ui
+
+> «det er fortsatt veldig trangt der man skal ta inn romtemperaturen … samme gjelder
+> boksene i varmebalanse»
+
+Løser også 11. Ny rytme på stepperne, og tallfeltet utvidet — «24,0 °C» ble klippet til
+«24,0 °».
+
+### 37 · Pil opp på deigregnskapet, og grafen inn i det — `levert` · bøtte: ui
+
+> «pila nedover … bør være en tydeligere pil som peker oppover … Det bør også i det
+> panelet legges inn gjæring over tid-grafen.»
+
 ### 17 · Bedre appikon — `venter på Bjørn` · bøtte: infra
 
 > «ikonet til appen er litt dårlig. Brødbakeikonet. Prøv å lage et bedre ikon som er litt
@@ -202,7 +288,7 @@ flettet inn i stillhet.
 > «lag en knapp som heter "Lagre dette som standardbrød" under loggingen, sånn at man har
 > det når man åpner appen som standard, dersom det ikke ligger noe annet der fra før av.»
 
-### 21 · Endret gram på mel: spør hva som skal gi etter — `åpen` · bøtte: ui
+### 21 · Endret gram på mel: spør hva som skal gi etter — `levert` · bøtte: ui
 
 > «nå er det sånn at man bare justerer en annen meltype dersom du endrer grammen. Men jeg
 > vil ha en pop-up boks som sier hva du vil gjøre når du har endret dette. Vil du redusere

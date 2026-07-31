@@ -376,6 +376,179 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   ok('vannkortet er grønt i vinduet', soner.gronn);
   ok('gramfeltet har runde kanter', /999px|50%/.test(soner.radius) || parseFloat(soner.radius) >= 12, soner.radius);
 
+
+  /* ---------------------------------------------------------------
+     12 · Hva skal gi etter når en meltype endres i gram
+     --------------------------------------------------------------- */
+  console.log('— Mel: hva skal gi etter —');
+  const girEtter = await page.evaluate(async () => {
+    const FB = window.__FB, S = FB.S;
+    S.melOverstyr = null; S.grov = 40; S.vekt = 900; S.antall = 4; S.tillegg = {};
+    S.skjerm = 'deigen'; FB.oppdater();
+    await new Promise(r => setTimeout(r, 150));
+    const start = regn(S).mel.map(m => Math.round(m.gram));
+    const prop = regn({ ...S, melOverstyr: settMelGram(S, 0, 900) }).mel.map(m => Math.round(m.gram));
+    const mot1 = regn({ ...S, melOverstyr: settMelGramMot(S, 0, 900, 1) }).mel.map(m => Math.round(m.gram));
+    const voks = settMelGramMerDeig(S, 0, 900);
+    const vr = regn({ ...S, melOverstyr: voks.melOverstyr, vekt: voks.vekt }).mel.map(m => Math.round(m.gram));
+    return { start, prop, mot1, voks: vr, nyVekt: voks.vekt, gammelVekt: S.vekt };
+  });
+  // ±2 g: løserne itererer, og siste desimal er under vektas oppløsning uansett.
+  const naer = (a, b) => Math.abs(a - b) <= 2;
+  ok('proporsjonalt: alle andre justeres', naer(girEtter.prop[0], 900) && !naer(girEtter.prop[1], girEtter.start[1]) && !naer(girEtter.prop[2], girEtter.start[2]),
+    girEtter.prop.join(' / ') + '  (start ' + girEtter.start.join(' / ') + ')');
+  ok('mot én meltype: bare den ene endres', naer(girEtter.mot1[0], 900) && naer(girEtter.mot1[2], girEtter.start[2]) && !naer(girEtter.mot1[1], girEtter.start[1]),
+    girEtter.mot1.join(' / '));
+  ok('la deigen endres: de andre står helt urørt',
+    naer(girEtter.voks[0], 900) && naer(girEtter.voks[1], girEtter.start[1]) && naer(girEtter.voks[2], girEtter.start[2]),
+    girEtter.voks.join(' / '));
+  ok('brødvekten følger med når deigen endres', girEtter.nyVekt !== girEtter.gammelVekt,
+    girEtter.gammelVekt + ' → ' + girEtter.nyVekt);
+
+  const spm = await page.evaluate(async () => {
+    const FB = window.__FB, S = FB.S;
+    S.melEndring = { i: 0, gram: 900, fra: 1109 }; S.skjerm = 'deigen'; FB.render();
+    await new Promise(r => setTimeout(r, 150));
+    const boks = [...document.querySelectorAll('.varsel')].find(x => /hva vil du at det skal være/i.test(x.textContent));
+    return { finnes: !!boks, valg: boks ? boks.querySelectorAll('.valgkort').length : 0,
+      krymper: boks ? /la deigen krympe/i.test(boks.textContent) : false };
+  });
+  ok('spørsmålet reises av en gramendring', spm.finnes);
+  ok('ett valg per meltype + proporsjonalt + deigen', spm.valg === 4, String(spm.valg));
+  ok('retningen står riktig (reduksjon = krympe)', spm.krymper);
+
+  /* ---------------------------------------------------------------
+     13 · Forfermentens temperatur
+     --------------------------------------------------------------- */
+  console.log('— Forferment: temperatur og kjøleskap —');
+  const ffT = await page.evaluate(async () => {
+    const FB = window.__FB, S = FB.S;
+    S.melEndring = null; S.ff = true; S.ffType = 'poolish'; S.ffTemp = null; FB.oppdater();
+    await new Promise(r => setTimeout(r, 120));
+    const varm = regn(S);
+    S.ffTemp = 4; FB.oppdater();
+    await new Promise(r => setTimeout(r, 150));
+    const kald = regn(S);
+    const tekst = document.body.innerText;
+    return { varmTemp: varm.forferment.temp, kaldTemp: kald.forferment.temp,
+      varmGjaer: varm.forferment.gjaer, kaldGjaer: kald.forferment.gjaer,
+      ekv: ffTidEkvivalent(varm.forferment.timer, varm.forferment.temp, 4),
+      advarer: /går ikke opp/i.test(tekst), harKjoleskapsknapp: /Kjøleskap 4°/.test(tekst) };
+  });
+  ok('planens temperatur gjelder når man ikke har rørt den', ffT.varmTemp === 21, String(ffT.varmTemp));
+  ok('kjøleskapsknappen setter 4 °C', ffT.kaldTemp === 4 && ffT.harKjoleskapsknapp);
+  ok('kaldt krever mer gjær for samme tid', ffT.kaldGjaer > ffT.varmGjaer,
+    ffT.varmGjaer.toFixed(2) + ' → ' + ffT.kaldGjaer.toFixed(2) + ' g');
+  ok('ekvivalent tid regnes ut', ffT.ekv > 0 && isFinite(ffT.ekv), Math.round(ffT.ekv) + ' t');
+  ok('appen sier fra når kombinasjonen ikke går opp', ffT.advarer);
+
+  /* ---------------------------------------------------------------
+     14 · Autolyse som eget steg
+     --------------------------------------------------------------- */
+  console.log('— Autolyse —');
+  const auto = await page.evaluate(async () => {
+    const FB = window.__FB, S = FB.S;
+    /* Uten forferment: med forferment på er DEN første steg i kjeden, og den
+       ankres til eltestart — autolysen legger seg mellom forberedelse og elting
+       og flytter da ikke kjedens start. Det er riktig oppførsel, men gjør
+       totaltiden til feil ting å måle på. */
+    S.ff = false; S.ffTemp = null; S.autolyseMin = 0; FB.oppdater();
+    await new Promise(r => setTimeout(r, 100));
+    const r0 = regn(S), k0 = kjede(S, r0, Date.now() + 20 * 3600000);
+    S.autolyseMin = 60; FB.oppdater();
+    await new Promise(r => setTimeout(r, 120));
+    const r1 = regn(S), k1 = kjede(S, r1, Date.now() + 20 * 3600000);
+    return { uten: k0.length, med: k1.length,
+      harSteg: k1.some(x => x.id === 'autolyse'),
+      totalUten: +k0.totalT.toFixed(2), totalMed: +k1.totalT.toFixed(2),
+      egenBoks: /9 · Autolyse/i.test(document.body.innerText) };
+  });
+  ok('autolyse er av som standard og legger til ett steg', auto.med === auto.uten + 1, auto.uten + ' → ' + auto.med);
+  ok('steget heter autolyse', auto.harSteg);
+  ok('autolysen forlenger totaltiden med 1 t', Math.abs((auto.totalMed - auto.totalUten) - 1) < 0.02,
+    auto.totalUten + ' → ' + auto.totalMed + ' t');
+  ok('autolyse har egen boks i Deig', auto.egenBoks);
+
+  /* ---------------------------------------------------------------
+     15 · Form og kurv: uten form, og kurvmål som innstilling
+     --------------------------------------------------------------- */
+  console.log('— Form og kurv —');
+  const former = await page.evaluate(async () => {
+    const FB = window.__FB, S = FB.S;
+    S.autolyseMin = 0; S.skjerm = 'brodet'; S.form = 'ingen'; FB.oppdater();
+    await new Promise(r => setTimeout(r, 150));
+    const utenForm = /Uten form/.test(document.body.innerText);
+    S.form = 'avlang'; S.vekt = 1600; S.kurvMaal = {}; FB.oppdater();
+    await new Promise(r => setTimeout(r, 150));
+    const forLiten = /kurven din er/i.test(document.body.innerText);
+    S.kurvMaal = { avlang: 60 }; FB.oppdater();
+    await new Promise(r => setTimeout(r, 150));
+    const okNaa = !/kurven din er/i.test(document.body.innerText);
+    return { utenForm, forLiten, okNaa,
+      ingenDittVanlige: !/ditt vanlige/i.test(JSON.stringify(FORMER)) };
+  });
+  ok('«Uten form» finnes som valg', former.utenForm);
+  ok('appen sier fra når emnet er for stort for kurven', former.forLiten);
+  ok('egen kurvstørrelse fjerner advarselen', former.okNaa);
+  ok('«ditt vanlige» er ute av formbeskrivelsene', former.ingenDittVanlige);
+
+  /* ---------------------------------------------------------------
+     16 · Deigregnskapet: pil opp og gjæringsgraf
+     --------------------------------------------------------------- */
+  console.log('— Deigregnskapet —');
+  const regnskap = await page.evaluate(async () => {
+    const FB = window.__FB, S = FB.S;
+    S.vekt = 900; S.skjerm = 'deigen'; S.regnskapAapen = false; FB.oppdater();
+    await new Promise(r => setTimeout(r, 150));
+    const pil = document.querySelector('.bunnlinje .pil');
+    const pilTegn = pil ? pil.textContent.trim() : '';
+    S.regnskapAapen = true; FB.oppdater();
+    await new Promise(r => setTimeout(r, 200));
+    const ark = document.querySelector('.regnskap-ark');
+    return { pilTegn, harGraf: !!(ark && ark.querySelector('svg[viewBox="0 0 360 210"]')),
+      harTittel: !!(ark && /Gjæringen over tid/i.test(ark.textContent)) };
+  });
+  ok('pila peker oppover når arket er lukket', regnskap.pilTegn === '⌃', regnskap.pilTegn);
+  ok('gjæringsgrafen ligger i deigregnskapet', regnskap.harGraf);
+  ok('grafen er merket i arket', regnskap.harTittel);
+
+  /* ---------------------------------------------------------------
+     17 · «Dette må være i huset» ligger først i Prosess
+     --------------------------------------------------------------- */
+  console.log('— Handlelista —');
+  const huset = await page.evaluate(async () => {
+    const FB = window.__FB, S = FB.S;
+    S.regnskapAapen = false; S.handlelisteOk = false; S.skjerm = 'prosess'; FB.oppdater();
+    await new Promise(r => setTimeout(r, 200));
+    const innhold = document.querySelector('.innhold');
+    const foerst = innhold.firstElementChild ? innhold.firstElementChild.firstElementChild : null;
+    const tekst = foerst ? foerst.textContent : '';
+    const knapp = [...document.querySelectorAll('button')].find(b => /Jeg har alt/.test(b.textContent));
+    if (knapp) knapp.click();
+    await new Promise(r => setTimeout(r, 150));
+    return { foerstTekst: tekst.slice(0, 60), kvittert: FB.S.handlelisteOk,
+      sammenlagt: /Alt er i huset/.test(document.body.innerText) };
+  });
+  ok('handlelista ligger ØVERST i Prosess', /i huset/i.test(huset.foerstTekst), huset.foerstTekst);
+  ok('«Jeg har alt» kvitterer den bort', huset.kvittert);
+  ok('kvittert lista blir én linje man kan åpne igjen', huset.sammenlagt);
+
+  /* ---------------------------------------------------------------
+     18 · Tidsplanene heter noe man kan skille
+     --------------------------------------------------------------- */
+  const planNavn = await page.evaluate(() => TIDSPLANER.map(t => t.navn));
+  ok('planene heter Optimal/Over natta/Samme dag/Ettermiddag/Ekspress',
+    planNavn.join(',') === 'Optimal,Over natta,Samme dag,Ettermiddag,Ekspress', planNavn.join(','));
+
+  /* ---------------------------------------------------------------
+     19 · Skrivefeil og hardkodede formuleringer
+     --------------------------------------------------------------- */
+  const tekster = await page.evaluate(() => ({
+    kloke: JSON.stringify(UTSTYR) + JSON.stringify(BAKE_PROFILES),
+    former: JSON.stringify(FORMER)
+  }));
+  ok('«kloke», ikke «klokke», i utstyr og profiler', !/klokke/.test(tekster.kloke));
+
   console.log(pageErrors.length ? '  ✗ JS-feil: ' + pageErrors.join(' | ') : '  ✓ ingen JS-feil på siden');
   if (pageErrors.length) feil++;
 

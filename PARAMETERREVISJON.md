@@ -386,3 +386,59 @@ Gjenstår, i rekkefølge:
 appen der en leser kan gå fra tall til referanse uten å lete. Samme grep i `FLOURS`,
 `SOAKERS` og `UTSTYR` ville flyttet størstedelen av kategori B over i A — eller avslørt
 hvilke tall som faktisk må måles på nytt.
+
+---
+
+## 31.07.2026 — Etterprøvd: friksjonstallet for Ooni Halo Pro (`spiralHjemme: 0.4`)
+
+Bjørn ba om at varmeutviklingen ble validert. Tallet styrer vanntemperaturen i
+hele appen (`FRIKSJON` i engine.js, °C deigoppvarming per minutts elting).
+
+**Konklusjon: 0,40 °C/min ligger i nedre kant av det kildene støtter, og det
+finnes ingen produsentoppgitt verdi for Halo Pro. Tallet er IKKE endret** — se
+begrunnelsen nederst.
+
+### Hva kildene sier
+
+| kilde | oppgitt | omregnet til °C/min |
+|---|---|---|
+| Spiralmikser, standard brøddeig: 6–9 °F stigning over en typisk miks (~8 min) | 3,3–5,0 °C | **0,42–0,63** |
+| Spiralmikser «tilfører rundt 8 °C» over en miks (~15 min) | 8 °C | **~0,53** |
+| Målt eksempel, spiralmikser på fart 5: 44 → 74 °F på 28 min | 16,7 °C | **~0,60** |
+| Ooni Halo Pro spesifikt | — | **ingen publisert verdi** |
+
+Merk at det amerikanske «friction factor» (oppgitt som 35–40 °F for spiralmiksere)
+**ikke er sammenlignbart**: det er et samletall i °F for hele miksen, brukt i
+DDT-formelen `FF = DDT × N − (mel + rom + vann [+ forferment])`, ikke en rate per
+minutt. Det tallet kan ikke settes inn i appens modell direkte, og gjør det
+heller ikke.
+
+### Vurdering
+
+0,40 er forsvarlig for en **husholdnings**spiral: kildene over gjelder i hovedsak
+bakerimaskiner, og en mindre motor på en mindre deig tilfører mindre energi per
+kg. Men appen bør ikke late som tallet er målt på nettopp Halo Pro — det er et
+klasseanslag, og det ligger under midten av spennet.
+
+**Praktisk konsekvens hvis tallet er for lavt:** appen ber om for varmt vann, og
+deigen lander over ønsket temperatur. Ved 13 min elting er forskjellen mellom
+0,40 og 0,55 °C/min omtrent 2 °C i ferdig deigtemperatur — nok til å merkes på
+hevetiden, ikke nok til å ødelegge et bak.
+
+### Ikke endret, og hvorfor
+
+Å flytte 0,40 → ~0,50 ville vært å bytte ett ukildet tall med et annet ukildet
+tall. Appen har allerede den riktige veien ut: **«Egen (kalibrer)»**, der man
+måler deigtemperaturen rett før og rett etter elting og deler stigningen på
+minuttene. Det tar to avlesninger og gir Bjørns egen maskin, ikke et snitt av
+andres.
+
+**Spørsmål til Bjørn:** vil du at jeg flytter standardverdien til midten av
+spennet (~0,5), eller står den på 0,40 til du har målt din egen?
+
+Kilder:
+- <https://www.restaurantsupply.com/blogs/food-service-buying-guide/spiral-mixer-dough-temperature-guide-ddt>
+- <https://www.kingarthurbaking.com/blog/2018/08/27/determining-the-friction-factor-in-baking>
+- <https://www.theperfectloaf.com/how-to-mix-bread-and-pizza-dough-with-a-ooni-halo-pro-spiral-mixer/>
+- <https://uk.ooni.com/blogs/ooni-insights/dough-mixing-101-with-ooni-halo-pro>
+- <https://www.thefreshloaf.com/node/69895/dough-temp-intensive-mixing>

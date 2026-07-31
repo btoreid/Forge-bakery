@@ -175,7 +175,25 @@ tolket som «ingenting der oppe» → last opp lokalt. Rør ikke det skillet.
 
 ### Åpne V2-punkter
 
-Fem, alle i `INNSPILL.md` med Bjørns egen ordlyd:
+**Ett**, og det venter på Bjørn: **appikonet** (#17). Higgsfield-koblingen laget fire
+forslag og han valgte ett, men proxyen i dette miljøet nekter CONNECT til Higgsfields
+CDN (403), så PNG-en kan ikke hentes hit. Et håndtegnet SVG-alternativ ble laget og
+forkastet av ham. Venter på at filen legges i `icons/` på grenen.
+
+Alt annet fra 31.07 er levert — se `INNSPILL.md` (38 punkter) og CHANGELOG.
+
+**Ikke ruller tilbake uten å lese hvorfor:**
+
+- **Loggen ARKIVERES per eier, den slettes aldri.** `forgebakery.v2.logg.<uid>` og
+  `…logg.enhet`. Utlogging flytter, innlogging henter tilbake.
+- **Utlogging: last opp → verifiser → logg ut → SÅ endre lokalt.** Endres tilstanden før
+  utloggingen, legger `lagre()` en tom logg i kø mot skyen og skriver over historikken.
+- **`erUtenKonto()` skiller på om `konto`-feltet FINNES**, ikke på om det er falsy.
+  Eldre poster mangler feltet og hører til kontoen.
+- **`okDeig` og autolysen regnes i engine.js av state**, ikke ved å skrive til `S.vekt`.
+- **«Dette må være i huset» ligger utenfor `kjede()`** — kjeden eier de tidsatte stegene.
+
+### Arkivert: de fem punktene som stod åpne tidligere 31.07 (nå levert)
 
 1. **Forfermentens temperatur og kjøleskapsvalg** (#10) — krever modellarbeid, ikke bare
    et felt: han ber om at appen forklarer hva kulda gjør med tid OG effekt.

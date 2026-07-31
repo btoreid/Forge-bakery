@@ -32,6 +32,12 @@ const STANDARD = {
   standardBrod: null,         // oppskriften appen åpner på når ingenting er påbegynt
   okDeig: false,              // kompenser tilleggenes plass ved å øke deigvekten
   brodInfo: null,             // hvilken brødtype som har ⓘ-utfellingen åpen
+  melEndring: null,           // ventende gramendring på mel: {i, gram, fra}
+  kompSporsmal: false,        // kompensasjonsmodalen er reist av en endring
+  ffTemp: null,               // forfermentens temperatur; null = planens forslag
+  autolyseMin: 0,             // autolyse i minutter; 0 = av
+  handlelisteOk: false,       // «dette må være i huset» er kvittert bort
+  kurvMaal: {},               // brukerens kurvstørrelser i cm, per form-id
   kompVist: false             // kompensasjonspanelet er åpnet av en endring
 };
 /* Er oppskriften fortsatt akkurat som den kom fra fabrikken? Brukes til å avgjøre
@@ -103,7 +109,7 @@ function last() {
    noen appen sist». */
 const UI_FELT = ['skjerm', 'paramInfo', 'tilleggInfo', 'melInfo', 'meltallInfo', 'aktivSteg',
   'regnskapAapen', 'byttBekreft', 'lgRediger', 'lgSlett', 'bildeVis', 'oppslag', 'oppslagSok',
-  'brodInfo', 'kompVist'];
+  'brodInfo', 'kompVist', 'melEndring', 'kompSporsmal', 'handlelisteOk'];
 function dataAvtrykk(s) {
   const kopi = {};
   Object.keys(s).forEach(k => { if (k !== 'oppdatert' && UI_FELT.indexOf(k) < 0) kopi[k] = s[k]; });
@@ -316,6 +322,7 @@ function renderInner() {
 
   tegnBunnlinje(r, K);
   tegnBildeVis();
+  tegnKompModal(r);
 
   byId('bunnmeny').replaceChildren(...SKJERMER.map(s =>
     h('button', { class: s.id === S.skjerm ? 'paa' : '', 'aria-current': s.id === S.skjerm ? 'page' : null, onClick: () => bytt(s.id) },
@@ -349,7 +356,10 @@ function tegnBunnlinje(r, K) {
     h('b', null, fmt(r.gjaerTotal, 2) + ' g'), ' gjær', sep(),
     h('b', null, String(r.loft.loft)), ' løft', sep(),
     h('b', null, fmt(K.totalT, 1) + ' t'), ' total',
-    h('span', { class: 'pil' }, '▾'));
+    // Pila peker OPP når arket er lukket: det er retningen arket kommer fra, og
+    // det er den som forteller at linja er noe man kan dra opp. Nedover leste
+    // som «her lukkes noe», altså motsatt av hva knappen gjør.
+    h('span', { class: 'pil', 'aria-hidden': 'true' }, '⌃'));
   const barn = [stripe];
   if (S.regnskapAapen) {
     const rader = [
@@ -365,7 +375,7 @@ function tegnBunnlinje(r, K) {
       ['Kostnad', fmt(r.kost.total, 0) + ' kr']
     ].filter(Boolean);
     // «Hva valgene koster» hører hjemme her: totalen over, avvikene mot
-    // normalen (brød uten tillegg) under — samme tall som dose–respons-panelet.
+    // brødet uten tillegget som referanse — samme tall som dose–respons-panelet.
     const avvik = doseResponsRader();
     // Arket popper opp OVER bunnlinja (position:absolute; bottom:100%).
     // Trykk hvor som helst på arket lukker det — ikke bare på bakteppet.
@@ -374,18 +384,36 @@ function tegnBunnlinje(r, K) {
       h('div', { class: 'ark-tittel' }, 'Deigregnskap'),
       h('div', { class: 'regnskap' }, ...rader.map(([k, v]) =>
         h('div', { class: 'rad' }, h('span', null, k), h('b', null, v)))),
-      avvik.length ? h('div', { class: 'ark-tittel', style: 'margin-top:12px' }, 'Valgene dine mot normalen') : null,
+      avvik.length ? h('div', { class: 'ark-tittel', style: 'margin-top:12px' }, 'Hva tilleggene gjør med brødet') : null,
       ...avvik.map(rad => h('div', { class: 'ark-avvik' },
         h('b', null, rad.navn),
         h('span', null, rad.verdier.map(([lab, v]) => lab + ' ' + fmtDelta(v)).join(' · ')))),
       avvik.length ? h('div', { style: 'font-size:.68rem;color:var(--color-neutral-500);margin-top:4px' },
-        '± er endring mot samme brød uten tillegg. Detaljer i «Hva valgene koster» på Deig.') : null));
+        '± er endring mot samme brød uten tillegg. Detaljer i «Hva valgene koster» på Deig.') : null,
+      // Gjæringskurven hører hjemme her: regnskapet sier hva deigen ER, grafen
+      // sier hvordan den kommer dit. Samme funksjon som på Tid, i mini-format —
+      // samme data, ingen ny matematikk.
+      regnskapGraf(r, K)));
     // Bakteppe over innholdet — lukker ved trykk.
     byId('telefon').appendChild(h('div', { class: 'regnskap-bakteppe', id: 'bakteppe',
       onClick: () => { S.regnskapAapen = false; oppdater(); } }));
   }
   bl.replaceChildren(...barn);
 }
+/* Mini-gjæringskurve til deigregnskapet. Bruker nøyaktig samme planProfil() og
+   gjaeringsGraf() som Tid-skjermen. */
+function regnskapGraf(r, K) {
+  if (typeof planProfil !== 'function') return null;
+  const pts = planProfil(r.planTrinn, r.gjaerTorr, r.masseKg, { antall: S.antall, lokk: S.lokk, fulltKjol: S.fulltKjol });
+  if (!pts || pts.length <= 2) return null;
+  const bulkStart = (K.find(x => x.id === 'trinn-0') || {}).tid || K.start;
+  return h('div', { style: 'margin-top:12px' },
+    h('div', { class: 'ark-tittel' }, 'Gjæringen over tid'),
+    gjaeringsGraf(pts, r, bulkStart, S.tidModus === 'naa'),
+    h('div', { style: 'font-size:.68rem;color:var(--color-neutral-500);margin-top:2px' },
+      'Grønn kurve: andel av gjæringen som er gjort (høyre akse). Stiplet: deigtemperatur (venstre).'));
+}
+
 const sep = () => h('span', { class: 'sep' }, ' · ');
 
 /* ============================================================
@@ -402,12 +430,13 @@ function tegnBrodet(r, K) {
   wrap.appendChild(h('div', { class: 'valg' }, ...BTYPER.map(bt => {
     const paa = bt.id === S.brotype || (bt.id === 'grovbrod' && S.brotype === 'loff');
     const rad = h('div', { class: 'brodvalg' + (paa ? ' paa' : '') });
+    // Hakemerket er ute: valgt tilstand vises på kortets egen farge, og plassen
+    // trengs til at ⓘ kan ligge INNI boksen i stedet for å henge utenfor den.
     rad.appendChild(h('button', { class: 'brodvalg-hoved', aria: { pressed: paa }, onClick: () => velgBrotype(bt.id) },
       h('span', { class: 'brodvalg-ikon' }, brodTegning(bt.id)),
       h('span', { style: 'flex:1;min-width:0' },
         h('span', { class: 'tittel' }, bt.navn),
-        h('span', { class: 'undertittel' }, bt.undertittel || '')),
-      paa ? h('span', { class: 'valgt-merke' }, '✓') : null));
+        h('span', { class: 'undertittel' }, bt.undertittel || ''))));
     // ⓘ per brødtype i stedet for ett kollapskort for den valgte. Da kan man
     // lese hva en ciabatta ER før man bytter til den — som er når man lurer.
     rad.appendChild(h('button', { class: 'info-ring', 'aria-label': 'Om ' + bt.navn,
@@ -476,13 +505,25 @@ function brodInfoBoks(bt, K) {
   return boks;
 }
 
+/* Emnets største mål i cm: kFaktor × ∛(masse i kg) × 10. Samme formel som
+   ellers i appen, samlet ett sted. */
+function emneMaalCm(f, emneMasse) {
+  if (!f || !f.kFaktor) return null;
+  return Math.cbrt(emneMasse / 1000) * f.kFaktor * 10;
+}
+/* Brukerens egen kurvstørrelse. Kurver finnes i mange mål, og om emnet passer
+   er et spørsmål om DIN kurv — ikke om en antatt standardstørrelse. */
+function kurvMaal(f) {
+  if (!f || !f.standardMaal) return null;
+  const eget = (S.kurvMaal || {})[f.id];
+  return isFinite(eget) && eget > 0 ? eget : f.standardMaal;
+}
 function tegnFormKurv(r, emneMasse) {
   const boks = kort('Form og kurv', null);
   boks.appendChild(h('div', { class: 'valg', style: 'margin-top:6px' }, ...FORMER.map(f => {
     const paa = f.id === S.form;
-    let maal = '';
-    if (f.maal === 'lengde') maal = 'ca. ' + fmt(Math.cbrt(emneMasse / 1000) * f.kFaktor * 10, 0) + ' cm lang';
-    else if (f.maal === 'tverrmål') maal = 'ca. ' + fmt(Math.cbrt(emneMasse / 1000) * f.kFaktor * 10, 0) + ' cm tvers';
+    const cm = emneMaalCm(f, emneMasse);
+    const maal = cm ? 'emnet blir ca. ' + fmt(cm, 0) + ' cm ' + (f.maal === 'lengde' ? 'langt' : 'tvers') : '';
     return h('button', { class: 'valgkort' + (paa ? ' paa' : ''), onClick: () => velgForm(f.id) },
       h('span', { style: 'flex:1;min-width:0' },
         h('span', { class: 'tittel', style: 'font-size:.98rem' }, f.navn),
@@ -490,6 +531,22 @@ function tegnFormKurv(r, emneMasse) {
       paa ? h('span', { class: 'valgt-merke' }, '✓' ) : null);
   })));
   const f = FORMER.find(x => x.id === S.form);
+  // Kurvens mål som innstilling, og en ærlig sjekk mot emnet.
+  if (f && f.standardMaal) {
+    const mine = kurvMaal(f), cm = emneMaalCm(f, emneMasse);
+    boks.appendChild(h('div', { class: 'gramrad' },
+      h('span', { class: 'gramrad-lab' }, f.maal === 'lengde' ? 'Kurvens lengde' : 'Kurvens tverrmål'),
+      gramFelt(mine, v => {
+        S.kurvMaal = Object.assign({}, S.kurvMaal);
+        if (v > 0) S.kurvMaal[f.id] = v; else delete S.kurvMaal[f.id];
+        oppdater();
+      }, 'Kurvens mål i cm'),
+      h('span', { class: 'gramrad-enhet' }, 'cm')));
+    if (cm && cm > mine) boks.appendChild(h('div', { class: 'varsel' },
+      'Emnet blir ca. ' + fmt(cm, 0) + ' cm og kurven din er ' + fmt(mine, 0) + ' cm. Del deigen i flere brød, eller bruk en større kurv — et emne som presses ned i en for kort kurv mister spenningen du nettopp bygget.'));
+    else if (cm && cm < mine * 0.6) boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' },
+      'Emnet er ca. ' + fmt(cm, 0) + ' cm i en ' + fmt(mine, 0) + ' cm kurv. Det har god plass — men mye slark gjør at emnet flyter utover i stedet for å holdes oppreist.'));
+  }
   if (f && f.advarsel) boks.appendChild(h('div', { class: 'varsel' }, f.advarsel));
   if (f) boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' }, f.om, f.snitt ? h('div', { style: 'margin-top:6px' }, h('b', null, 'Snitt: '), f.snitt) : null));
   return boks;
@@ -535,7 +592,7 @@ function velgForm(id) { S.form = id; if (!S.stekeProfilManuell) S.stekeProfil = 
 const UTSTYR_PROFIL = { stal15: 'brod_kloke', glass: 'brod_glass_stal', glass_stal: 'brod_glass_stal', stopejern: 'brod_gryte', apen: 'brod_apen', brett: 'brod_brett' };
 function profilForUtstyr(utstyrId, formId) {
   // Tidligere ble avlangt + stål tvunget til åpen steking (antatt at ingen gryte
-  // tok avlange emner). Med den avlange Pyrexen tar klokke-oppsettet avlange
+  // tok avlange emner). Med den avlange Pyrexen tar kloke-oppsettet avlange
   // brød fint, så det spesialtilfellet er fjernet.
   return UTSTYR_PROFIL[utstyrId] || 'brod_apen';
 }
@@ -598,7 +655,7 @@ function anbefaltKnapp(naa, anbefalt, settInn, enhet) {
 }
 
 function stepperRad(label, verdi, felt, min, max, steg) {
-  return h('div', { style: 'margin-top:10px' },
+  return h('div', { class: 'stepper-blokk' },
     h('div', { class: 'felt-label' }, label),
     h('div', { class: 'stepper' },
       h('button', { onClick: () => { S[felt] = Math.max(min, (S[felt] || 0) - steg); oppdater(); } }, '−'),
@@ -653,7 +710,14 @@ function tegnDeigen(r) {
       // i engine.js (settMelGram), som itererer fordi melmengden avhenger av
       // andelene og andelene av melmengden.
       h('div', { class: 'm-tall' },
-        gramFelt(m.gram, nyGram => { S.melOverstyr = settMelGram(S, i, nyGram); oppdater(); }, 'Gram ' + m.navn),
+        // Endringen utføres IKKE her. Den legges som et spørsmål (`melEndring`),
+        // fordi «hva skal gi etter» har flere rimelige svar og appen tok det
+        // stilltiende før: den fordelte alltid differansen på de andre meltypene.
+        gramFelt(m.gram, nyGram => {
+          if (Math.abs(nyGram - m.gram) < 0.5) return;
+          S.melEndring = { i, gram: nyGram, fra: Math.round(m.gram) };
+          oppdater();
+        }, 'Gram ' + m.navn),
         h('div', { class: 'p' }, fmt(m.pct, 0) + ' %')),
       h('button', { class: 'info-ring', 'aria-label': 'Info om ' + m.navn, onClick: () => { S.tilleggInfo = null; S.melInfo = S.melInfo === m.id ? null : m.id; oppdater(); } }, 'ⓘ')));
     if (S.melInfo === m.id && info) {
@@ -665,6 +729,9 @@ function tegnDeigen(r) {
         h('div', { class: 'info-linje' }, h('span', { class: 'etikett', style: 'flex:0 0 18px;color:' + f }, l), h('span', { class: 'tekst' }, tk)))));
     }
   });
+  // Spørsmålet etter en gramendring: hva skal gi etter?
+  const melSp = tegnMelEndring(r);
+  if (melSp) melBoks.appendChild(melSp);
   // Veien tilbake til anbefalingen. Uten den er en egen blanding en enveisdør,
   // og grovhetsdialen ser ut som den har sluttet å virke.
   if (S.melOverstyr) {
@@ -752,7 +819,51 @@ function tegnDeigen(r) {
 
   // 8 · Forferment
   wrap.appendChild(tegnForferment(r));
+  // 9 · Autolyse — egen boks, ikke en fotnote under «ingen forferment».
+  wrap.appendChild(tegnAutolyse(r));
   return wrap;
+}
+
+/* «Du satte X til N g — hva skal gi etter?»
+   Før fordelte appen differansen på de andre meltypene uten å si fra. Det er ett
+   rimelig svar av tre, og de to andre er ofte de man mener: at ÉN bestemt meltype
+   skal gi etter (rugen er kanskje dosert bevisst), eller at ingen skal det og
+   deigen heller får vokse. */
+function tegnMelEndring(r) {
+  const e = S.melEndring;
+  if (!e || !r.mel[e.i]) return null;
+  const navn = r.mel[e.i].navn;
+  const opp = e.gram > e.fra;
+  const diff = Math.abs(Math.round(e.gram - e.fra));
+  const boks = h('div', { class: 'varsel', style: 'margin-top:10px' },
+    h('div', { style: 'font-weight:800;margin-bottom:2px' },
+      navn + ': ' + e.fra + ' → ' + Math.round(e.gram) + ' g'),
+    h('div', { style: 'font-size:.8rem;line-height:1.45;margin-bottom:8px' },
+      'Deigvekten er fast, så ' + diff + ' g må ' + (opp ? 'tas fra' : 'gå til') +
+      ' noe annet. Hva vil du at det skal være?'));
+  const velg = (fn) => { fn(); S.melEndring = null; oppdater(); };
+  const knapp = (tekst, under, fn) => h('button', { class: 'valgkort', style: 'margin-bottom:6px', onClick: () => velg(fn) },
+    h('span', { style: 'flex:1;min-width:0' },
+      h('span', { style: 'display:block;font-weight:700;font-size:.86rem' }, tekst),
+      h('span', { class: 'undertittel' }, under)));
+
+  boks.appendChild(knapp('De andre meltypene deler på det', 'Alle andre justeres proporsjonalt — blandingsforholdet mellom dem holdes',
+    () => { S.melOverstyr = settMelGram(S, e.i, e.gram); }));
+  r.mel.forEach((m, j) => {
+    if (j === e.i) return;
+    boks.appendChild(knapp((opp ? 'Reduser ' : 'Øk ') + m.navn,
+      'Bare denne endres — ' + g0(m.gram) + ' ' + (opp ? '−' : '+') + ' ' + diff + ' g. De øvrige står',
+      () => { S.melOverstyr = settMelGramMot(S, e.i, e.gram, j); }));
+  });
+  // Retningen må stå riktig i teksten: reduserer man en meltype og ingen andre
+  // skal ta over, KRYMPER deigen — den vokser ikke.
+  const nyVekt = settMelGramMerDeig(S, e.i, e.gram).vekt;
+  boks.appendChild(knapp('Ingen — la deigen ' + (opp ? 'vokse' : 'krympe'),
+    'De andre meltypene står urørt. Brødvekten går ' + S.vekt + ' → ' + nyVekt + ' g/brød',
+    () => { const ut = settMelGramMerDeig(S, e.i, e.gram); S.melOverstyr = ut.melOverstyr; S.vekt = ut.vekt; }));
+  boks.appendChild(h('button', { class: 'btn', style: 'width:100%;font-size:.82rem;margin-top:2px',
+    onClick: () => { S.melEndring = null; oppdater(); } }, 'Avbryt'));
+  return boks;
 }
 
 function kort(num, infoId, ...barn) {
@@ -791,8 +902,6 @@ function tilleggSeksjon(r) {
     items.forEach(t => boks.appendChild(tilleggRad(t, r)));
     wrap.appendChild(boks);
   });
-  const komp = tegnKompensasjon(r);
-  if (komp) wrap.appendChild(komp);
   return wrap;
 }
 
@@ -800,7 +909,7 @@ function tilleggSeksjon(r) {
    melet faller. Panelet viser hva som faktisk skjedde og tilbyr alternativet:
    øk deigen i stedet, så melmengden blir som uten tillegg. Vannet justeres
    alltid automatisk for det frøene binder. */
-function tegnKompensasjon(r) {
+function tegnKompensasjon(r, iModal) {
   if (!Object.keys(S.tillegg || {}).length) return null;
   // Referansen er ALLTID «samme bakst uten tillegg og uten kompensasjon». Den er
   // fast, og det er nettopp derfor panelet ikke lenger kan løpe løpsk.
@@ -810,7 +919,8 @@ function tegnKompensasjon(r) {
   if (tap < 1) return null;
   const paa = !!S.okDeig;
   const nyVekt = Math.round(r.totalVekt / Math.max(S.antall, 1) / 10) * 10;
-  const boks = kort('Hva vil du gjøre med endringen?', null);
+  const boks = iModal ? h('div', null, h('div', { class: 'kort-num' }, 'Hva vil du gjøre med endringen?'))
+                      : kort('Hva vil du gjøre med endringen?', null);
   boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:6px' },
     'Tilleggene tar plass i deigen: uten kompensasjon faller melet ',
     h('b', null, g0(tap)), ' (fra ' + g0(r0.melTotal) + ' til ' + g0(rRa.melTotal) + '). Vannet er allerede justert for det frøene binder.'));
@@ -826,8 +936,27 @@ function tegnKompensasjon(r) {
     : ['Brødene er ', h('b', null, S.vekt + ' g'), ' som valgt, med ' + g0(r.melTotal) + ' mel — ' + g0(tap) + ' mindre enn uten tillegg. Litt tettere krumme, samme størrelse.']));
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
     'Valget kan slås av og på uten at noe går tapt: brødvekten din står urørt på ' + S.vekt + ' g/brød under Størrelse.'));
+  if (iModal) boks.appendChild(h('button', { class: 'btn btn-primary btn-full', style: 'margin-top:12px',
+    onClick: () => { S.kompSporsmal = false; oppdater(); } }, 'Ferdig'));
   return boks;
 }
+/* Modal i stedet for et kort nederst på skjermen.
+   Panelet er et SPØRSMÅL — «hva vil du gjøre med endringen?» — og et spørsmål
+   som ligger og venter langt nede i en rulleliste blir ikke stilt. Det dukker nå
+   opp der blikket er, i det øyeblikket endringen skjer, og lukkes når man har
+   svart. `S.kompSporsmal` settes av hver eneste vei inn i tilleggene. */
+function tegnKompModal(r) {
+  const gml = byId('kompmodal'); if (gml) gml.remove();
+  if (!S.kompSporsmal) return;
+  const innmat = tegnKompensasjon(r, true);
+  if (!innmat) { S.kompSporsmal = false; return; }
+  const lukk = () => { S.kompSporsmal = false; oppdater(); };
+  const lag = h('div', { class: 'modal-bakteppe', id: 'kompmodal', role: 'dialog', 'aria-modal': 'true',
+    'aria-label': 'Hva vil du gjøre med endringen?', onClick: lukk },
+    h('div', { class: 'modal-ark', onClick: e => e.stopPropagation() }, innmat));
+  byId('telefon').appendChild(lag);
+}
+
 function soakerKorn(id) { const s = SOAKERS.find(x => x.id === id); return s && s.korn; }
 function tilleggRad(t, r) {
   const pct = (S.tillegg || {})[t.id] || 0;
@@ -911,6 +1040,8 @@ function settTilleggGram(t, gram) {
   settTillegg(t, pct);
 }
 function settTillegg(t, v) {
+  // Enhver endring i tilleggene reiser spørsmålet om hva den skal gå ut over.
+  S.kompSporsmal = true;
   S.tillegg = Object.assign({}, S.tillegg);
   const min = t.min || 0, max = t.max || 30;
   v = Math.round(v * 10) / 10;
@@ -940,6 +1071,7 @@ function tegnForferment(r) {
   const ff = r.ffT;
   if (S.ff && ff.id !== 'ingen' && r.forferment) {
     const f = r.forferment;
+    boks.appendChild(tegnFfTemp(r, f));
     boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' },
       'Tar ', h('b', null, fmt(f.pctMel, 0) + ' %'), ' av melet (', g0(f.mel), ') og modner ', h('b', null, fmtTimer(f.timer)),
       ' ved ', h('b', null, grader(f.temp, 0)), '. Gjærdosen i hoveddeigen faller, og løftet ', h('b', null, (r.loft.tap.ff >= 0 ? '+' : '') + fmt(r.loft.tap.ff, 1)), ' poeng.'));
@@ -959,6 +1091,77 @@ function tegnForferment(r) {
   }
   return boks;
 }
+/* Autolyse som eget valg.
+   Den lå som en setning under «Ingen forferment» («1 t autolyse i stedet»), og
+   var dermed usynlig for alle som BRUKER en forferment — enda kombinasjonen er
+   helt vanlig. Den er nå et eget steg med egen varighet i `kjede()`, så den
+   skyver tidsplanen slik den faktisk gjør på kjøkkenet. */
+function tegnAutolyse(r) {
+  const min = S.autolyseMin || 0;
+  const paa = min > 0;
+  const boks = kort('9 · Autolyse', null);
+  boks.appendChild(h('div', { class: 'piller', style: 'margin-top:6px' },
+    ...[[0, 'Av'], [30, '30 min'], [60, '1 time'], [120, '2 timer'], [180, '3 timer']].map(([v, navn]) =>
+      h('button', { class: min === v ? 'paa' : '', onClick: () => { S.autolyseMin = v; oppdater(); } }, navn))));
+  if (paa) boks.appendChild(stepperRad('Minutter', min, 'autolyseMin', 10, 240, 15));
+  boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' }, paa
+    ? ['Mel og vann blandes og hviler ', h('b', null, fmtTimer(min / 60)), ' før salt og gjær kommer i. Det legger ',
+       h('b', null, fmtTimer(min / 60)), ' til totaltiden, og du ser steget under Prosess.']
+    : 'Av. Mel, vann, salt og gjær blandes samtidig.'));
+  boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
+    'Autolyse er mel og vann alene, uten salt og gjær. Melet drikker seg fullt, og enzymene begynner å bryte ned proteinet — glutenet bygger seg selv, så du trenger kortere elting for samme nettverk. Saltet holdes utenfor fordi det strammer glutenet og bremser enzymene; gjæren fordi gjæringen ikke skal starte ennå.'));
+  if (min >= 180) boks.appendChild(h('div', { class: 'varsel' },
+    'Over ~3 timer begynner proteasene å bryte ned mer enn de bygger, og deigen blir slapp og klissete. Med gjærdeig er 1–3 timer trygt — surdeig tåler langt mindre fordi lav pH vekker proteasene.'));
+  return boks;
+}
+
+/* Forfermentens temperatur — og hva den faktisk gjør.
+   Gjærdosen i forfermenten løses mot temperaturen i motoren, så alt her er
+   AVLESNING av modellen, ikke en parallell regel. Den ekvivalente tiden kommer
+   fra ffTidEkvivalent() i engine.js. */
+function tegnFfTemp(r, f) {
+  const boks = h('div', { style: 'margin-top:12px' });
+  boks.appendChild(h('div', { class: 'felt-label' }, 'Hvor står forfermenten?'));
+  const kald = f.temp <= 12;
+  boks.appendChild(h('div', { class: 'piller', style: 'margin-top:4px' },
+    h('button', { class: kald ? '' : 'paa', onClick: () => { S.ffTemp = S.romTemp || 21; oppdater(); } },
+      'Rommet ditt ' + fmt(S.romTemp || 21, 0) + '°'),
+    h('button', { class: kald ? 'paa' : '', onClick: () => { S.ffTemp = 4; oppdater(); } }, 'Kjøleskap 4°'),
+    f.egenTemp ? h('button', { onClick: () => { S.ffTemp = null; oppdater(); } },
+      'Planens ' + fmt(f.standardTemp, 0) + '°') : null));
+  boks.appendChild(stepperRad('Temperatur på forfermenten', f.temp, 'ffTemp', 2, 30, 1));
+
+  // Hva kulda koster i tid. Regnet, ikke påstått.
+  const ekv = ffTidEkvivalent(f.timer, f.standardTemp, f.temp);
+  const linjer = [];
+  if (ekv && Math.abs(ekv - f.timer) > 0.3) {
+    const saktere = ekv > f.timer;
+    linjer.push('Ved ' + grader(f.temp, 0) + ' går modningen ' + fmt(ekv / f.timer, 1) + '× ' +
+      (saktere ? 'saktere' : 'raskere') + ' enn ved ' + grader(f.standardTemp, 0) + '. Skulle du hatt samme modning på ' +
+      fmtTimer(f.timer) + ' der, måtte den stått ' + fmtTimer(ekv) + ' her.');
+  }
+  linjer.push('Appen holder tiden fast på ' + fmtTimer(f.timer) + ' og løser gjærmengden mot temperaturen i stedet — derfor står det ' +
+    veiG(f.gjaer) + ' gjær nå. Setter du den kaldt uten å øke tiden, er det gjæren som må ta igjen forskjellen.');
+  if (kald) linjer.push('Kaldt skap flytter dessuten balansen mot syre: melkesyrebakteriene bremses mindre av kulde enn gjæren gjør. Det gir mer smaksdybde og mindre gassdrivkraft — som er hele grunnen til at man gjør det med vilje.');
+  linjer.forEach(t => boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:8px' }, t)));
+
+  if (f.temp < 2.5) boks.appendChild(h('div', { class: 'varsel' },
+    'Under ~2 °C står gjæringen praktisk talt stille i modellen, og tallene under blir da mer et anslag enn en beregning.'));
+  /* Appen holder tiden fast og løser gjæren. Setter man en poolish kaldt uten å
+     forlenge, blir svaret matematisk riktig og bakefaglig meningsløst: dosen
+     løper opp i flere prosent av forfermentens mel. Da skal appen si det, ikke
+     bare skrive ut tallet. */
+  const ffPct = f.mel > 0 ? f.gjaer / f.mel * 100 : 0;
+  if (ffPct > 2) boks.appendChild(h('div', { class: 'varsel' },
+    h('b', null, 'Denne kombinasjonen går ikke opp. '),
+    'For å rekke samme modning på ' + fmtTimer(f.timer) + ' ved ' + grader(f.temp, 0) +
+    ' må forfermenten ha ' + fmt(ffPct, 1) + ' % gjær på sitt eget mel (' + veiG(f.gjaer) +
+    '). Over ~2 % smaker det gjær, og poenget med en forferment forsvinner. ' +
+    (ekv ? 'Enten står den ' + fmtTimer(ekv) + ' ved denne temperaturen, eller så setter du den varmere.'
+         : 'Sett den varmere, eller gi den vesentlig lengre tid.')));
+  return boks;
+}
+
 function velgFf(id) {
   if (id === 'ingen') { S.ff = false; }
   else { S.ff = true; S.ffType = id; }
@@ -1017,7 +1220,7 @@ function tegnDoseRespons(r) {
     return boks;
   }
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:4px' },
-    'Pluss og minus mot samme brød uten tillegget. Streken i midten er normalen (0).'));
+    'Hvert tillegg målt mot det samme brødet uten det. Streken i midten er brødet uten tillegget — til høyre er gevinst, til venstre kostnad.'));
   rader.forEach(rad => boks.appendChild(h('div', { style: 'margin-top:10px' },
     h('div', { style: 'font-weight:700;font-size:.86rem;margin-bottom:4px' }, rad.navn),
     ...rad.verdier.map(([lab, v, skala]) => deltaRad(lab, v, skala)),
@@ -1298,10 +1501,13 @@ function isRad(r) {
     'Vannet skal være kaldere enn springen (', grader(spring, 0), '). Bytt ut ', h('b', null, pst(andel * 100, 0)),
     ' av vannet med is — ca. ', h('b', null, g0(is)), ' isbiter, resten kaldt vann.');
 }
+/* Etikett og stepper på samme rad, men med luft: tre slike stablet med 6 px
+   mellomrom og en etikett som brøt til to linjer ble en tett grøt på 390 px.
+   Rytmen ligger i CSS (.ministepper-rad) i stedet for i inline-stiler. */
 function miniStepper(label, verdi, felt, min, max, steg, enhet) {
-  return h('div', { style: 'display:flex;align-items:center;gap:10px;margin-top:6px' },
-    h('div', { class: 'felt-label', style: 'flex:1' }, label),
-    h('div', { class: 'stepper', style: 'width:160px' },
+  return h('div', { class: 'ministepper-rad' },
+    h('div', { class: 'felt-label' }, label),
+    h('div', { class: 'stepper' },
       h('button', { 'aria-label': 'Mindre ' + label, onClick: () => { S[felt] = Math.max(min, (S[felt] || min) - steg); oppdater(); } }, '−'),
       h('input', { type: 'text', inputmode: 'decimal', 'aria-label': label, value: fmt(verdi, steg < 1 ? 1 : 0) + enhet, style: 'font-size:1rem',
         onblur: e => { const v = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(v)) S[felt] = Math.min(max, Math.max(min, v)); oppdater(); } }),
@@ -1313,6 +1519,18 @@ function legendePrikk(farge, tekst) {
 }
 /* Forklarer den valgte eltemaskinen: hva den er, friksjonstallet, den levende
    utregningen (friksjon × min → Wh/kg) og en sammenligning av alle maskinene. */
+/* Fasene som minutter. `andel` av eltetiden, men aldri under `min` — samling
+   tar den tiden den tar selv om totalen er kort. Siste fase får resten, så
+   summen alltid er nøyaktig eltetiden og ikke et avrundingsavvik. */
+function fartFaser(faser, totalMin) {
+  const ut = faser.map(f => ({ fart: f.fart, hva: f.hva, min: Math.max(f.min || 0, Math.round(totalMin * f.andel)) }));
+  const sum = ut.reduce((s2, f) => s2 + f.min, 0);
+  if (ut.length && sum !== totalMin) {
+    const siste = ut[ut.length - 1];
+    siste.min = Math.max(1, siste.min + (totalMin - sum));
+  }
+  return ut;
+}
 function maskinInfoPanel(r) {
   const mid = S.maskin || 'spiralHjemme';
   const info = (typeof MASKIN_INFO !== 'undefined') && MASKIN_INFO[mid];
@@ -1327,7 +1545,16 @@ function maskinInfoPanel(r) {
       h('span', { class: 'mi-frik' }, mid === 'egen' ? 'målt ' + fmt(frik, 2) + ' °C/min' : fmt(frik, 2) + ' °C/min')),
     h('div', { class: 'mi-hva' }, info.hva),
     h('div', { class: 'mi-hva', style: 'margin-top:4px' }, info.tid),
-    info.fart ? h('div', { class: 'mi-hva', style: 'margin-top:4px' }, h('b', null, 'Hastighet: '), info.fart) : null,
+    // Hastighet som FASER med minutter, regnet av eltetiden du faktisk har satt.
+    // Prosasetningen ligger under som begrunnelse.
+    info.faser ? h('div', { style: 'margin-top:8px' },
+      h('div', { class: 'felt-label', style: 'font-weight:800' }, 'Hastighet — ' + min + ' min fordelt'),
+      ...fartFaser(info.faser, min).map((f, i) => h('div', { class: 'fart-fase' },
+        h('span', { class: 'ff-nr' }, String(i + 1)),
+        h('span', { class: 'ff-fart' }, f.fart),
+        h('span', { class: 'ff-min' }, f.min + ' min'),
+        h('span', { class: 'ff-hva' }, f.hva)))) : null,
+    info.fart ? h('div', { class: 'mi-hva', style: 'margin-top:6px' }, info.fart) : null,
     // Den levende utregningen — samme tall som varmebalansen bruker.
     h('div', { class: 'mi-regn' },
       h('span', null, fmt(frik, 2), ' °C/min × ', String(min), ' min = '),
@@ -1505,6 +1732,14 @@ function flyttFerdig(min) {
    ============================================================ */
 function tegnProsess(r, K) {
   const wrap = h('div');
+  /* «Dette må være i huset» er steg null: å oppdage at melet ikke rekker etter
+     at forfermenten står, hjelper ingen. Den lå som et sammenklappet kort
+     NEDERST — altså etter alt man skulle gjort med varene.
+
+     Den ligger med vilje UTENFOR `kjede()`: kjeden eier de tidsatte stegene, og
+     et steg uten varighet der ville forskjøvet klokkeslettene i alt som leser
+     den (Tid, grafen, totaltiden). */
+  wrap.appendChild(tegnHandleliste(r));
   const i = Math.min(S.aktivSteg, K.length - 1);
   wrap.appendChild(h('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:12px' },
     h('div', { class: 'framdrift', style: 'flex:1;margin:0' }, ...K.map((s, j) =>
@@ -1523,13 +1758,22 @@ function tegnProsess(r, K) {
     h('span', { style: 'flex:1;font-size:.86rem;font-weight:600' }, s.navn),
     h('span', { style: 'font-size:.74rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums' }, klokke(s.tid)))));
 
-  // Handleliste — dette må være i huset
-  wrap.appendChild(tegnHandleliste(r));
   return wrap;
 }
 function tegnHandleliste(r) {
-  const d = h('details', { class: 'kort', style: 'padding:0' });
-  d.appendChild(h('summary', { style: 'padding:14px 16px;cursor:pointer;font-weight:800;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--color-neutral-600);list-style:none' }, 'Dette må være i huset ▾'));
+  // Kvittert bort? Da er den én linje man kan åpne igjen. Ellers står den åpen.
+  if (S.handlelisteOk) {
+    return h('button', { class: 'valgkort', style: 'margin-bottom:12px;min-height:52px',
+      onClick: () => { S.handlelisteOk = false; oppdater(); } },
+      h('span', { style: 'flex:0 0 24px;height:24px;border-radius:999px;display:grid;place-items:center;background:var(--color-accent-2-500);color:#fff;font-weight:800;font-size:.72rem' }, '✓'),
+      h('span', { style: 'flex:1;font-size:.86rem;font-weight:700' }, 'Alt er i huset'),
+      h('span', { style: 'font-size:.74rem;color:var(--color-neutral-600)' }, 'se lista'));
+  }
+  const d = h('div', { class: 'kort', style: 'padding:0;margin-bottom:12px' });
+  d.appendChild(h('div', { style: 'padding:14px 16px 0' },
+    h('div', { class: 'kort-num' }, 'Før du starter · dette må være i huset'),
+    h('div', { class: 'hjelpetekst', style: 'margin-top:4px' },
+      'Sjekk at du har alt før forfermenten står — det er for sent å oppdage at melet ikke rekker når deigen er i gang.')));
   const kropp = h('div', { style: 'padding:0 16px 14px' });
   const seksjon = (tittel, rader) => {
     if (!rader.length) return;
@@ -1552,6 +1796,8 @@ function tegnHandleliste(r) {
   if (r.bt.rute !== 'preset') utstyrRader.push(['Hevekurv', (FORMER.find(f => f.id === S.form) || {}).navn || '—']);
   utstyrRader.push(['Vekt', 'som viser ' + vektNavn]);
   seksjon('Utstyr', utstyrRader);
+  kropp.appendChild(h('button', { class: 'btn btn-primary btn-full', style: 'margin-top:14px',
+    onClick: () => { S.handlelisteOk = true; oppdater(); } }, 'Jeg har alt — start prosessen'));
   d.appendChild(kropp);
   return d;
 }
@@ -2234,10 +2480,43 @@ async function skyGlemt() {
    utløser et spørsmål. Å flette dem inn i stillhet ville lagt en fremmeds bak
    inn i din logg på en delt enhet; å slette dem ville vært datatap. Å spørre er
    det eneste som ikke er en av delene.                                        */
+/* Loggen bor i et arkiv per eier, ved siden av hovedtilstanden. Utlogging
+   FLYTTER loggen dit i stedet for å slette den, og innlogging henter den ut
+   igjen. Ingenting kastes noe sted i denne mekanikken — det er hele poenget:
+   førsteforsøket slettet den lokale loggen ved utlogging, og var loggen ikke
+   kommet trygt opp i skyen først, var den borte for godt.
+
+   `enhet` er arkivet for bak loggført uten konto. */
+const LOGG_ARKIV = uid => 'forgebakery.v2.logg.' + (uid || 'enhet');
+function lesArkiv(uid) {
+  try {
+    const o = JSON.parse(localStorage.getItem(LOGG_ARKIV(uid)) || 'null');
+    if (o && Array.isArray(o.poster)) return { poster: o.poster, slettet: Array.isArray(o.slettet) ? o.slettet : [] };
+  } catch (e) {}
+  return { poster: [], slettet: [] };
+}
+function skrivArkiv(uid, poster, slettet) {
+  try { localStorage.setItem(LOGG_ARKIV(uid), JSON.stringify({ poster: poster || [], slettet: slettet || [] })); } catch (e) {}
+}
+
 const ANON_LAGER = 'forgebakery.v2.utenkonto';
 function naaKonto() {
   const b = (typeof Sky !== 'undefined' && Sky.klar() && Sky.bruker()) || null;
   return b ? b.id : null;
+}
+/* Er posten ENHETENS, altså loggført bevisst uten konto?
+   Forskjellen på `konto: null` og manglende `konto` er reell og viktig:
+
+     konto: null   — feltet er satt, og satt til null: loggført mens man var
+                     utlogget, ETTER at eierskap ble innført. Hører til enheten.
+     ingen konto   — posten er eldre enn feltet. Den har hele tiden blitt synket
+                     opp til kontoen, så det er der den hører hjemme.
+
+   Uten dette skillet ble hver eneste eksisterende loggpost lest som enhetens,
+   lagt i enhetsbøtta ved innlogging og lagt TILBAKE ved utlogging — så loggen
+   ble stående i lista etter at man hadde logget ut. */
+function erUtenKonto(b) {
+  return !!b && Object.prototype.hasOwnProperty.call(b, 'konto') && b.konto == null;
 }
 function lesAnon() {
   try {
@@ -2281,17 +2560,36 @@ function flettLogg(lokal, sky, slettet) {
         kontoens, og skal overleve utloggingen                                */
 async function loggUtTrygt() {
   skyForm.utFeil = null;
-  if ((S.loggListe || []).length || (S.loggSlettet || []).length) {
+  const uid = naaKonto();
+  const alle = S.loggListe || [];
+  const enhetens = alle.filter(erUtenKonto);
+  const kontoens = alle.filter(b => !erUtenKonto(b));
+
+  // 1 · Opp i skyen, og verifiser. Feiler det, skjer INGENTING annet: man blir
+  //     stående innlogget med alt i behold og får beskjed.
+  if (alle.length || (S.loggSlettet || []).length) {
     await Sky.skyvNaa(S);
     const st = Sky.status();
     if (st.tilstand === 'feil') { skyForm.utFeil = st.tekst || ''; render(); return; }
   }
-  const anon = lesAnon();
-  S.loggListe = anon.poster.slice();
-  S.loggSlettet = [];
-  lagre();
+  // 2 · Legg kontoens logg i arkivet. Den slettes ikke — den flyttes, så en
+  //     innlogging uten nett fortsatt viser historikken.
+  if (uid) skrivArkiv(uid, kontoens, S.loggSlettet || []);
+
+  /* 3 · Logg ut FØR tilstanden endres.
+         Rekkefølgen er ikke kosmetikk: `lagre()` speiler opp til skyen så lenge
+         noen er innlogget, og debouncet. Tømte vi loggen først og lagret, ble en
+         TOM logg lagt i kø mot skyen — og skrev over historikken der et sekund
+         senere. Det var nettopp slik den lokale loggen kunne forsvinne for godt. */
   await Sky.loggUt();
   _harHentetNed = false;
+
+  // 4 · Enhetens egne bak er tilbake — de var aldri kontoens.
+  const arkivEnhet = lesArkiv(null);
+  const kjent = new Set(enhetens.map(b => b.id));
+  S.loggListe = enhetens.concat(arkivEnhet.poster.filter(b => b && !kjent.has(b.id)));
+  S.loggSlettet = arkivEnhet.slettet.slice();
+  lagre();
   render();
 }
 

@@ -52,7 +52,12 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   // 3: Ooni Halo Pro + hastighet
   const maskin = await page.locator('.maskin-info').innerText();
   ok('maskinpanelet sier Ooni Halo Pro', maskin.includes('Ooni Halo Pro'));
-  ok('maskinpanelet har hastighetsråd', maskin.includes('Hastighet:'));
+  /* Hastighet er ikke lenger én prosasetning, men en FASEPLAN med minutter
+     regnet av eltetiden — «Lav 5 min · Middels 8 min». Prosaen ligger under. */
+  ok('maskinpanelet har hastighetsfaser med minutter',
+    /Hastighet — \d+ min fordelt/.test(maskin) && /\d+ min/.test(maskin), maskin.split('\n').find(l => /Hastighet/.test(l)) || '');
+  const faser = await page.locator('.fart-fase').count();
+  ok('minst to hastighetsfaser på spiralmikseren', faser >= 2, String(faser));
   await page.click('.piller button:has-text("Kjøkkenmaskin")');
   await page.waitForTimeout(200);
   const maskin2 = await page.locator('.maskin-info').innerText();
@@ -96,9 +101,12 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await solInp2.fill('6'); await solInp2.dispatchEvent('blur');
   await page.waitForTimeout(200);
 
-  // 6: kompensasjonspanel
-  const komp = page.locator('.kort:has-text("Hva vil du gjøre med endringen?")');
-  ok('kompensasjonspanel vises når tillegg er på', await komp.count() === 1);
+  /* 6: kompensasjonspanelet. Det er en MODAL nå, ikke et kort nederst: et
+     spørsmål som ligger og venter langt nede i en rulleliste blir ikke stilt.
+     Den reises av hver endring i tilleggene — fill+blur over holder. */
+  const komp = page.locator('.modal-ark');
+  ok('kompensasjonsmodalen reises av en tilleggsendring', await komp.count() === 1);
+  ok('modalen har riktig spørsmål', /hva vil du gjøre med endringen/i.test(await komp.innerText()));
   const kompTekst = await komp.innerText();
   // Formuleringen er endret; det som skal holde er at tapet oppgis i gram.
   ok('panelet viser meltapet i gram', /faller melet\s+[\d\s ]+ g/.test(kompTekst), kompTekst.split('\n')[1]);
@@ -123,11 +131,16 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await page.waitForTimeout(200);
   const melAv = await page.locator('.kort:has-text("2 · Meltypene") .h-meta').innerText();
   ok('«Behold brødvekten» slår kompensasjonen av igjen', melAv === melFoer, melAv);
+  // Lukk modalen igjen, ellers dekker den resten av skjermen for testene under.
+  await komp.locator('button:has-text("Ferdig")').click();
+  await page.waitForTimeout(200);
+  ok('modalen lukkes med «Ferdig»', await page.locator('.modal-ark').count() === 0);
 
   // 9: dose–respons som ± mot normalen
   const dr = page.locator('.kort:has-text("Hva valgene koster")');
   const drTekst = await dr.innerText();
-  ok('dose–respons viser ± mot normalen', /[+−]\d/.test(drTekst) && drTekst.includes('normalen'), drTekst.slice(0, 90));
+  ok('dose–respons viser ± mot brødet uten tillegget',
+    /[+−]\d/.test(drTekst) && /uten tillegget/.test(drTekst), drTekst.slice(0, 90));
   await dr.scrollIntoViewIfNeeded();
   await page.screenshot({ path: SHOT('deig-doserespons') });
 
@@ -159,7 +172,7 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await page.waitForTimeout(300);
   ok('regnskapsarket åpnet', await page.locator('.regnskap-ark').count() === 1);
   const ark = await page.locator('.regnskap-ark').innerText();
-  ok('arket har «Valgene dine mot normalen»', /valgene dine mot normalen/i.test(ark), ark.replace(/\n/g, ' | ').slice(0, 120));
+  ok('arket har «Hva tilleggene gjør med brødet»', /hva tilleggene gjør med brødet/i.test(ark), ark.replace(/\n/g, ' | ').slice(0, 120));
   await page.screenshot({ path: SHOT('regnskap') });
   await page.locator('.regnskap-ark .ark-tittel').first().click();
   await page.waitForTimeout(300);

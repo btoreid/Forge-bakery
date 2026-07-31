@@ -7,6 +7,103 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 31.07.2026 (kveld) — Sytten punkter til, og loggen som endelig hører til kontoen
+
+Bjørn matet inn tilbakemeldinger fortløpende gjennom hele økta. Alle 38 står i
+`INNSPILL.md` med hans egen ordlyd. Verifisert: `test-r4.js` utvidet til 85 sjekker,
+alle åtte suiter grønne, skjermbilder av hver visuelle endring.
+
+### Loggen ble slettet lokalt OG i skyen — den alvorligste feilen i runden
+
+Meldt i to trinn: «loggen ligger fortsatt i lista, selv om man har logget ut», og så
+«den lokale loggen slettes selv om man har logget ut. Når man logger inn igjen, er den
+borte.»
+
+To ulike feil, begge innført av forrige runde:
+
+**1 · Eldre loggposter ble lest som enhetens.** De har ikke `konto`-feltet i det hele
+tatt, og `!b.konto` er sant for både `null` og «finnes ikke». Skillet går nå på om
+feltet FINNES (`erUtenKonto`): `konto: null` er en post man bevisst loggførte utlogget,
+mens en post uten feltet er eldre enn eierskapet og har hele tiden blitt synket opp til
+kontoen — den hører hjemme der.
+
+**2 · Utloggingen la en TOM logg i kø mot skyen.** `lagre()` speiler opp så lenge noen
+er innlogget, debouncet 1,2 s. Rekkefølgen var: tøm loggen lokalt → lagre → logg ut.
+Den lagringen la den tomme lista i kø, og et sekund senere skrev den over historikken i
+skyen. Rekkefølgen er nå: last opp → **verifiser** → logg ut → så endre lokalt.
+
+Og viktigst: **loggen slettes ikke lenger i det hele tatt.** Den ARKIVERES per eier i
+`forgebakery.v2.logg.<uid>` (og `…logg.enhet` for bak uten konto). Utlogging flytter
+den dit; innlogging henter den ut igjen, også uten nett.
+
+### Hva skal gi etter når du endrer gram på en meltype?
+
+Appen fordelte differansen på de andre meltypene uten å si fra — ett rimelig svar av
+tre. Nå spør den, med ett valg per alternativ: alle andre deler på det · én bestemt
+meltype gir etter · ingen, la deigen endres. `settMelGramMot()` og
+`settMelGramMerDeig()` i engine.js. Merk at retningen står riktig i teksten: reduserer
+du en meltype og ingen skal ta over, **krymper** deigen.
+
+### Forfermentens temperatur, og hva kulda faktisk koster
+
+`S.ffTemp` med hurtigvalg for rommet og kjøleskap. Gjærdosen løses allerede mot
+temperaturen i motoren, så dette er avlesning, ikke en ny regel. Ny `ffTidEkvivalent()`
+svarer ærlig på hva kulda gjør: samme modning krever `t · rate(T1)/rate(T2)`.
+
+Og appen sier fra når regnestykket blir meningsløst: en poolish satt på 4 °C med samme
+tid krever over 2 % gjær på sitt eget mel. Da er svaret matematisk riktig og bakefaglig
+tull, og det skal stå.
+
+### Autolyse ble et eget steg
+
+Lå som en setning under «Ingen forferment» — usynlig for alle som bruker en forferment,
+enda kombinasjonen er helt vanlig. Nå egen boks med egen varighet i `kjede()`, så den
+skyver tidsplanen slik den faktisk gjør på kjøkkenet.
+
+### Resten
+
+- **Kompensasjonspanelet er en modal.** Et spørsmål som ligger og venter nederst i en
+  rulleliste blir ikke stilt.
+- **Hastighet på maskinen som faseplan** med minutter regnet av eltetiden, ikke én
+  prosasetning. `faser` i `MASKIN_INFO`.
+- **«Dette må være i huset» ligger først i Prosess.** Å oppdage at melet ikke rekker
+  etter at forfermenten står, hjelper ingen. Den ligger med vilje UTENFOR `kjede()` —
+  kjeden eier de tidsatte stegene.
+- **Kurver:** «ditt vanlige» er ute (appen vet ikke hva som er noens vanlige), kurvens
+  mål i cm er en innstilling per form, og **«Uten form»** finnes som valg.
+- **Deigregnskapet:** pila peker opp — det er retningen arket kommer fra — og
+  gjæringsgrafen ligger i arket. Regnskapet sier hva deigen ER, grafen hvordan den
+  kommer dit.
+- **Sonefargen som bakgrunn**, ikke kantstripe. Kantstripa ble prøvd først og forkastet.
+- **Luft i stepperne.** Tallfeltet ble samtidig utvidet: «24,0 °C» ble klippet til
+  «24,0 °» — samme felle som da +/−-knappene «ikke virket» fordi feltet mellom dem var
+  to piksler bredt.
+- **Tidsplanene** heter Optimal · Over natta · Samme dag · Ettermiddag · Ekspress.
+  «Én dag» og «Kort» beskrev omtrent samme sak.
+- **ⓘ ligger inni brødtype-boksen**, hakemerket er ute.
+- **Skrivefeil:** «kloke», ikke «klokke».
+- **«Mot normalen»** → «Hva tilleggene gjør med brødet».
+- **Smakstilleggene** viste «0 g» og manglet gramfelt — verdien ble hentet fra `r.fro`,
+  som er frø og korn.
+
+### Ooni Halo Pro-friksjonen er etterprøvd, og IKKE endret
+
+Full gjennomgang i `PARAMETERREVISJON.md`. Kort: 0,40 °C/min ligger i nedre kant av det
+kildene støtter (publiserte spiraltall gir 0,42–0,63 °C/min), og Ooni oppgir ingen verdi
+for Halo Pro. Å flytte tallet ville vært å bytte ett ukildet tall med et annet — appen
+har allerede «Egen (kalibrer)», som er det eneste presise svaret. Notatet i maskinpanelet
+sier nå rett ut at 0,40 er et klasseanslag.
+
+### To feller som veltet oppstarten under arbeidet
+
+Verdt å skrive ned, for begge ga en helt hvit app:
+
+- **`appendChild(null)` kaster.** `h()` tåler null-barn; `appendChild` gjør det ikke.
+- **En `const` er i TDZ selv om funksjonen som bruker den er hoistet.** `let S = last()`
+  kjørte før `const FABRIKK_FELT` var initialisert.
+
+---
+
 ## 31.07.2026 (senere) — Loggen hører til kontoen, og fire punkter til
 
 ### Bakeloggen ble liggende igjen på enheten

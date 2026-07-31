@@ -402,14 +402,29 @@ const BROTYPER = [
    KONVENSJON, ikke en fysisk lov — hvor langt du trekker en bâtard bestemmer du
    selv — så regn ±15 %. Ankerpunktene: boule 800 g ≈ 18 cm tvers over,
    bâtard 800 g ≈ 28 cm lang.                                              */
+/* «kort» beskriver formen, ikke brukeren. «ditt vanlige» sto på den avlange —
+   appen vet ikke hva som er noens vanlige, og skal ikke late som. Samme feil som
+   ★-ene i stekeprofilene og «det beste oppsettet du har» i utstyrslista.
+
+   `standardMaal` er kurvens innvendige mål i cm (lengde for avlang, tverrmål for
+   rund) og kan overstyres per bruker i `S.kurvMaal` — kurver finnes i mange
+   størrelser, og om emnet passer er et spørsmål om DIN kurv.                  */
 const FORMER = [
-  { id:'avlang', navn:'Avlang kurv (bâtard)', kort:'ditt vanlige', ikon:'▬',
+  { id:'ingen', navn:'Uten form', kort:'fri heving på benk eller brett', ikon:'○',
+    kFaktor:1.93, maal:'tverrmål', utstyr:'apen', ingenKurv:true,
+    om:'Ingen kurv og ingen form: emnet heves fritt på melet brett eller klede og settes rett i ovnen. Det stiller de strengeste kravene til deigstyrke og forming — uten vegger er det bare glutennettverket som holder fasongen, så en slapp eller overhevet deig flyter ut. Til gjengjeld trenger du ikke noe utstyr.',
+    snitt:'Ett bestemt drag. Et fritthevet emne har mindre spenst å gå på enn et kurvhevet, så kuttet må sitte første gang.',
+    advarsel:'Uten kurv bør hydreringen ligge i nedre del av vinduet og deigen være godt utviklet. Over ~75 % vann på butikkmel flyter emnet gjerne ut i en skive.' },
+
+  { id:'avlang', navn:'Avlang kurv (bâtard)', kort:'mest skorpe per gram', ikon:'▬',
+    standardMaal:35,
     kFaktor:3.0, maal:'lengde', utstyr:'stal15',
     om:'Mer skorpe per gram enn en boule, og et langt snitt som gir ett stort, kontrollert øre. Emnet sprer seg mer sidelengs, så det står litt lavere enn en rund av samme vekt.',
     snitt:'Ett langt drag langs midten, 30–45° fra vannrett, eller 3–5 skrå snitt som overlapper en tredel. Ikke kryss — det deler løftet i fire.',
     advarsel:'' },
 
   { id:'rund', navn:'Rund kurv (boule)', kort:'holder høyden best', ikon:'●',
+    standardMaal:23,
     kFaktor:1.93, maal:'tverrmål', utstyr:'glass_stal',
     om:'Minst overflate per gram, så den taper minst fukt og står høyest. Dette er formen alle grytebaserte oppsett er bygget for.',
     snitt:'Ett kryss, en firkant, eller ett enkelt buet drag langs kanten. Det buede draget gir høyest løft av de tre.',
@@ -501,23 +516,23 @@ const TIDSPLANER = [
            { navn:'Kaldheving, utbakt i kurv', timer:14, miljo:3.5, utbakt:true } ],
     om:'Alt forskningen peker på: stiv biga for styrke, full bulk ved kontrollert temperatur, og 14 timers kaldheving på utbakte emner. Kaldhevingen gir blemmer, rent snitt og et bredt hevevindu — og fordi gjærdeig ligger på pH 5,5–6 tåler den dette uten å bli sur.',
     ovnslos:100, ovnslosBasis:95 },
-  { id:'lang', navn:'Lang', timer:20, kort:'18–20 timer',
+  { id:'lang', navn:'Over natta', timer:20, kort:'18–20 timer',
     forferment:{ bruk:true, type:'poolish', pctMel:25, hydrering:100, timer:12, temp:21 },
     plan:[ { navn:'Bulk', timer:3.5, miljo:24 },
            { navn:'Kaldheving, utbakt i kurv', timer:3, miljo:3.5, utbakt:true } ],
     om:'Poolish over natta på benken, deig og steking neste dag. Nesten all smaken fra optimal-planen, halve klokka. Poolish er lettere å treffe hjemme enn biga, som vil ha 16–18 °C.',
     ovnslos:96, ovnslosBasis:93 },
-  { id:'dag', navn:'Én dag', timer:9, kort:'8–9 timer',
+  { id:'dag', navn:'Samme dag', timer:9, kort:'8–9 timer',
     forferment:{ bruk:true, type:'poolish', pctMel:20, hydrering:100, timer:4, temp:24 },
     plan:[ { navn:'Bulk', timer:3, miljo:25 },
            { navn:'Etterheving utbakt', timer:1.25, miljo:24, utbakt:true } ],
     om:'Start om morgenen, brød til middag. En kort poolish på 4 timer gir fortsatt merkbart mer smak enn ingen.',
     ovnslos:90, ovnslosBasis:88 },
-  { id:'kort', navn:'Kort', timer:5, kort:'4–5 timer',
+  { id:'kort', navn:'Ettermiddag', timer:5, kort:'4–5 timer',
     forferment:{ bruk:false, type:'poolish', pctMel:20, hydrering:100, timer:4, temp:24 },
     plan:[ { navn:'Bulk', timer:2.5, miljo:26 },
            { navn:'Etterheving utbakt', timer:1.25, miljo:25, utbakt:true } ],
-    om:'Ingen forferment. Bruk lang autolyse (1 time) i stedet — det er den billigste smaken du får når klokka er knapp.',
+    om:'Ingen forferment — all gjæringen skjer i hoveddeigen. Autolyse settes for seg, i sin egen boks.',
     ovnslos:82, ovnslosBasis:82 },
   { id:'ekspress', navn:'Ekspress', timer:3, kort:'under 3 timer',
     forferment:{ bruk:false, type:'poolish', pctMel:20, hydrering:100, timer:4, temp:24 },
@@ -543,9 +558,9 @@ const TIDSPLANER = [
    referansemaks (100); surdeig lander på poolish-nivå og under bigas optimum,
    og et oversurt/overmodnet levann SENKER løftet.                             */
 const FF_TYPER = [
-  { id:'ingen', navn:'Ingen', kort:'1 t autolyse i stedet',
+  { id:'ingen', navn:'Ingen', kort:'gjærdeig uten forferment',
     pctMel:0, hyd:0, timer:0, temp:0, salt:false, loftBase:0, refAndel:1, syre:false,
-    hvorfor:'Ingen forferment. Bruk 1 times autolyse i stedet — mel og vann uten salt og gjær, som lar melet drikke og glutenet bygge seg selv. Den billigste smaken du får når klokka er knapp.',
+    hvorfor:'Ingen forferment — all gjæringen skjer i hoveddeigen. Vurder autolyse i stedet (egen boks under): mel og vann uten salt og gjær, som lar melet drikke og glutenet bygge seg selv. Det er den billigste smaken du får når klokka er knapp.',
     merke:'RASKEST',
     plus:['Ingen planlegging dagen før','Ett kar mindre å vaske','Fungerer greit til hverdagsbrød'],
     minus:['Tydelig grunnere smak','Trenger mer gjær, som gir mer gjærpreg','Svakere deig ved høy hydrering'] },
@@ -1275,8 +1290,8 @@ const UTSTYR = [
      skal ikke kåre en favoritt på brukerens vegne. Tallene sier hva oppsettet
      leverer, og ★-knappen i Oppslag → Stekeutstyr er brukerens egen merking.
      Samme rettelse som ★-ene i stekeprofilene og «rundbrød» i denne lista. */
-  { id:'stal15', navn:'Deig rett på stålet + glass som klokke', effusivitet:13625, kontakt:232, forvarm:'90–120 min',
-    damp:'glasset som klokke fanger dampen', best:'Mest bunnvarme av oppsettene i lista — deigen ligger RETT på stålet, Pyrexen snus over som klokke',
+  { id:'stal15', navn:'Deig rett på stålet + glass som kloke', effusivitet:13625, kontakt:232, forvarm:'90–120 min',
+    damp:'glasset som kloke fanger dampen', best:'Mest bunnvarme av oppsettene i lista — deigen ligger RETT på stålet, Pyrexen snus over som kloke',
     om:'Deigen på det forvarmede stålet gir full stålkontakt mot bunnen (toppklasse — identisk med støpejern, 15 mm lagrer 55 700 J/m²K), og Pyrexen snudd opp-ned over emnet fanger brødets egen damp. Du får altså både maksimal bunnvarme OG damp. Stålet må forvarmes lenge: de fleste gir det 30–45 min, og da ligger det fortsatt 40–60 °C for lavt. Regn 90 min, gjerne 2 timer. Legg glasset over først etter at emnet er satt inn og snittet.' },
   { id:'glass', navn:'Pyrex Slow Cook 4,4 L med lokk (din)', effusivitet:1453, kontakt:147, forvarm:'sammen med stålet, maks 230 °C',
     damp:'utmerket — lukket kammer', best:'Damp og fuktighetskontroll, ikke bunnvarme',
@@ -1286,7 +1301,7 @@ const UTSTYR = [
   // 220-graders termiske sprang. Ved 230 °C mot 6-graders deig blir det ~213.
   { id:'glass_stal', navn:'Deig i Pyrexen på stålet', effusivitet:13625, kontakt:213, forvarm:'stål 90–120 min, gryta inn siste 20 min',
     damp:'utmerket — lukket kammer', best:'Enklere håndtering — deigen ligger i gryta — men litt mindre bunnvarme enn deig rett på stålet',
-    om:'Deigen ligger i glassbunnen, og stålet varmer GJENNOM glasset: ca. 213 °C kontakttemperatur ved 230-graders ovn, mot ~232 °C når deigen ligger rett på stålet. Litt lavere bunnvarme enn klokke-oppsettet, men lettere håndtering — du slipper å manøvrere et varmt glasslokk. Sett gryta på det ferdig forvarmede stålet de siste 20 minuttene, hold deg på 230 °C (Pyrexen tåler 220 °C termisk sprang), og last inn på bakepapir.' },
+    om:'Deigen ligger i glassbunnen, og stålet varmer GJENNOM glasset: ca. 213 °C kontakttemperatur ved 230-graders ovn, mot ~232 °C når deigen ligger rett på stålet. Litt lavere bunnvarme enn kloke-oppsettet, men lettere håndtering — du slipper å manøvrere et varmt glasslokk. Sett gryta på det ferdig forvarmede stålet de siste 20 minuttene, hold deg på 230 °C (Pyrexen tåler 220 °C termisk sprang), og last inn på bakepapir.' },
   { id:'stopejern', navn:'Støpejernsgryte (referanse)', effusivitet:13123, kontakt:232, forvarm:'45–60 min',
     damp:'utmerket — lukket kammer', best:'Alt av frittstående brød',
     om:'Løser damp og bunnvarme i én gjenstand. Dette er fasiten alle andre oppsett måles mot.' },
@@ -1311,31 +1326,49 @@ const UTSTYR = [
    må vannet kompensere for friksjonsvarmen. Arbeidet leses som Wh/kg =
    friksjonsstigning ÷ 1,29 (målt varmekapasitet), og målsonen for åpen krumme er
    3–5 Wh/kg. Kilder og målesone står i ELTING-kommentaren i engine.js. */
+/* `faser` er hastighetsplanen som EN LISTE, ikke bare prosa.
+   `fart`-setningen sa allerede omtrent det samme, men den kunne ikke regnes om
+   til minutter for den eltetiden man faktisk har satt — og det var det Bjørn
+   spurte etter: hvor lenge på lav, hvor lenge på middels. `andel` er brøken av
+   eltetiden fasen tar; appen ganger med `S.eltMin`. `min` er et gulv i minutter,
+   fordi samling tar den tiden den tar selv om totalen er kort.               */
 const MASKIN_INFO = {
   hand: { navn:'For hånd', friksjon:0.15,
     hva:'Elting på benk eller i bolle uten maskin. Tilfører minst varme av alt — benk og hender trekker nesten like mye varme ut som knaingen tilfører.',
     tid:'Regn 15–25 min med strekk-og-brett, eller la autolyse og lange hviler gjøre jobben i stedet for muskelkraft.',
     fart:'Ingen hastighet å velge — jobb rolig og la pausene gjøre jobben. Strekk-og-brett hvert 30. minutt bygger mer nettverk enn hardere knaing.',
+    faser:[ { fart:'Rolig', andel:1, min:5, hva:'knaing med pauser — pausene gjør mer enn kraften' } ],
     note:'Lav friksjon betyr at vannet kan være varmere uten at deigen løper varm.' },
   planet: { navn:'Kjøkkenmaskin (planet)', friksjon:0.6,
     hva:'Klassisk husholdningsmaskin med krok i planetbane (KitchenAid, Kenwood o.l.). Kroken drar deigen mot bollekanten og jobber hardt og lokalt.',
     tid:'~5–8 min på middels fart mot målsonen. Varmer raskt.',
     fart:'Laveste trinn til deigen er samlet (~2–3 min), deretter trinn 2. Produsentene (KitchenAid m.fl.) fraråder høyere fart til gjærdeig — det sliter på maskinen og varmer deigen unødig.',
+    faser:[ { fart:'Lav', andel:0.35, min:2, hva:'til deigen er samlet' },
+            { fart:'Middels (trinn 2)', andel:0.65, min:3, hva:'til utvikling — ikke høyere, produsentene fraråder det for gjærdeig' } ],
     note:'Høy friksjon: bruk kaldere vann og følg med — det er lett å kna forbi metning på en varm planetmaskin.' },
   spiralHjemme: { navn:'Ooni Halo Pro (spiral hjemme)', friksjon:0.4,
     hva:'Spiralmikser i husholdningsstørrelse, som Ooni Halo Pro. Spiralen står i ro mens bollen roterer, så deigen bearbeides jevnere og mer skånsomt enn i en planetmaskin.',
     tid:'~8 min mot improved mix. Jevn, moderat oppvarming.',
     fart:'Lav fart til deigen er samlet (~3 min), så middels fart til utvikling. Spiralen bygger nettverk fort — ta vindusprøven før du øker farten, og la deigtempen styre når du stopper.',
-    note:'Appens standardvalg — balansert friksjon mellom hånd og proffmaskin.' },
+    faser:[ { fart:'Lav', andel:0.38, min:3, hva:'til deigen er samlet' },
+            { fart:'Middels', andel:0.62, min:3, hva:'til utvikling — ta vindusprøven før du eventuelt øker' } ],
+    /* 0,40 °C/min er et KLASSEANSLAG, ikke en Halo Pro-måling: Ooni oppgir ingen
+       verdi, og de publiserte tallene gjelder bakerimaskiner (6–9 °F over ~8 min
+       = 0,42–0,63 °C/min). Full gjennomgang i PARAMETERREVISJON.md, 31.07.2026. */
+    note:'Appens standardvalg — balansert friksjon mellom hånd og proffmaskin. Merk at 0,40 °C/min er et anslag for klassen «husholdningsspiral»; Ooni oppgir ingen verdi for Halo Pro, og publiserte spiraltall ligger på 0,42–0,63 °C/min for bakerimaskiner. Vil du ha det presist, mål ditt eget under «Egen (kalibrer)»: deigtemp rett før og rett etter elting, delt på minuttene.' },
   spiralProff: { navn:'Spiral proff', friksjon:1.0,
     hva:'Profesjonell spiralmikser som på et bakeri. Kraftig og effektiv — bygger glutennettverk fort.',
     tid:'~4–6 min er nok. Varmer raskest av alle maskinene.',
     fart:'Klassisk togirs kjøring: 1. gir til alt er samlet (~4 min), så et kort drag på 2. gir (2–4 min) til utvikling. Full utvikling kommer fort — ikke gå fra maskinen.',
+    faser:[ { fart:'1. gir', andel:0.6, min:3, hva:'til alt er samlet' },
+            { fart:'2. gir', andel:0.4, min:2, hva:'kort drag til utvikling — ikke gå fra maskinen' } ],
     note:'Høyeste friksjon: regn med kaldt vann eller is, ellers passerer deigen 26 °C før nettverket er ferdig.' },
   egen: { navn:'Egen (kalibrer)', friksjon:null,
     hva:'Din egen maskin, kalibrert med målt friksjon i stedet for et tabelltall.',
     tid:'Mål deigtempen rett før og rett etter elting, og del stigningen på antall minutter.',
     fart:'Følg maskinens egen anbefaling for gjærdeig: lav fart til samling, middels til utvikling.',
+    faser:[ { fart:'Lav', andel:0.4, min:2, hva:'til deigen er samlet' },
+            { fart:'Middels', andel:0.6, min:3, hva:'til utvikling' } ],
     note:'Da regner appen vanntemperaturen mot akkurat din maskin — mest presist om du elter ofte.' }
 };
 

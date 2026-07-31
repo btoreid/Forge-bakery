@@ -40,6 +40,19 @@ function rateFactor(T) {
   return v * v;
 }
 
+/* Hvor lang tid tilsvarer `timer` ved `fraTemp` når den står ved `tilTemp`?
+   Modningen er rate × tid, så samme modning krever t2 = t1 · rate(T1)/rate(T2).
+   Dette er den ærlige måten å svare på «hva gjør kjøleskapet med forfermenten»:
+   den stopper ikke, den går saktere, og tallet sier hvor mye.
+
+   Returnerer null under FERM.T_MIN — der er raten null i modellen, og et tall
+   ville vært oppspinn. */
+function ffTidEkvivalent(timer, fraTemp, tilTemp) {
+  const r1 = rateFactor(fraTemp), r2 = rateFactor(tilTemp);
+  if (!(r2 > 0) || !(r1 > 0)) return null;
+  return timer * r1 / r2;
+}
+
 /* Hvor mange grader må du opp for å doble farten? null over optimum. */
 function doublingInterval(T0) {
   const target = 2 * rateFactor(T0);
@@ -815,6 +828,57 @@ function settMelGram(state, i, gram) {
   }
   return liste;
 }
+/* ---------- Hva skal gi etter? ----------
+   `settMelGram` fordeler differansen på ALLE de andre meltypene. Det er én av
+   flere rimelige svar, og appen tok det stilltiende. De to under er de andre to,
+   og appen spør nå i stedet for å velge.
+
+   `settMelGramMot`: én bestemt meltype tar hele endringen. Skriver du 700 g
+   sammalt og sier at hvetemelet skal gi etter, er det hvetemelet som faller —
+   ikke rugen, som du kanskje har dosert bevisst.                              */
+function settMelGramMot(state, i, gram, j) {
+  const grunn = gyldigOverstyring(state.melOverstyr) || regn(state).melListe;
+  const liste = grunn.map(m => ({ ...m }));
+  if (!liste[i] || !liste[j] || i === j) return liste;
+  const maal = Math.max(0, gram);
+  for (let n = 0; n < 6; n++) {
+    const r = regn({ ...state, melOverstyr: liste });
+    if (!isFinite(r.melTotal) || r.melTotal <= 0) break;
+    const diff = maal - (r.mel[i] ? r.mel[i].gram : 0);
+    const gJ = (r.mel[j] ? r.mel[j].gram : 0) - diff;         // giveren tar hele endringen
+    const sum = liste.reduce((s, m) => s + m.pct, 0) || 100;
+    // Andelene er relative, så gram → pct går via melTotal, som holdes fast her:
+    // summen av mel endrer seg ikke når én tar det den andre gir fra seg.
+    liste[i].pct = Math.max(0, maal / r.melTotal * sum);
+    liste[j].pct = Math.max(0, gJ / r.melTotal * sum);
+  }
+  return liste;
+}
+
+/* `settMelGramMerDeig`: ingen andre meltyper røres — deigen vokser i stedet.
+   Returnerer BÅDE ny melliste og ny brødvekt, fordi de to henger sammen: mer mel
+   i samme antall brød betyr tyngre brød.                                      */
+function settMelGramMerDeig(state, i, gram) {
+  const r0 = regn(state);
+  const start = r0.mel.map(m => m.gram);
+  if (!start[i] && start[i] !== 0) return { melOverstyr: gyldigOverstyring(state.melOverstyr) || r0.melListe, vekt: state.vekt || 900 };
+  /* De andre meltypene låses til gramverdiene de HAR NÅ, én gang.
+     Første forsøk leste dem på nytt i hver iterasjon — og siden de da allerede
+     var flyttet av forrige runde, drev de oppover i stedet for å stå stille. */
+  const maalGram = start.map((g, k) => (k === i ? Math.max(0, gram) : g));
+  const nyTotal = maalGram.reduce((sum, g) => sum + g, 0);
+  if (!(nyTotal > 0)) return { melOverstyr: r0.melListe, vekt: state.vekt || 900 };
+  const liste = r0.melListe.map((m, k) => ({ id: m.id, pct: maalGram[k] / nyTotal * 100 }));
+  // Andelene er nå gitt; bare deigvekten må løses, så melTotal treffer nyTotal.
+  let vekt = state.vekt || 900;
+  for (let n = 0; n < 6; n++) {
+    const r = regn({ ...state, melOverstyr: liste, vekt });
+    if (!isFinite(r.melTotal) || r.melTotal <= 0) break;
+    vekt = vekt * nyTotal / r.melTotal;
+  }
+  return { melOverstyr: liste, vekt: Math.round(vekt) };
+}
+
 /* Vann i gram → hydrering i prosent. Samme gjensidige avhengighet: vannet er
    melTotal × hyd, og melTotal faller når hydreringen stiger i en fast deigvekt. */
 function settVannGram(state, gram) {
@@ -883,12 +947,20 @@ function regn(state) {
   const ffT = ffTypeFor(state.ffType);
   const ffPaa = !!state.ff && ffT.id !== 'ingen';
   const pf = plan.forferment || {};
+  /* Forfermentens temperatur: planen/typen foreslår, brukeren bestemmer.
+     `ffTemp` er null når man ikke har rørt den, og da gjelder forslaget som før.
+     Gjærdosen i forfermenten løses mot NETTOPP denne temperaturen
+     (forfermentGjaerPct), så et kaldt skap gir automatisk mer gjær for samme
+     modningstid — det er ikke en separat regel som må vedlikeholdes. */
+  const ffStandardTemp = pf.temp || ffT.temp || 21;
   const forferment = {
     bruk: ffPaa, type: ffT.id,
     pctMel: pf.pctMel || ffT.pctMel,
     hydrering: ffT.hyd || pf.hydrering || 100,
     timer: pf.timer || ffT.timer,
-    temp: pf.temp || ffT.temp || 21
+    temp: state.ffTemp != null ? state.ffTemp : ffStandardTemp,
+    standardTemp: ffStandardTemp,
+    egenTemp: state.ffTemp != null
   };
 
   // Frøgram avhenger av melTotal og melTotal av frøgram. Det er en AFFIN likning,
@@ -1081,7 +1153,13 @@ function kjede(state, r, ferdigMs) {
     }
   }
   const eltStart = minus(peker, KJEDE.ELT);
-  const prepStart = minus(eltStart, KJEDE.PREP);
+  /* Autolyse ligger MELLOM forberedelse og elting: mel og vann blandes, hviler,
+     og først da kommer salt og gjær i. Den har egen varighet og skyver derfor
+     alt foran seg — derfor må den inn i kjeden og ikke bare stå som et råd i
+     teksten. 0 = av. */
+  const autoMin = Math.max(0, +(state.autolyseMin || 0));
+  const autoStart = minus(eltStart, autoMin);
+  const prepStart = minus(autoMin > 0 ? autoStart : eltStart, KJEDE.PREP);
 
   const steg = [];
 
@@ -1145,6 +1223,18 @@ function kjede(state, r, ferdigMs) {
       gjor: b.gjor, sjekk: b.sjekk
     });
   });
+
+  // 2b · Autolyse (bare hvis på)
+  if (autoMin > 0) {
+    steg.push({
+      id: 'autolyse', navn: 'Autolyse', tid: autoStart, varighet: autoMin, tone: 'noytral',
+      hoved: fmtTimer(autoMin / 60), hovedNote: 'mel og vann hviler', sideK: 'Uten', sideV: 'salt og gjær',
+      tall: [['Varighet', fmtTimer(autoMin / 60)], ['Mel', gram(r.melTotal)], ['Vann', gram(r.vannHoved)],
+             ['Salt og gjær', 'holdes utenfor']],
+      gjor: 'Bland mel og vann til det ikke er tørt mel igjen — ikke elt. La det hvile tildekket. Salt og gjær kommer i når eltingen begynner.',
+      sjekk: 'Deigen skal kjennes tydelig mykere og mer strekkbar enn da du blandet den. Det er enzymene og vannet som har gjort jobben elting ellers måtte gjort.'
+    });
+  }
 
   // 3 · Elting
   steg.push({
