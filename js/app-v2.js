@@ -832,9 +832,14 @@ function soakerKorn(id) { const s = SOAKERS.find(x => x.id === id); return s && 
 function tilleggRad(t, r) {
   const pct = (S.tillegg || {})[t.id] || 0;
   const paa = pct > 0;
-  const frr = r.fro.find(f => f.id === t.id);
-  const gramV = frr ? frr.gram : 0;
   const erSmak = t.type === 'smak';
+  /* Gram for smakstilleggene lå ikke i `r.fro` — den listen er frø og korn. De
+     har hvert sitt felt i motoren (`honningPct` → `r.honning` osv.), og uten
+     dette oppslaget viste raden «2,0 % · 0 g» for honning, olje, sukker, smør
+     og malt. Verdien fantes hele tiden; den ble bare hentet fra feil sted. */
+  const frr = r.fro.find(f => f.id === t.id);
+  const smakFelt = erSmak && t.felt ? t.felt.replace(/Pct$/, '') : null;
+  const gramV = frr ? frr.gram : (smakFelt && isFinite(r[smakFelt]) ? r[smakFelt] : 0);
   // Sone mot anbefalingen: grønn t.o.m. anbefalt dose, gul over, rød nær taket.
   // Grensene er relative til spennet anbefalt→maks, så de skalerer per tillegg.
   let sone = '', soneOrd = '';
@@ -845,7 +850,7 @@ function tilleggRad(t, r) {
     else if (over > 0.12) { sone = ' gul'; soneOrd = ' · over anbefalt ' + fmt(anb, erSmak ? 1 : 0) + ' %'; }
   }
   const status = paa
-    ? fmt(pct, 1) + ' % · ' + g0(gramV) + (erSmak ? '' : ' · ' + behandlingOrd(t.id)) + soneOrd
+    ? fmt(pct, 1) + ' % · ' + veiG(gramV) + (erSmak ? '' : ' · ' + behandlingOrd(t.id)) + soneOrd
     : 'trykk for å legge til (' + fmt(t.pct, 1) + ' %)';
   const rad = h('div', { class: 'tillegg-rad' + (paa ? ' paa' : '') + sone },
     h('div', { style: 'display:flex;align-items:center;gap:8px' },
@@ -864,8 +869,11 @@ function tilleggRad(t, r) {
         onblur: e => { const v = parseFloat(e.target.value.replace(',', '.')); settTillegg(t, isNaN(v) ? 0 : v); } }),
       h('button', { 'aria-label': 'Mer', onClick: () => endreTillegg(t, (erSmak ? 0.5 : 1)) }, '+')),
     h('span', { style: 'font-size:.8rem;color:var(--color-neutral-600);font-weight:800' }, '%'),
-    erSmak ? null : h('div', { style: 'display:flex;align-items:center;gap:4px;flex:0 0 auto' },
-      h('input', { type: 'text', inputmode: 'numeric', 'aria-label': t.navn + ' gram', value: fmt(gramV, 0),
+    // Gramfeltet gjelder ALLE tillegg. Smakstilleggene hadde det ikke, og med
+    // et steg på 0,5 prosentpoeng var malt (0,05–0,3 %) i praksis ujusterbar.
+    h('div', { style: 'display:flex;align-items:center;gap:4px;flex:0 0 auto' },
+      h('input', { type: 'text', inputmode: 'decimal', 'aria-label': t.navn + ' gram',
+        value: fmt(gramV, gramV > 0 && gramV < 10 ? 1 : 0),
         style: 'width:60px;min-height:44px;text-align:center;font:inherit;font-weight:800;font-variant-numeric:tabular-nums;background:#fff;border:1px solid var(--color-neutral-300);border-radius:12px',
         onblur: e => { const v = parseFloat(e.target.value.replace(/\s/g, '').replace(',', '.')); settTilleggGram(t, isNaN(v) ? 0 : v); } }),
       h('span', { style: 'font-size:.8rem;color:var(--color-neutral-600);font-weight:800' }, 'g'))));

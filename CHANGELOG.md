@@ -7,6 +7,63 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 31.07.2026 (senere) — Loggen hører til kontoen, og fire punkter til
+
+### Bakeloggen ble liggende igjen på enheten
+
+Følgefeil av flettingen tidligere samme dag, meldt av Bjørn: «loggene bak vil fortsatt
+være der — den bør være koblet til at du er logget inn eller ikke.» Riktig, og verre enn
+det: siden loggen nå FLETTES, ville den blitt flettet inn i neste konto som logget inn
+på enheten.
+
+Modellen er to eierskap, ikke ett:
+
+- post med `konto: <uid>` → hører til kontoen, bor i skyen
+- post med `konto: null` → loggført uten konto, hører til **enheten**
+
+**Ved utlogging** (`loggUtTrygt()`), i denne rekkefølgen: last opp → *verifiser at det
+gikk* → fjern kontoens poster lokalt → legg tilbake postene uten konto. Verifiseringen
+er ikke pynt: uten den ville et nettverksglipp betydd at loggen ble slettet lokalt uten
+å finnes noe annet sted — nøyaktig feilen vi nettopp rettet, speilvendt. Feiler
+opplastingen, blir man stående innlogget med alt i behold og får beskjed.
+
+**Ved innlogging** deles de lokale postene på eierskap før noe flettes. Kontoens egne
+flettes som før; postene uten konto legges i en enhetsbøtte (`forgebakery.v2.utenkonto`)
+og utløser et spørsmål: «N bak er loggført uten konto — ta dem med inn?» Å flette dem i
+stillhet ville lagt en fremmeds bak inn i din logg på en delt enhet; å slette dem ville
+vært datatap. Å spørre er det eneste som ikke er en av delene. Sier man nei, blir de
+liggende og dukker opp igjen ved utlogging.
+
+### Smakstilleggene viste «0 g» og kunne ikke justeres
+
+Honning, olje, sukker, smør og malt sa «2,0 % · 0 g», uten gramfelt. Gramverdien ble
+hentet fra `r.fro` — men den listen er frø og korn; smakstilleggene har hvert sitt felt
+i motoren (`honningPct` → `r.honning`). Verdien fantes hele tiden, den ble hentet fra
+feil sted. Gramfeltet er dessuten gitt til alle tillegg nå: med et steg på 0,5
+prosentpoeng var diastatisk malt (0,05–0,3 %) i praksis ujusterbar.
+
+### Standardbrød
+
+«Lagre dette som standardbrød» i Logg lagrer oppskriften som appen åpner på når det ikke
+ligger noe påbegynt der fra før. Samme avtrykk som loggposten bruker, så de kan ikke
+drifte. `erFabrikkOppskrift()` avgjør når den legges på — har man begynt på noe, skal
+appen ikke overkjøre det.
+
+### Sonefargen dekker hele kortet
+
+Var bare en merkelapp i hjørnet. Nå bærer fargen hele raden eller kortet, med en farget
+venstrekant som gir styrken retning: grønn i sonen, gul over anbefalt, rød nær taket.
+Gjelder tilleggsradene og vann- og saltkortet. Gramfeltet har fått runde kanter.
+
+### Verifisert
+
+Ny suite `test-r4.js` utvidet til 55 sjekker; alle åtte suiter grønne. To feil funnet
+under testingen og verdt å huske: `appendChild(null)` kaster (h() tåler null-barn, det
+gjør ikke appendChild), og en `const` brukt fra en hoistet funksjon som kalles tidligere
+i fila er i TDZ — begge veltet hele oppstarten.
+
+---
+
 ## 31.07.2026 — V2: tolv punkter fra fjerde brukertest
 
 Bjørn matet inn tilbakemeldinger fortløpende gjennom økta. Alle er skrevet inn i

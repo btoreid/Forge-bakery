@@ -159,7 +159,24 @@ stegene — et steg uten varighet må ikke inn der, ellers forskyves alt som les
 
 `env(safe-area-inset-bottom)` + `viewport-fit=cover`. Gjelder installert PWA.
 
-### 17 · Bedre appikon — `åpen` · bøtte: infra
+### 23 · Smakstilleggene viste «0 g» og kunne ikke justeres i gram — `levert` · bøtte: ui
+
+> «på håndtering må man også få opp gram og mulighet til å justere gram. I dag sier det
+> 2% null gram, gir ingen mulighet for å justere noe. Det må være en feil her.»
+
+Ekte feil. Gramverdien ble hentet fra `r.fro`, som bare inneholder frø og korn —
+honning, olje, sukker, smør og malt har hvert sitt felt i motoren. Verdien fantes hele
+tiden, den ble hentet fra feil sted. Gramfeltet manglet dessuten helt for disse, og med
+et steg på 0,5 prosentpoeng var malt (0,05–0,3 %) i praksis ujusterbar.
+
+### 24 · Sonefargen bekreftet — `levert` · bøtte: ui
+
+> «det er mye finere når du har denne grønne grafikken på venstre sida. Det er mye finere
+> at du bruker hele boksen i farge.»
+
+Bekreftelse på 22. Behandlingen ligger nå på tilleggsradene og på vann- og saltkortet.
+
+### 17 · Bedre appikon — `venter på Bjørn` · bøtte: infra
 
 > «ikonet til appen er litt dårlig. Brødbakeikonet. Prøv å lage et bedre ikon som er litt
 > kulere. Har du noen skills som kan gjøre det? Eller connections? MCP-greier?»
@@ -201,9 +218,13 @@ meltypene. Skal bli et valg — hvilken meltype som gir etter, eller om deigen s
 
 ---
 
-Svar på spørsmålet: nei, ingen av de tilkoblede MCP-ene lager bilder (Coda, Drive, Slack,
-Trello, Grafana, GitHub, kalender, reise). Veien er `tester/lag-ikoner.js`, som tegner
-`icons/` i Chromium fra en SVG i repoet — altså håndtegnet SVG, så regenerering.
+Higgsfield-koblingen kom inn underveis, og fire forslag ble generert. Bjørn valgte ett
+(ambolt, glødende snittet boule, flammer). **Blokkert:** proxyen i dette miljøet nekter
+CONNECT til Higgsfields CDN (403), så PNG-en kan ikke hentes ned hit.
+
+Et håndtegnet SVG-alternativ ble laget og forkastet av Bjørn («ikke i nærheten av å være
+det samme») — rullet tilbake, det gamle ikonet står. **Venter på at PNG-en legges i
+`icons/` på grenen**, så kobles den opp i manifestet.
 
 ---
 
