@@ -40,8 +40,16 @@ iterasjon — den divergerte).
 > den skulle pushe. Nå er `master` både standardgren, det som er live, og det som
 > utvikles — ett navn, ingen valg å ta.
 >
-> `claude/forge-bakery-mobile-v2-l4ean3` og `…-67w83p` står igjen som historikk. De er
-> begge inneholdt i `master` og kan slettes når som helst.
+> `…-67w83p` er slettet. `claude/forge-bakery-mobile-v2-l4ean3` står igjen fordi
+> git-proxyen i utviklingsmiljøet svarer 403 på branch-sletting — den må fjernes fra
+> GitHubs eget grensesnitt. Den er fullt inneholdt i `master`.
+
+**V1 er bare halvveis frosset — les dette før du rører motoren.** «Frosset» gjelder
+`index-v1.html` og `js/app.js`. Men V1 laster **`js/data.js` og `js/engine.js`, de
+samme filene V2 bruker**, så hver endring i motoren treffer V1 også. Etter en
+engine- eller data-endring: last `index-v1.html` i nettleser og se at den tegner uten
+JS-feil. `test-flytt.js` sjekker bare at inngangen svarer, ikke at V1 regner riktig.
+Kontrollert 31.07 etter dagens motorendringer — ren.
 
 ### Nylig levert: innlogging og sky-lagring (30.07 natt)
 

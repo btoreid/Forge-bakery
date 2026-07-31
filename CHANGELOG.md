@@ -7,6 +7,52 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 31.07.2026 (natt, sist) — Opprydding, og en oppdagelse om V1
+
+### Grenene er ryddet
+
+`claude/forge-bakery-mobile-v2-67w83p` er borte. `…-l4ean3` står igjen fordi
+git-proxyen i utviklingsmiljøet svarer **403 på branch-sletting** — den kan bare
+slettes fra GitHubs eget grensesnitt. Begge var kontrollert til null commits utenfor
+`master` før sletting; ingenting går tapt.
+
+### V1 er ikke så frosset som den ser ut
+
+Bjørn ville beholde V1 for historisk formål, og det utløste en sjekk som burde vært
+gjort før: **V1 laster `js/data.js` og `js/engine.js` — de samme filene V2 bruker.**
+
+«V1 er frosset» har hele tiden betydd `index-v1.html` og `js/app.js`. Motoren under den
+er delt, og den har flyttet seg mye i dag: `KJEDE.ELT` byttet navn til `ELT_FAST`,
+`klokke()` fikk nytt format, `hydLoftFaktor` fikk nytt knekkpunkt, forfermentens
+gjærdose fikk tak, `regn()` leser nå `romTemp`/`kjolskapTemp`, og 41 kilopriser er
+endret. Hver av dem kunne ha knekt V1 uten at noen merket det.
+
+Den ble derfor lastet i nettleser og kontrollert: **ingen JS-feil, rendrer fullt.** Den
+har til og med hatt rett hele tiden der V2 tok feil — V1 kalte `maalHeveProsent()`
+korrekt og viste «MÅL HEVING 32–38 %» mens V2 sto på hardkodet 60–72 %.
+
+**Regelen framover:** endrer du `engine.js` eller `data.js`, har du rørt V1 også. Last
+`index-v1.html` og se etter at den fortsatt tegner. `test-flytt.js` sjekker bare at
+inngangene svarer, ikke at V1 regner riktig — den dagen V1 skal være garantert, trengs
+en egen suite.
+
+### Hele økten, kort
+
+| tema | hva |
+|---|---|
+| Delt maskinkalibrering | «mangler kalibrering» i stedet for et klasseanslag; delt tabell med RLS |
+| Bakefaglig review | hevemål per grovhet, hydrering mot melblandingen, hoveddeigens gjærdose, tak på forfermenten |
+| Steg mot virkeligheten | lokk-råd, «fra kjøl» på varme planer, `state.form`, stegvarigheter, surdeig uten tørrgjær |
+| Autolyse | to tidskonstanter i stedet for én |
+| Rom og kjøleskap | målinger, ikke valg — gjør ikke planen egendefinert |
+| Datoer | kolonner som står under hverandre, ukedager skrevet ut |
+| Priser | 41 kilopriser hentet fra Oda, med dato og kilde i appen |
+| Infrastruktur | V2 og live flyttet til `master`, grener ryddet |
+
+Ni testsuiter, alle grønne. `test-r5.js` er ny og vokter tallene fra reviewen.
+
+---
+
 ## 31.07.2026 (natt) — V2 er flyttet til `master`
 
 Bjørn: «burde vi merget til main nå og jobbet derfra, så det ikke blir noe forvirring
