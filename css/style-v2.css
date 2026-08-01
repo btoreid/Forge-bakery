@@ -182,7 +182,11 @@ input[type=range] { accent-color: var(--color-accent); }
 .bunnlinje .stripe .sep { color: var(--color-neutral-400); }
 .bunnlinje .stripe .pil { margin-left: auto; color: var(--color-accent-700); font-size: 1.15rem; font-weight: 800; line-height: 1; transition: transform .15s; }
 .bunnlinje.open .stripe .pil { transform: rotate(180deg); }
-.regnskap-ark { max-height: 74vh; }
+/* Arket får bruke nesten hele skjermen: 74vh lot en stripe stå ubrukt øverst
+   mens grafen måtte scrolles fram nederst (Bjørn 01.08). Taket er avstanden
+   fra bunnlinja til toppen minus ~90 px luft til statusfelt/hakk — kortere
+   innhold gjør fortsatt arket lavere (max-height, ikke height). */
+.regnskap-ark { max-height: 74vh; max-height: calc(100dvh - 200px - env(safe-area-inset-top)); }
 .bunnlinje .regnskap { padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
 /* Paret forferment/hoveddeig-tabell: samme ingrediens på samme linje, én kolonne
    per bolle — øyet sammenligner vannrett i stedet for å lete i to lister. */
