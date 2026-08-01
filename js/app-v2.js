@@ -24,6 +24,7 @@ const STANDARD = {
   stekeProfil: 'brod_kloke', stekeProfilManuell: false, lokk: true, fulltKjol: false,
   form: 'rund', utstyr: 'stal15', vektTrinn: 1, egenFriksjon: 0.4, pyrexIOvn: false,
   saltPct: null, ferdigMs: null, tidModus: 'ferdig',
+  vinduStart: null,               // egendefinert vindu: når du kan sette deigen
   heveplan: null,                 // null = planens standard; array = redigert
   paramInfo: null, tilleggInfo: null, melInfo: null, meltallInfo: null,
   aktivSteg: 0, aktivStegId: null, regnskapAapen: false, byttBekreft: null,
@@ -556,6 +557,46 @@ function oppdater() { lagre(); render(); }
 function standardFerdig() {
   const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(17, 0, 0, 0);
   return d.getTime();
+}
+
+/* EGENDEFINERT VINDU: du sier når du KAN starte og når det MÅ være ferdig, så
+   fyller appen ut resten selv. Den strekker det fleksible leddet — kaldhevingen
+   (eller siste trinn hvis ingen er kald) — til hele prosessen akkurat fyller
+   vinduet, og gjærdosen løses automatisk mot den nye planen (mer tid = mindre
+   gjær). Returnerer den tilpassede planen og om vinduet var for kort.
+   Itererer fordi forvarm/stek overlapper litt — noen runder lander eksakt. */
+function tilpassVindu(startMs, ferdigMs) {
+  const maalT = (ferdigMs - startMs) / 3600000;
+  const base = (Array.isArray(S.heveplan) && S.heveplan.length)
+    ? S.heveplan
+    : ((typeof TIDSPLANER !== 'undefined' && TIDSPLANER.find(t => t.id === S.tid)) || {}).plan || [];
+  let trinn = base.map(t => ({ ...t }));
+  if (!trinn.length) return { trinn: null, span: null, forKort: true };
+  // Det fleksible leddet: kaldhevingen om den finnes, ellers siste trinn.
+  let idx = trinn.findIndex(t => t.miljo <= 12);
+  if (idx < 0) idx = trinn.length - 1;
+  let span = maalT;
+  for (let n = 0; n < 6; n++) {
+    const st = Object.assign({}, S, { heveplan: trinn, ferdigMs });
+    const K = kjede(st, regn(st), ferdigMs);
+    span = (ferdigMs - K.start.getTime()) / 3600000;
+    const diff = maalT - span;
+    if (Math.abs(diff) < 0.05) break;
+    trinn[idx] = Object.assign({}, trinn[idx], { timer: Math.max(0, Math.round((trinn[idx].timer + diff) * 4) / 4) });
+  }
+  // Etter klemming til 0: sjekk hva vinduet FAKTISK ble (for kort → span > mål).
+  const st = Object.assign({}, S, { heveplan: trinn, ferdigMs });
+  span = (ferdigMs - kjede(st, regn(st), ferdigMs).start.getTime()) / 3600000;
+  return { trinn, span, forKort: span > maalT + 0.25, flexIdx: idx };
+}
+// Bruk vinduet: fit planen og lagre. Kalles når start eller ferdig endres.
+function settVindu(startMs, ferdigMs) {
+  if (!(isFinite(startMs) && isFinite(ferdigMs) && ferdigMs > startMs)) { oppdater(); return; }
+  const res = tilpassVindu(startMs, ferdigMs);
+  if (res.trinn) S.heveplan = res.trinn;
+  S.vinduStart = startMs;
+  S.ferdigMs = ferdigMs;
+  oppdater();
 }
 
 /* ============================================================
@@ -2021,7 +2062,7 @@ function tegnTid(r, K) {
   // Ferdig/Start-veksler + tidsstepper
   const kort1 = h('div', { class: 'kort' });
   kort1.appendChild(h('div', { class: 'toggle2' },
-    h('button', { class: S.tidModus !== 'start' ? 'paa' : '', onClick: () => { S.tidModus = 'ferdig'; oppdater(); }       /* «man» og «lør» i småbokstaver midt i en knapp leses som stavefeil.
+    h('button', { class: S.tidModus === 'ferdig' ? 'paa' : '', onClick: () => { S.tidModus = 'ferdig'; oppdater(); }       /* «man» og «lør» i småbokstaver midt i en knapp leses som stavefeil.
          Her er det ikke plass til hele ukedagen, så den står i store bokstaver:
          MAN, LØR. Da er den åpenbart en forkortelse og ikke et halvt ord. */
 }, 'Ferdig ' + ukedagKort(ferdigMs).toUpperCase() + ' ' + klHM(ferdigMs)),
@@ -2040,7 +2081,7 @@ function tegnTid(r, K) {
     h('button', { onClick: () => flyttFerdig(60) }, '+')));
   // Direkte valg av dato og klokkeslett for ferdig — ±-knappene er for
   // finjustering, ikke for å flytte seg tre døgn fram.
-  if (!erStart) kort1.appendChild(h('div', { style: 'margin-top:10px' },
+  if (!erStart && S.tidModus !== 'vindu') kort1.appendChild(h('div', { style: 'margin-top:10px' },
     h('div', { class: 'felt-label' }, 'Eller velg dato og klokkeslett ferdig'),
     h('input', { type: 'datetime-local', class: 'dato-inp', 'aria-label': 'Dato og klokkeslett ferdig',
       value: tilDatoLokal(ferdigMs),
@@ -2089,7 +2130,7 @@ function tegnTid(r, K) {
     // planens statiske forferment-spec (teknisk #5).
     const sub = (prov.ffPaa ? prov.ffT.navn.toLowerCase() + ' ' + prov.ffInn.pctMel + ' %' : 'ingen forferment') +
       ' · gjær ' + fmt(prov.gjaerTorr, 3) + ' % = ' + fmt(prov.gjaerTotal, 2) + ' g';
-    wrap.appendChild(h('button', { class: 'valgkort plan-valg' + (paa ? ' paa' : ''), onClick: () => { S.tid = tp.id; S.heveplan = null; oppdater(); } },
+    wrap.appendChild(h('button', { class: 'valgkort plan-valg' + (paa && S.tidModus !== 'vindu' ? ' paa' : ''), onClick: () => { S.tid = tp.id; S.heveplan = null; if (S.tidModus === 'vindu') S.tidModus = 'ferdig'; oppdater(); } },
       h('div', { class: 'plankort' },
         h('div', { style: 'flex:1;min-width:0' },
           // «t til ovnen», ikke totalen: nedkjølingen er den samme for alle
@@ -2099,6 +2140,45 @@ function tegnTid(r, K) {
           h('div', { class: 'p-sub' }, sub)),
         h('div', { class: 'p-loft' }, h('div', { class: 'v' }, String(prov.loft.loft)), h('div', { class: 'l' }, 'LØFT')))));
   });
+
+  /* EGENDEFINERT VINDU — du setter start og slutt, appen fyller resten.
+     Egen komponent (div med en knapp inni), ikke ett stort <button>, fordi
+     dato-velgerne under må kunne trykkes uten å ligge inne i en knapp. */
+  {
+    const vinduPaa = S.tidModus === 'vindu';
+    const startNaa = S.vinduStart != null ? S.vinduStart : Date.now();
+    const egen = h('div', { class: 'valgkort plan-valg' + (vinduPaa ? ' paa' : '') });
+    egen.appendChild(h('button', { style: 'all:unset;display:block;width:100%;box-sizing:border-box;cursor:pointer;padding:14px 16px',
+      onClick: () => { if (vinduPaa) return; S.tidModus = 'vindu'; settVindu(startNaa, ferdigMs); } },
+      h('div', { class: 'plankort' },
+        h('div', { style: 'flex:1;min-width:0' },
+          h('div', null, h('span', { class: 'p-navn' }, 'Egendefinert vindu'),
+            h('span', { class: 'p-tid' }, vinduPaa ? fmt(K.tilOvnenT, 1) + ' t til ovnen' : 'sett start og slutt')),
+          h('div', { class: 'p-sub' }, 'Du sier når du kan starte og når det må være ferdig — appen fyller ut hevetiden og gjæren selv.')),
+        h('div', { class: 'p-loft' }, h('div', { class: 'v' }, vinduPaa ? String(r.loft.loft) : '·'), h('div', { class: 'l' }, 'LØFT')))));
+    if (vinduPaa) {
+      const res = tilpassVindu(startNaa, ferdigMs);
+      const flex = (res.trinn && res.flexIdx != null) ? res.trinn[res.flexIdx] : null;
+      const det = h('div', { style: 'padding:0 16px 14px' },
+        h('div', { class: 'felt-label' }, 'Tidligst jeg kan starte'),
+        h('input', { type: 'datetime-local', class: 'dato-inp', 'aria-label': 'Tidligst start', value: tilDatoLokal(startNaa),
+          onchange: e => { const t = new Date(e.target.value).getTime(); if (isFinite(t)) settVindu(t, ferdigMs); } }),
+        h('div', { class: 'felt-label', style: 'margin-top:10px' }, 'Ferdig senest (ut av ovnen)'),
+        h('input', { type: 'datetime-local', class: 'dato-inp', 'aria-label': 'Ferdig senest', value: tilDatoLokal(ferdigMs),
+          onchange: e => { const t = new Date(e.target.value).getTime(); if (isFinite(t)) settVindu(startNaa, t); } }));
+      if (res.forKort) {
+        det.appendChild(h('div', { class: 'varsel fare', style: 'margin-top:10px' },
+          'Vinduet er for kort. Selv uten kaldheving trenger denne baken minst ', h('b', null, fmtTimer(res.span)),
+          ' fra start til ferdig. Flytt starten tidligere eller ferdig senere.'));
+      } else if (flex) {
+        det.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' },
+          'Appen fyller vinduet med ', h('b', null, fmtTimer(flex.timer) + ' ' + (flex.miljo <= 12 ? 'kaldheving' : 'heving')),
+          ' og løser gjæren til ', h('b', null, fmt(r.gjaerTotal, 2) + ' g'), '. Endrer du start eller ferdig, regnes resten om.'));
+      }
+      egen.appendChild(det);
+    }
+    wrap.appendChild(egen);
+  }
 
   wrap.appendChild(h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin:2px 0 10px;padding:0 2px' },
     'Tidene er fra du starter til brødet er ute av ovnen. Nedkjøling kommer i tillegg — ' +
@@ -2580,6 +2660,12 @@ function dagSpenn(startMs, sluttMs) {
 }
 function flyttFerdig(min) {
   const base = S.ferdigMs != null ? S.ferdigMs : standardFerdig();
+  // I vindu-modus flyttes hele vinduet (både start og ferdig), så baken beholder
+  // lengden sin — du skyver bare når den skjer. Ellers flyttes bare ferdig.
+  if (S.tidModus === 'vindu' && S.vinduStart != null) {
+    settVindu(S.vinduStart + min * 60000, base + min * 60000);
+    return;
+  }
   S.ferdigMs = base + min * 60000; oppdater();
 }
 
@@ -2922,7 +3008,7 @@ function tegnLogg(r) {
 const OPPSKRIFT_FELT = ['brotype', 'grov', 'hyd', 'tid', 'ff', 'ffType', 'ffTemp', 'ffRomTemp', 'ffRomTid', 'ffTimer', 'ffKjol',
   'tillegg', 'antall', 'vekt', 'startTemp', 'melTemp', 'maskin', 'eltMin', 'romTemp', 'kjolskapTemp',
   'stekeProfil', 'stekeProfilManuell', 'lokk', 'fulltKjol', 'form', 'utstyr', 'pyrexIOvn',
-  'saltPct', 'heveplan', 'melOverstyr', 'okDeig', 'froVannPaaToppen'];
+  'saltPct', 'heveplan', 'melOverstyr', 'okDeig', 'froVannPaaToppen', 'vinduStart'];
 function oppskriftAvtrykk() {
   const o = {};
   OPPSKRIFT_FELT.forEach(k => { if (S[k] !== undefined) o[k] = S[k]; });
