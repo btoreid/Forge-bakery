@@ -1847,12 +1847,23 @@ function kjede(state, r, ferdigMs) {
     });
   });
 
-  /* Vann-reserven ved autolyse: ca. 5 % av hovedvannet (rundet til 5 g, minst
-     40, aldri over 20 % av vannet). Holdes igjen til eltingen — saltet løses i
-     den, og den er bassinage-rommet for å justere deigen. */
-  const vannReserve = autoMin > 0
-    ? Math.min(Math.max(40, Math.round(r.vannHoved * 0.05 / 5) * 5), Math.round(r.vannHoved * 0.2))
+  /* Vann-reserven ved autolyse er TO SEPARATE POTTER (baker-review 01.08,
+     etter Bjørns innvending — begge punktene hans stemte med fagrådene):
+       saltVann  — FAST mengde på 3× saltvekten (NaCl løser maks ~26 g per
+                   100 g vann; den gamle 70 g-reserven kunne ikke løse 34 g
+                   salt), går ALLTID i sin helhet. Tartine: 50 g per 20 g salt.
+       bassinage — RENT justeringsvann for våte deiger (Suas' double hydration:
+                   basishydrering ~72 %, resten spes inn mot slutten). Det man
+                   dropper av denne endrer IKKE saltprosenten — det var hele
+                   poenget med å skille dem. */
+  const saltHovedG = r.salt - (r.ffPaa && r.forferment ? (r.forferment.salt || 0) : 0);
+  const saltVann = autoMin > 0
+    ? Math.min(Math.max(40, Math.round(saltHovedG * 3 / 5) * 5), Math.round(r.vannHoved * 0.15))
     : 0;
+  const bassinage = autoMin > 0 && r.hyd > 0.72
+    ? Math.min(Math.round((r.hyd - 0.72) * melHovedG / 5) * 5, Math.round(r.vannHoved * 0.10))
+    : 0;
+  const vannReserve = saltVann + bassinage;
 
   // 2b · Autolyse (bare hvis på)
   if (autoMin > 0) {
@@ -1871,11 +1882,15 @@ function kjede(state, r, ferdigMs) {
       // og den gir rom til å justere deigen (bassinage). Bjørn 01.08.
       tall: [['Varighet', fmtTimer(autoMin / 60)], ['Mel (hoveddeigen)', gram(autoMel)], ...melTyper(autoMel),
              ['Vann nå (' + grader(r.vannTempMulig, 1) + ')', gram(r.vannHoved - vannReserve)],
-             ['Holdes igjen til eltingen', gram(vannReserve)],
+             ['Saltvannet — alt skal i', gram(saltVann)],
+             ...(bassinage > 0 ? [['Justeringsvann (bassinage)', gram(bassinage)]] : []),
              ['Salt og gjær', 'holdes utenfor'],
              ...(r.ffPaa ? [['Forfermenten', 'står for seg — kommer i ved elting']] : [])],
       gjor: 'Bland hoveddeigens mel og ' + gram(r.vannHoved - vannReserve) + ' av vannet til det ikke er tørt mel igjen — ikke elt. Hold igjen ' +
-            gram(vannReserve) + ' til eltingen: saltet løses i det, og du kan justere deigen med det. La det hvile tildekket. Salt og gjær' +
+            (bassinage > 0
+              ? 'to potter: saltvannet (' + gram(saltVann) + ') som ALLTID skal helt i, og justeringsvannet (' + gram(bassinage) + ') til å spe deigen med.'
+              : 'saltvannet (' + gram(saltVann) + ') — det skal alltid helt i ved eltingen.') +
+            ' La det hvile tildekket. Salt og gjær' +
             (r.ffPaa ? ' og forfermenten' : '') + ' kommer i når eltingen begynner.',
       sjekk: 'Deigen skal kjennes tydelig mykere og mer strekkbar enn da du blandet den. Det er enzymene og vannet som har gjort jobben elting ellers måtte gjort. ' +
              (autoMin <= 45
@@ -1901,7 +1916,8 @@ function kjede(state, r, ferdigMs) {
        blandet (og listet på autolyse-steget), så her gjenstår reserven, salt
        og gjær. */
     tall: [...(autoMin > 0
-             ? [['Resten av vannet', gram(vannReserve)]]
+             ? [['Saltvannet — alt i', gram(saltVann)],
+                ...(bassinage > 0 ? [['Justeringsvann mot slutten', gram(bassinage)]] : [])]
              : [['Mel (hoveddeigen)', gram(melHovedG)], ...melTyper(melHovedG),
                 ['Vann (' + grader(r.vannTempMulig, 1) + ')', gram(r.vannHoved)]]),
            ['Tørrgjær nå', fmt(r.ffPaa ? r.gjaerHoved : r.gjaerTotal, 2) + ' g'],
@@ -1911,9 +1927,17 @@ function kjede(state, r, ferdigMs) {
            ['Friksjon, ' + r.eltMin + ' min', '+' + grader(r.friksjon, 1)], ['Arbeid', fmt(r.wh, 1) + ' Wh/kg'],
            ['Meltemperatur', grader(state.melTemp ?? 21, 0)], ['Deigvekt', gram(r.totalVekt)],
            ...(r.vannForKaldt ? [['NB — vannet rekker ikke alene', 'deigen lander på ' + grader(r.deigTempMulig, 1) + ' — kort ned eltingen eller kjøl melet']] : [])],
-    gjor: (autoMin > 0 ? 'Løs saltet i vannet du holdt igjen (' + gram(vannReserve) + ') og tilsett det utover i eltingen. ' : '') +
+    /* Med autolyse: saltet kommer som lake TIDLIG (når deigen har samlet seg)
+       — å helle 100 g saltlake de siste to minuttene rekker ikke å innarbeides,
+       så «salt de siste 2–3 min»-rådet gjelder bare uten autolyse. Justerings-
+       vannet er RENT: det man dropper endrer ikke saltprosenten. */
+    gjor: (autoMin > 0
+            ? 'Løs ALT saltet i saltvannet (' + gram(saltVann) + ') og ha hele blandingen i når deigen har samlet seg, etter 2–3 minutter. '
+              + (bassinage > 0 ? 'Justeringsvannet (' + gram(bassinage) + ') sper du inn i 2–3 omganger MOT SLUTTEN, når deigen har styrke — bruk bare så mye deigen tåler; det du dropper endrer ikke saltet. ' : '')
+            : '') +
           (r.ffPaa ? 'Bruk ' + fmt(r.gjaerHoved, 2) + ' g tørrgjær her — resten står alt i forfermenten. ' : '') +
-          'Salt de siste 2–3 minuttene. Stopp ved 60–75 % glutenutvikling — IKKE full vindusrute.',
+          (autoMin > 0 ? 'Stopp ved 60–75 % glutenutvikling — IKKE full vindusrute.'
+                       : 'Salt de siste 2–3 minuttene. Stopp ved 60–75 % glutenutvikling — IKKE full vindusrute.'),
     sjekk: 'Deigen slipper bollen, men er fortsatt litt klissete. Dømm på deigen, ikke på klokka.', veie: true
   });
 
