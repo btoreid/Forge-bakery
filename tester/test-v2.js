@@ -21,11 +21,16 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await page.click('#bunnmeny button:has-text("Tid")');
   await page.waitForTimeout(200);
 
-  // 1: datetime-velger finnes og setter ferdigMs
+  // 1: dato- og tidsvelger finnes og setter ferdigMs. Kontrollen er nå TO felt
+  // (dato-input + klokkeslett-select) i stedet for ett datetime-local — det
+  // native hjulet per felt er det som faktisk fungerer på telefon.
   const dato = page.locator('input.dato-inp');
-  ok('datetime-velger synlig i Ferdig-modus', await dato.count() === 1);
-  await dato.fill('2026-08-02T12:30');
+  ok('dato-velger synlig i Ferdig-modus', await dato.count() === 1);
+  await dato.fill('2026-08-02');
   await dato.dispatchEvent('change');
+  await page.waitForTimeout(200);
+  ok('klokkeslett-select synlig i Ferdig-modus', await page.locator('select.dato-inp').count() === 1);
+  await page.selectOption('select.dato-inp', '12:30');
   await page.waitForTimeout(200);
   const ferdigTekst = await page.locator('.tid-rad').nth(1).innerText();
   /* Raden er nå fire kolonner — ukedag, dato, klokkeslett — så måneden står

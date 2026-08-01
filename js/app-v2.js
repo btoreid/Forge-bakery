@@ -301,8 +301,10 @@ function ikonSvg(name) {
 function infoIkon(px = 15) {
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
+  // Tynnere strek når ikonet ER hele knappen (stor variant) — 2,2 er avstemt
+  // for liten inline-bruk og blir klumpete oppskalert.
   [['viewBox', '0 0 24 24'], ['width', px], ['height', px], ['fill', 'none'], ['stroke', 'currentColor'],
-   ['stroke-width', '2.2'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'], ['aria-hidden', 'true']].forEach(a => svg.setAttribute(a[0], a[1]));
+   ['stroke-width', px >= 20 ? '2' : '2.2'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'], ['aria-hidden', 'true']].forEach(a => svg.setAttribute(a[0], a[1]));
   const P = d => { const e = document.createElementNS(NS, 'path'); e.setAttribute('d', d); svg.appendChild(e); };
   const e = document.createElementNS(NS, 'circle');
   e.setAttribute('cx', 12); e.setAttribute('cy', 12); e.setAttribute('r', 9.5); svg.appendChild(e);
@@ -1161,7 +1163,7 @@ function tegnDeigen(r) {
     const lab0 = vannMerke(S.hyd, anb, tak);
     const verdiEl = h('span', { class: 'skyver-verdi' }, gradTxt(S.hyd) + ' %');
     const merkeEl = h('span', { class: 'skyver-klasse', style: 'background:' + lab0.bg + ';color:' + lab0.farge }, lab0.merke);
-    const guideEl = h('div', { class: 'konsekvens' }, vannGuide(S.hyd, anb, tak));
+    const guideEl = h('div', { class: 'konsekvens' }, vannGuide(S.hyd, anb, tak, r));
     // Live-oppdatering UNDER draget (oninput) uten full re-render — så tallet og
     // merkelappen følger fingeren. Selve utregningen skjer på slipp (onchange).
     const oppdaterLive = v => {
@@ -1169,7 +1171,7 @@ function tegnDeigen(r) {
       const m = vannMerke(v, anb, tak);
       merkeEl.textContent = m.merke;
       merkeEl.setAttribute('style', 'background:' + m.bg + ';color:' + m.farge);
-      guideEl.textContent = vannGuide(v, anb, tak);
+      guideEl.textContent = vannGuide(v, anb, tak, r);
       if (vk) vk.className = 'kort sone-' + m.sone;
     };
     const vk = kort('3 · Vann', 'hydrering',
@@ -1208,6 +1210,15 @@ function tegnDeigen(r) {
     if (!r.erBrodform && !r.medLokk && (r.hydBehov > r.takFri + 2 || r.grovAndel > 0.40 || r.rugAndel > 0.25)) {
       vk.appendChild(h('div', { class: 'varsel' },
         'Denne melblandingen trenger ~' + gradTxt(r.hydBehov) + ' % vann for ikke å bake tørr, men et frittstående emne bærer bare ~' + gradTxt(r.takFri) + ' % før det flyter ut. Bak i brødform — da kan du gi deigen vannet den trenger uten at den mister fasongen. (Gryte med lokk hjelper litt, men ikke like mye.)'));
+    }
+    /* Samme signal MED lokk: gryta gir bare +2 pp over strukturtaket, så en
+       blanding som trenger mer enn det, presser fortsatt mot grensen. Før nådde
+       denne beskjeden aldri fram i standardoppsettet (lokk er på som standard) —
+       brukeren fikk anbefalingen uten å få vite at brødform er det romslige
+       valget for blandingen hans (baker-review 01.08). */
+    else if (!r.erBrodform && r.medLokk && r.hydBehov > r.takFri + 2) {
+      vk.appendChild(h('div', { class: 'varsel' },
+        'Denne melblandingen trenger ~' + gradTxt(r.hydBehov) + ' % vann for ikke å bake tørr — mer enn et frittstående emne bærer (~' + gradTxt(r.takFri) + ' %). Gryta med lokk gir litt støtte, så anbefalingen holder seg like under grytetaket. Vil du gi deigen vannet med god margin, er brødform det trygge valget.'));
     }
     wrap.appendChild(vk);
   }
@@ -1365,7 +1376,7 @@ function tegnMelEndring(r) {
 
 function kort(num, infoId, ...barn) {
   const hode = h('div', { class: 'kort-num' }, num);
-  if (infoId) hode.appendChild(h('button', { class: 'info-knapp', 'aria-label': 'Info', onClick: () => toggleInfo(infoId) }, infoIkon()));
+  if (infoId) hode.appendChild(h('button', { class: 'info-knapp ikon', 'aria-label': 'Info', onClick: () => toggleInfo(infoId) }, infoIkon(26)));
   return h('div', { class: 'kort' }, hode, ...barn);
 }
 function toggleInfo(id) { S.paramInfo = S.paramInfo === id ? null : id; oppdater(); }
@@ -1504,7 +1515,7 @@ function tilleggRad(t, r) {
         h('span', { style: 'flex:1;min-width:0' },
           h('span', { style: 'display:block;font-weight:700;font-size:.9rem' }, t.navn),
           h('span', { style: 'display:block;font-size:.74rem;color:var(--color-neutral-600)' }, status))),
-      h('button', { class: 'info-knapp', 'aria-label': 'Info om ' + t.navn, onClick: () => { S.tilleggInfo = S.tilleggInfo === t.id ? null : t.id; oppdater(); } }, infoIkon())));
+      h('button', { class: 'info-knapp ikon', 'aria-label': 'Info om ' + t.navn, onClick: () => { S.tilleggInfo = S.tilleggInfo === t.id ? null : t.id; oppdater(); } }, infoIkon(26))));
   // Finjustering vises bare når tillegget er PÅ.
   if (paa) rad.appendChild(h('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px' },
     h('div', { class: 'stepper', style: 'flex:1' },
@@ -1905,7 +1916,9 @@ function tegnHeveplan(r) {
         h('span', { class: 'pille', style: kaldt ? 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)' : 'background:var(--color-accent-100);color:var(--color-accent-700)' }, kaldt ? 'kaldt' : 'varmt'),
         h('input', { type: 'text', value: tr.navn, 'aria-label': 'Trinnnavn', style: 'flex:1;border:none;background:none;font:inherit;font-weight:700;font-size:.86rem;min-width:0', onblur: e => redigerTrinn(i, 'navn', e.target.value) }),
         trinn.length > 1 ? h('button', { class: 'info-knapp', 'aria-label': 'Fjern trinn', onClick: () => fjernTrinn(i) }, '×') : null),
-      h('div', { style: 'display:flex;gap:8px;margin-top:6px' },
+      // Timer og Miljø UNDER hverandre, ikke side ved side: to felt på delt
+      // bredde ble trange på 390 px, og etikettene fløt sammen med naboens tall.
+      h('div', { style: 'display:flex;flex-direction:column;gap:6px;margin-top:6px' },
         trinnFelt('Timer', tr.timer, 't', v => redigerTrinn(i, 'timer', v)),
         trinnFelt('Miljø', tr.miljo, '°C', v => redigerTrinn(i, 'miljo', v))),
       // Hurtigvalg for hvor deigen står: kjøleskapet eller rommet ditt.
@@ -2019,11 +2032,20 @@ function vannMerke(hyd, anb, tak) {
   if (hyd <= s.lost) return { merke: 'LØST', sone: 'gul', bg: 'var(--color-accent-200)', farge: 'var(--color-accent-900)' };
   return { merke: 'OVER TAKET', sone: 'rod', bg: 'var(--color-accent-300)', farge: 'var(--color-accent-900)' };
 }
-function vannGuide(hyd, anb, tak) {
+/* `r` avgjør hvilket OPPSETT teksten lover for. «I vinduet» sa «frittstående
+   brød» uansett — også når taket anbefalingen var regnet mot, var gryte-med-
+   lokk-taket eller brødformens. Det var nettopp det som forvirret: appen så ut
+   til å påstå at 78 % var frittstående-realistisk (baker-review 01.08: det er
+   det ikke — frittstående-taket for samme blanding er lavere). */
+function vannGuide(hyd, anb, tak, r) {
   const s = vannSoner(anb, tak);
+  const oppsett = !r ? 'brød med oppsettet ditt'
+    : r.erBrodform ? 'brød i brødform'
+    : r.medLokk ? 'brød stekt i gryte med lokk'
+    : 'frittstående brød';
   if (hyd <= s.stramt) return 'Stramt: fast deig som er lett å håndtere og forme, men tettere krumme med mindre uregelmessige hull. Trygt for nybegynnere og grovt mel.';
   if (hyd <= s.trygt) return 'Trygt: deigen holder formen godt, gir jevn krumme og reiser seg villig. Et godt utgangspunkt før du skrur oppover.';
-  if (hyd <= s.vindu) return 'I vinduet: her ligger de fleste frittstående brød på denne melblandingen — åpen, saftig krumme uten at deigen flyter ut. Krever litt stø hånd i formingen.';
+  if (hyd <= s.vindu) return 'I vinduet: her ligger de fleste ' + oppsett + ' på denne melblandingen — åpen, saftig krumme uten at deigen flyter ut. Krever litt stø hånd i formingen.';
   if (hyd <= s.lost) return 'Løst: våt, klissete deig som gir stor, hullete krumme og sprø skorpe — men den vil helst støttes av form eller kurv, og trenger sterkt mel.';
   return 'Over taket: mer vann enn denne melblandingen holder på, så deigen flyter ut i stedet for å reise seg. Bruk form, brett ofte under heving, og regn med tettere bunn.';
 }
@@ -2083,9 +2105,7 @@ function tegnTid(r, K) {
   // finjustering, ikke for å flytte seg tre døgn fram.
   if (!erStart && S.tidModus !== 'vindu') kort1.appendChild(h('div', { style: 'margin-top:10px' },
     h('div', { class: 'felt-label' }, 'Eller velg dato og klokkeslett ferdig'),
-    h('input', { type: 'datetime-local', class: 'dato-inp', 'aria-label': 'Dato og klokkeslett ferdig',
-      value: tilDatoLokal(ferdigMs),
-      onchange: e => { const t = new Date(e.target.value).getTime(); if (isFinite(t)) { S.ferdigMs = t; oppdater(); } } })));
+    datoTidVelger(ferdigMs, t => { S.ferdigMs = t; oppdater(); }, 'Ferdig')));
 
   // Start → ferdig, alltid begge ender med ukedag og dato, så det er tydelig
   // hvilket døgn du starter og hvilket du er ferdig (baken går over døgnskiller).
@@ -2147,7 +2167,10 @@ function tegnTid(r, K) {
   {
     const vinduPaa = S.tidModus === 'vindu';
     const startNaa = S.vinduStart != null ? S.vinduStart : Date.now();
-    const egen = h('div', { class: 'valgkort plan-valg' + (vinduPaa ? ' paa' : '') });
+    /* Kolonne, ikke .valgkort-radens flex: dato- og tidsvelgerne skal ligge på
+       FULL bredde under teksten. I raden sto de klemt ved siden av den og
+       presset kortet bredere enn skjermen (Bjørns skjermbilde 01.08). */
+    const egen = h('div', { class: 'valgkort plan-valg' + (vinduPaa ? ' paa' : ''), style: 'flex-direction:column;align-items:stretch' });
     egen.appendChild(h('button', { style: 'all:unset;display:block;width:100%;box-sizing:border-box;cursor:pointer;padding:14px 16px',
       onClick: () => { if (vinduPaa) return; S.tidModus = 'vindu'; settVindu(startNaa, ferdigMs); } },
       h('div', { class: 'plankort' },
@@ -2161,11 +2184,9 @@ function tegnTid(r, K) {
       const flex = (res.trinn && res.flexIdx != null) ? res.trinn[res.flexIdx] : null;
       const det = h('div', { style: 'padding:0 16px 14px' },
         h('div', { class: 'felt-label' }, 'Tidligst jeg kan starte'),
-        h('input', { type: 'datetime-local', class: 'dato-inp', 'aria-label': 'Tidligst start', value: tilDatoLokal(startNaa),
-          onchange: e => { const t = new Date(e.target.value).getTime(); if (isFinite(t)) settVindu(t, ferdigMs); } }),
+        datoTidVelger(startNaa, t => settVindu(t, ferdigMs), 'Tidligst start'),
         h('div', { class: 'felt-label', style: 'margin-top:10px' }, 'Ferdig senest (ut av ovnen)'),
-        h('input', { type: 'datetime-local', class: 'dato-inp', 'aria-label': 'Ferdig senest', value: tilDatoLokal(ferdigMs),
-          onchange: e => { const t = new Date(e.target.value).getTime(); if (isFinite(t)) settVindu(startNaa, t); } }));
+        datoTidVelger(ferdigMs, t => settVindu(startNaa, t), 'Ferdig senest'));
       if (res.forKort) {
         det.appendChild(h('div', { class: 'varsel fare', style: 'margin-top:10px' },
           'Vinduet er for kort. Selv uten kaldheving trenger denne baken minst ', h('b', null, fmtTimer(res.span)),
@@ -2196,8 +2217,24 @@ function tegnTid(r, K) {
       h('span', { style: 'margin-left:auto;font-size:.8rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums' }, fmt(r.wh, 1) + ' Wh/kg')),
     h('div', { class: 'konsekvens', style: 'margin-top:8px' },
       'For å treffe ', h('b', null, grader(S.startTemp || 24, 0)), ' deigtemp med mel på ', h('b', null, grader(S.melTemp || 21, 0)),
+      /* Forfermenten MÅ nevnes når den er med: den er en stor masse med egen
+         temperatur, og med en kald biga/poolish dominerer den hele regnestykket.
+         Sto det bare «mel og elting», så et riktig svar (varmt vann tross
+         friksjon) ut som en regnefeil — mel 21 og +5 °C friksjon alene peker
+         mot ~17 °C vann, ikke 23. */
+      r.forferment ? [', forferment på ', h('b', null, grader(r.forferment.temp, 0))] : null,
       ' og ', h('b', null, (S.eltMin || 13) + ' min'), ' elting: bruk vann på ', h('b', null, grader(r.vannTemp, 1)), '.',
       r.wh < 3 ? ' Arbeidet er under målsonen (3–5 Wh/kg) — elt lengre for åpnere krumme.' : r.wh > 8.3 ? ' Over metning (8,3 Wh/kg) — mer elting gir ikke mer nettverk.' : ' Arbeidet er i målsonen 3–5 Wh/kg.'),
+    /* Kald forferment: vannet ender gjerne NÆR (eller over) ønsket deigtemp,
+       som strider mot intuisjonen «elting varmer, så vannet må være kaldt».
+       Begge deler er sant samtidig — friksjonen varmer, men den kalde massen
+       fra kjøleskapet skal også opp til deigtemp, og vannet er det eneste
+       leddet som kan bære begge. Uten denne setningen leses tallet som feil. */
+    r.forferment && r.forferment.temp <= KALDGRENSE ? h('div', { class: 'konsekvens', style: 'margin-top:8px' },
+      'Vannet er varmere enn friksjonen alene tilsier: ', h('b', null, g0(r.forferment.total)),
+      ' forferment rett fra kjøl (', h('b', null, grader(r.forferment.temp, 0)),
+      ') skal også opp til deigtemp, og det er vannet som må løfte den. Friksjonen (+',
+      fmt(r.friksjon, 1), ' °C) er regnet inn.') : null,
     /* Kan vannet appen ber om i det hele tatt skaffes?
        Regnestykket kan lande på 1 °C eller lavere, og da er tallet ubrukelig
        som instruksjon. Da skal appen si hva som FAKTISK skjer, og hva man kan
@@ -2244,7 +2281,7 @@ function tegnTid(r, K) {
     const visNaa = S.tidModus === 'start';
     wrap.appendChild(h('div', { class: 'kort' },
       h('div', { class: 'kort-num' }, 'Gjæringen over tid'),
-      gjaeringsGraf(pts, r, bulkStart, visNaa),
+      gjaeringsGraf(pts, r, bulkStart, visNaa, K),
       h('div', { style: 'display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:.7rem;color:var(--color-neutral-600)' },
         legendePrikk('var(--color-accent-2-500)', 'Akkumulert gjæring (høyre)'),
         legendePrikk('var(--color-neutral-500)', 'Deigtemp (venstre)'),
@@ -2252,7 +2289,8 @@ function tegnTid(r, K) {
         legendePrikk('var(--color-accent-2-700)', 'Halvveis'),
         visNaa ? legendePrikk('var(--color-danger)', 'Nå') : null),
       h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:8px;line-height:1.45' },
-        'Arealet under fartskurven er dosen. Grønne bånd er kald heving (≤ 12 °C), varme bånd romtemperatur — se hvordan farten stuper i kulda og skyter fart igjen når deigen tempereres.')));
+        'Arealet under fartskurven er dosen. Grønne bånd er kald heving (≤ 12 °C), varme bånd romtemperatur — se hvordan farten stuper i kulda og skyter fart igjen når deigen tempereres.' +
+        (r.ffPaa ? ' Skravert bånd først er forfermentens modning — den skjer i egen bolle, så deigens kurver starter først ved eltingen.' : ''))));
   }
 
   // Rate-tabell: gjæringsfart mot temperatur
@@ -2487,7 +2525,7 @@ function maskinInfoPanel(r) {
 /* SVG-graf: fasebånd, temp- og gjæringsakser, gjæringsfart (areal), akkumulert
    dose (hovedkurve), deigtemp, halvveismerke, klokkeslett og «nå»-markør.
    `bulkStart` er Date-en for når gjæringen (bulk) begynner — gir ekte klokke. */
-function gjaeringsGraf(pts, r, bulkStart, visNaa) {
+function gjaeringsGraf(pts, r, bulkStart, visNaa, K) {
   const NS = 'http://www.w3.org/2000/svg';
   const W = 360, H = 210;
   const pad = { l: 30, r: 30, t: 30, b: 30 };
@@ -2497,26 +2535,75 @@ function gjaeringsGraf(pts, r, bulkStart, visNaa) {
   const doseMax = pts[pts.length - 1].dose || 1;
   const fartMax = Math.max(...pts.map(p => p.fart), 1e-6);
   const tempMax = Math.max(30, Math.ceil(Math.max(...pts.map(p => p.temp)) / 5) * 5);
-  const X = t => pad.l + t / totalT * iW;
+  const startMs = bulkStart ? bulkStart.getTime() : Date.now();
+  /* Tidslinja skal dekke HELE prosessen, ikke bare deigen etter elting. Med
+     forferment starter baket mange timer før bulk — uten den perioden i grafen
+     stemte ikke aksens klokkeslett med planen over (vindu-start 10:51, graf fra
+     23:06), og det leste som en feil. Forfermentens tider hentes fra KJEDEN
+     (samme kilde som stegene), så de følger enhver endring lengre opp. */
+  const ffSteg = (K && K.find) ? K.find(x => x.id === 'ff') : null;
+  const tMin = ffSteg ? Math.min(0, (ffSteg.tid.getTime() - startMs) / 3600000) : 0;
+  const span = totalT - tMin || 1;
+  const X = t => pad.l + (t - tMin) / span * iW;
   const Yt = v => pad.t + (1 - v / tempMax) * iH;   // temperatur 0..tempMax (venstre)
   const Yd = f => pad.t + (1 - f) * iH;             // gjæringsandel 0..1 (høyre)
-  const startMs = bulkStart ? bulkStart.getTime() : Date.now();
   const klAv = t => klHM(startMs + t * 3600000);
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const n = v => v.toFixed(1);
   let s = '';
+  let sistLabelX = -Infinity;   // kollisjonsvern for fasebånd-etikettene
+
+  // Forfermentens modning: skravert bånd med navn + temperaturkurve (venstre
+  // akse). Gjæringen dens deler IKKE deigens doseskala (den er en egen kultur i
+  // egen bolle), så fart/dose-kurvene starter fortsatt ved deigen — det ærlige
+  // er å vise NÅR den står og HVOR VARM den er, ikke å blande dosene.
+  if (ffSteg && r.forferment) {
+    const ff = r.forferment;
+    const ffTimer = (ffSteg.varighet || 0) / 60;
+    const ffSlutt = tMin + ffTimer;
+    const kaldFf = ff.temp <= 12;
+    s += `<rect x="${n(X(tMin))}" y="${pad.t}" width="${n(X(ffSlutt) - X(tMin))}" height="${iH}" fill="${kaldFf ? 'var(--color-accent-2-500)' : 'var(--color-accent-500)'}" opacity="0.09"/>`;
+    s += `<line x1="${n(X(ffSlutt))}" y1="${pad.t}" x2="${n(X(ffSlutt))}" y2="${pad.t + iH}" stroke="var(--color-neutral-300)" stroke-dasharray="3 3"/>`;
+    s += `<line x1="${n(X(0))}" y1="${pad.t}" x2="${n(X(0))}" y2="${pad.t + iH}" stroke="var(--color-neutral-300)" stroke-dasharray="3 3"/>`;
+    if (X(ffSlutt) - X(tMin) > 42) {
+      const midt = (X(tMin) + X(ffSlutt)) / 2;
+      s += `<text x="${n(midt)}" y="${pad.t - 15}" fill="var(--color-neutral-700)" font-size="9.5" font-weight="700" text-anchor="middle">${esc(r.ffT ? r.ffT.navn : 'Forferment')}</text>`;
+      s += `<text x="${n(midt)}" y="${pad.t - 5}" fill="var(--color-neutral-500)" font-size="8.5" text-anchor="middle">${fmt(ffTimer, ffTimer < 10 ? 1 : 0)} t · ${fmt(ff.temp, 0)}°</text>`;
+      sistLabelX = midt;
+    }
+    // Temperaturbanen: blandes varm (mikstemp), står evt. romTid timer varmt,
+    // og kjøles så mot skapet — samme modell som kjølebanen i motoren.
+    const masse = ((ff.mel || 0) + (ff.vann || 0)) / 1000;
+    const tau = (typeof tauHours === 'function') ? tauHours(Math.max(masse, 0.1), { lokk: true }) : 4;
+    const T0 = (ff.mikstemp != null && isFinite(ff.mikstemp)) ? ff.mikstemp : ff.temp;
+    const romTid = ff.romTid || 0;
+    let ftl = '';
+    for (let i = 0; i <= 40; i++) {
+      const t = ffTimer * i / 40;
+      const temp = ff.temp >= T0 - 0.05 ? ff.temp
+        : (t < romTid ? T0 : (typeof doughTempAt === 'function' ? doughTempAt(t - romTid, T0, ff.temp, tau) : ff.temp));
+      ftl += `${i ? 'L' : 'M'} ${n(X(tMin + t))} ${n(Yt(temp))} `;
+    }
+    s += `<path d="${ftl}" fill="none" stroke="var(--color-neutral-500)" stroke-width="1.6" stroke-dasharray="5 3" opacity="0.7"/>`;
+  }
 
   // Fasebånd med navn, tid og temperatur — kald heving (≤12 °C) i grønt, varm i terrakotta.
+  // Etikettene kolliderte da forfermenten kom inn på aksen og gjorde hvert bånd
+  // smalere: lange navn («Kaldheving, utbakt i kurv») fløt inn i naboens. Derfor
+  // kortes navnet ved komma på smale bånd, og en etikett hoppes helt over hvis
+  // senteret ligger nærmere forrige tegnede etikett enn 62 px.
   let acc = 0;
   trinn.forEach((tr, i) => {
     const x0 = X(acc), x1 = X(acc + (tr.timer || 0)), br = x1 - x0;
     const kald = tr.miljo <= 12;
     s += `<rect x="${n(x0)}" y="${pad.t}" width="${n(br)}" height="${iH}" fill="${kald ? 'var(--color-accent-2-500)' : 'var(--color-accent-500)'}" opacity="${i % 2 ? 0.06 : 0.11}"/>`;
     if (i > 0) s += `<line x1="${n(x0)}" y1="${pad.t}" x2="${n(x0)}" y2="${pad.t + iH}" stroke="var(--color-neutral-300)" stroke-dasharray="3 3"/>`;
-    if (br > 42) {
-      const midt = n((x0 + x1) / 2);
-      s += `<text x="${midt}" y="${pad.t - 15}" fill="var(--color-neutral-700)" font-size="9.5" font-weight="700" text-anchor="middle">${esc(tr.navn)}</text>`;
-      s += `<text x="${midt}" y="${pad.t - 5}" fill="var(--color-neutral-500)" font-size="8.5" text-anchor="middle">${fmt(tr.timer, tr.timer < 10 ? 1 : 0)} t · ${fmt(tr.miljo, 0)}°</text>`;
+    const midt = (x0 + x1) / 2;
+    if (br > 42 && midt - sistLabelX > 62) {
+      const navn = br < 110 ? String(tr.navn).split(/[,·(]/)[0].trim() : tr.navn;
+      s += `<text x="${n(midt)}" y="${pad.t - 15}" fill="var(--color-neutral-700)" font-size="9.5" font-weight="700" text-anchor="middle">${esc(navn)}</text>`;
+      s += `<text x="${n(midt)}" y="${pad.t - 5}" fill="var(--color-neutral-500)" font-size="8.5" text-anchor="middle">${fmt(tr.timer, tr.timer < 10 ? 1 : 0)} t · ${fmt(tr.miljo, 0)}°</text>`;
+      sistLabelX = midt;
     }
     acc += tr.timer || 0;
   });
@@ -2559,18 +2646,20 @@ function gjaeringsGraf(pts, r, bulkStart, visNaa) {
     s += `<text x="${n(X(halv.t) + dx)}" y="${n(Yd(0.5) - 6)}" fill="var(--color-accent-2-700)" font-size="8.5" font-weight="700" text-anchor="${ank}">halvveis ${klAv(halv.t)}</text>`;
   }
 
-  // «Nå»-markør — bare når prosessen er startet OG vi står inne i vinduet.
+  // «Nå»-markør — bare når prosessen er startet OG vi står inne i vinduet
+  // (forfermentperioden regnes med: står poolishen, er prosessen i gang).
   const naaT = (Date.now() - startMs) / 3600000;
-  if (visNaa && naaT > 0.02 && naaT < totalT) {
+  if (visNaa && naaT > tMin + 0.02 && naaT < totalT) {
     s += `<line x1="${n(X(naaT))}" y1="${pad.t - 2}" x2="${n(X(naaT))}" y2="${pad.t + iH}" stroke="var(--color-danger)" stroke-width="1.4"/>`;
     s += `<circle cx="${n(X(naaT))}" cy="${pad.t - 2}" r="2.6" fill="var(--color-danger)"/>`;
     s += `<text x="${n(X(naaT))}" y="${pad.t - 20}" fill="var(--color-danger)" font-size="8.5" font-weight="800" text-anchor="middle">nå</text>`;
   }
 
-  // X-akse med klokkeslett.
+  // X-akse med klokkeslett — fra prosessens FAKTISKE start (forfermenten om den
+  // er med), så aksen viser de samme klokkeslettene som planen over.
   s += `<line x1="${pad.l}" y1="${pad.t + iH}" x2="${pad.l + iW}" y2="${pad.t + iH}" stroke="var(--color-neutral-400)"/>`;
-  const steg = totalT <= 8 ? 2 : totalT <= 18 ? 4 : totalT <= 30 ? 6 : 8;
-  for (let t = 0; t <= totalT + 0.01; t += steg) {
+  const steg = span <= 8 ? 2 : span <= 18 ? 4 : span <= 30 ? 6 : 8;
+  for (let t = tMin; t <= totalT + 0.01; t += steg) {
     s += `<line x1="${n(X(t))}" y1="${pad.t + iH}" x2="${n(X(t))}" y2="${pad.t + iH + 4}" stroke="var(--color-neutral-400)"/>`;
     s += `<text x="${n(X(t))}" y="${pad.t + iH + 15}" fill="var(--color-neutral-500)" font-size="8.5" text-anchor="middle">${klAv(t)}</text>`;
   }
@@ -2613,6 +2702,37 @@ function klHM(ms) { return new Date(ms).toLocaleTimeString('nb-NO', { hour: '2-d
 function tilDatoLokal(ms) {
   const d = new Date(ms), p = n => String(n).padStart(2, '0');
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+/* Dato og klokkeslett som TO kontroller: <input type="date"> pluss en <select>
+   med kvarters oppløsning. Ett datetime-local-felt ga i praksis fritekst-følelse
+   på telefon; date-feltet og select-en åpner hver sitt NATIVE hjul, som er det
+   som faktisk fungerer med melete fingre. Kvarter er finmasket nok for en
+   bakeplan, og står klokka utenfor kvartersnettet (f.eks. satt av «Start nå»),
+   beholdes den eksakte tiden som eget valg øverst til man velger noe annet. */
+function datoTidVelger(ms, onSet, aria) {
+  const p = n => String(n).padStart(2, '0');
+  const d = new Date(ms);
+  const naa = p(d.getHours()) + ':' + p(d.getMinutes());
+  const tider = [];
+  if (d.getMinutes() % 15 !== 0) tider.push(naa);
+  for (let m = 0; m < 24 * 60; m += 15) tider.push(p(Math.floor(m / 60)) + ':' + p(m % 60));
+  return h('div', { style: 'display:flex;gap:8px' },
+    // width:auto i style: .dato-inp har width:100 % i CSS-en, og i en flex-rad
+    // ville to 100 %-bredder lagt seg utenfor kortet. Style-attributtet vinner.
+    h('input', { type: 'date', class: 'dato-inp', style: 'flex:1.3;min-width:0;width:auto', 'aria-label': aria + ' — dato',
+      value: tilDatoLokal(ms).slice(0, 10),
+      onchange: e => {
+        const [y, mn, dg] = String(e.target.value).split('-').map(Number);
+        if (!y || !mn || !dg) return;
+        const ny = new Date(ms); ny.setFullYear(y, mn - 1, dg); onSet(ny.getTime());
+      } }),
+    h('select', { class: 'dato-inp', style: 'flex:1;min-width:0;width:auto', 'aria-label': aria + ' — klokkeslett',
+      onchange: e => {
+        const [t, m] = String(e.target.value).split(':').map(Number);
+        if (!isFinite(t) || !isFinite(m)) return;
+        const ny = new Date(ms); ny.setHours(t, m, 0, 0); onSet(ny.getTime());
+      } },
+      ...tider.map(t => h('option', { value: t, selected: t === naa ? 'selected' : null }, t))));
 }
 /* Full dato med ukedag — baken går over døgnskiller, så «17:00» alene sier ikke
    hvilken dag. «fredag 31. juli, 17:00». */

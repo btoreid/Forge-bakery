@@ -242,6 +242,11 @@ input[type=range] { accent-color: var(--color-accent); }
   background: #fff; color: var(--color-accent-700); cursor: pointer; font-weight: 800;
   font-size: .82rem; line-height: 1; display: grid; place-items: center; padding: 0;
 }
+/* ⓘ-varianten: SVG-ikonet ER allerede en sirkel, så knappens egen ring oppå ble
+   runding-på-runding. Uten ramme fyller ikonet hele knappen; trykkflaten er
+   uendret (::after-utvidelsen under gjelder fortsatt). ×- og ★-knappene beholder
+   ringen sin — de har ingen egen sirkel i glyfen. */
+.info-knapp.ikon { border: none; background: transparent; }
 
 /* ---------- Valgkort (brødtype, forferment m.m.) ---------- */
 .valg { display: flex; flex-direction: column; gap: 8px; }
