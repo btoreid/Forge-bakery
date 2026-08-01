@@ -1621,6 +1621,17 @@ function kjede(state, r, ferdigMs) {
   const ingenKurv = !!(formV && formV.ingenKurv);
   const iBrodform = !!(formV && formV.id === 'form');
   const hvileSted = ingenKurv ? 'på melet klede eller brett' : iBrodform ? 'i brødformen' : 'i hevekurven med god side ned';
+  /* Sluttformen følger kurven. Forforming er alltid en løs kule, men den ENDELIGE
+     formingen skal matche formvalget — en bâtard formes avlang, ikke rund. Den
+     gamle teksten sa bare «form stramt», så en avlang kurv fikk beskjed om «runde
+     emner» hele veien. `formeOrd` gir riktig fasong, og `snittRaad` henter det
+     form-spesifikke snittet som allerede står i FORMER. */
+  const erAvlang = !!(formV && formV.maal === 'lengde');
+  const formeOrd = !formV ? 'et stramt, rundt emne'
+    : iBrodform ? 'et emne som fyller brødformen jevnt'
+    : erAvlang ? 'et stramt, avlangt emne (bâtard)'
+    : 'en stram, rund boule';
+  const snittRaad = (formV && formV.snitt) ? ' ' + formV.snitt : '';
 
   // Ankerpunkter bakover fra ferdig.
   const innsetting = minus(ferdig, stekeMin);
@@ -1813,9 +1824,9 @@ function kjede(state, r, ferdigMs) {
       hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Benkehvile', sideV: '15–20 min',
       tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)],
              ['Forforming', 'rund opp, hvil 15–20 min'],
-             ['Forming', 'stram overflatespenning, ' + hvileSted],
+             ['Forming', erAvlang ? 'stram, avlang — ' + hvileSted : 'stram overflatespenning, ' + hvileSted],
              ...(formV ? [['Form', formV.navn]] : [])],
-      gjor: 'Forform lett til runde emner, la dem hvile 15–20 min under klede, form så stramt og legg dem ' + hvileSted + '. Håndter bare de ytterste millimeterne.' +
+      gjor: 'Forform lett til runde emner, la dem hvile 15–20 min under klede, form så til ' + formeOrd + ' og legg dem ' + hvileSted + '. Håndter bare de ytterste millimeterne.' +
             (ingenKurv ? ' Uten kurv er det bare glutennettverket som holder fasongen — form strammere enn du ville gjort i en kurv, og la emnet stå kort.' : ''),
       sjekk: ingenKurv
         ? 'Emnet skal holde en stram kuppel av seg selv. Flyter det utover på brettet allerede nå, er det for vått eller for lite utviklet for fri heving — bruk kurv eller form neste gang.'
@@ -1839,7 +1850,7 @@ function kjede(state, r, ferdigMs) {
       id: 'snitt', navn: 'Snitt kaldt og sett inn', tid: postStart, varighet: POSTPROOF, tone: 'noytral',
       hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Rett fra kjøl', sideV: POSTPROOF + ' min',
       tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)], ['Rett fra kjøl', 'ikke temperer — snitt kaldt'], ['Benkestå', 'bare det snittingen tar'], ['Kald deig', '+2–4 min steketid']],
-      gjor: 'Ta emnene RETT FRA KJØL — ikke la dem stå og temperere. Vend på plata med god side opp og snitt kaldt: kald deig holder snittet bedre og gir bredere ovnsløft, fordi den kalde kjernen er strekkbar lenge etter at gassen har begynt å utvide seg. IKKE form på nytt: da degasser du blæreskinnet du nettopp bygde. Regn +2–4 min ekstra steketid siden emnet går kaldt inn.',
+      gjor: 'Ta emnene RETT FRA KJØL — ikke la dem stå og temperere. Vend på plata med god side opp og snitt kaldt: kald deig holder snittet bedre og gir bredere ovnsløft, fordi den kalde kjernen er strekkbar lenge etter at gassen har begynt å utvide seg. IKKE form på nytt: da degasser du blæreskinnet du nettopp bygde. Regn +2–4 min ekstra steketid siden emnet går kaldt inn.' + snittRaad,
       sjekk: 'Snittet skal åpne seg rent. Emnet er kaldt og fast — det er riktig; ovnsløftet kommer i ovnen, ikke på benken. Et fullhevet emne som får stå og bli varmt overhever i stedet.'
     });
   } else if (sisteUtbakt) {
@@ -1848,7 +1859,7 @@ function kjede(state, r, ferdigMs) {
       id: 'snitt', navn: 'Snitt og sett inn', tid: postStart, varighet: POSTPROOF, tone: 'noytral',
       hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Fra benken', sideV: POSTPROOF + ' min',
       tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)], ['Fra benken', 'romtemperert, ferdig hevet'], ['Benkestå', 'ingen ny heving']],
-      gjor: 'Emnet er ferdig hevet i romtemperatur. Vend det på plata med god side opp og snitt rett før det går inn. IKKE form på nytt: da degasser du det du nettopp bygde. Et romtemperert emne er mykere enn et kaldt, så bladet må være vått og draget bestemt.',
+      gjor: 'Emnet er ferdig hevet i romtemperatur. Vend det på plata med god side opp og snitt rett før det går inn. IKKE form på nytt: da degasser du det du nettopp bygde. Et romtemperert emne er mykere enn et kaldt, så bladet må være vått og draget bestemt.' + snittRaad,
       sjekk: 'Trykktest: gropen skal fylle seg langsomt igjen over 5–10 sekunder. Fyller den seg ikke, er emnet overhevet — sett det inn med én gang.'
     });
   } else {
@@ -1857,7 +1868,7 @@ function kjede(state, r, ferdigMs) {
       hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Benkehvile', sideV: POSTPROOF + ' min',
       tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)], ['Benkehvile', POSTPROOF + ' min'],
              ...(formV ? [['Hviler', hvileSted]] : [])],
-      gjor: 'Forform, hvil 15–20 min, form stramt og la hvile ' + hvileSted + '. Håndter bare de ytterste 1 cm. Ta av håndkleet 10 minutter før ovnen så skorpa tørker.',
+      gjor: 'Forform, hvil 15–20 min, form til ' + formeOrd + ' og la hvile ' + hvileSted + '. Håndter bare de ytterste 1 cm. Ta av håndkleet 10 minutter før ovnen så skorpa tørker.',
       sjekk: 'Trykktest: gropen skal fylle seg langsomt igjen over 5–10 sekunder og etterlate et synlig merke.'
     });
   }
