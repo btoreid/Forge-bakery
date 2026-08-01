@@ -671,6 +671,17 @@ function tegnBunnlinje(r, K) {
     r.ffPaa
       ? ['Gjær totalt', fmt(r.gjaerTotal, 2) + ' g']
       : ['Gjær (tørr)', fmt(r.gjaerTotal, 2) + ' g'],
+    /* Tilleggene med GRAM, ikke bare som effekt-avvik: frø ved navn, og
+       smakstilleggene (honning, olje, sukker, smør, malt). Alle går i
+       hoveddeigen, så de står i totallisten — regnskapet skal kunne leses som
+       en handleliste (Bjørn 01.08). */
+    ...(r.fro || []).filter(f => (f.gram || 0) > 0.5).map(f => {
+      const sk = (typeof SOAKERS !== 'undefined') && SOAKERS.find(s => s.id === f.id);
+      return [(sk ? sk.navn : f.id), g0(f.gram)];
+    }),
+    ...[['honning', 'Honning'], ['olje', 'Olje'], ['sukker', 'Sukker'], ['smor', 'Smør'], ['malt', 'Malt']]
+      .filter(([k]) => (r[k] || 0) > 0.5)
+      .map(([k, navn]) => [navn, g0(r[k])]),
     ['Effektiv hydrering', pst(r.effektivHydrering * 100, 1)],
     ['Brødskala', fmt(r.brodskala.pct, 0) + ' % · ' + r.brodskala.kort],
     ['Løftindeks', r.loft.loft + ' / 100'],
