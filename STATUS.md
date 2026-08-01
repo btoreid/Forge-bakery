@@ -1,6 +1,14 @@
-# Status og neste steg — 31.07.2026
+# Status og neste steg — 01.08.2026
 
 Notat ved øktskifte. Appen er i en konsistent tilstand og live på GitHub Pages.
+
+**Siste økt (01.08):** Bjørns fulltesting. Fikset en kritisk bakefaglig feil
+(hydreringstaket steg med grovhet — nå eget frittstående-tak som faller vs
+brødform-tak som bærer), frøvann-bryter + tydeligere vann-tekst, nytt
+egendefinert tidsvindu (sett start+ferdig, appen fyller resten), og en rekke
+visnings-/logikkfeil. Se øverste post i `CHANGELOG.md`. Alle 9 testsuiter grønne.
+Åpent: V1s `js/app.js` har samme gamle takfeil (frosset, ikke fikset); Web Push
+for låst-skjerm-varsling gjenstår.
 
 **Full historikk med begrunnelser: `CHANGELOG.md`** — les den øverste posten (30.07, V2) før
 du rører kode. Den har arkitekturreglene, modellavklaringene (L-01–L-14) og arbeidsmåten Bjørn

@@ -7,6 +7,54 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 01.08.2026 — Fulltesting: hydreringsmodell, frøvann, tidsvindu og UI-polish
+
+Bjørns fulltesting av V2 avdekket én reell modellfeil og en rekke visnings-/logikk-
+feil. Alt er fikset, testet og live på `master`. Nyeste arbeid nederst i denne posten.
+
+**Hydreringstaket var bakefaglig feil (KRITISK, verifisert med baker-agent).**
+`tak` ganget vannbehovet (`absFaktor`) med strukturen, så FRITTSTÅENDE-taket *steg*
+med grovhet (til 88 % på 100 %) — stikk i strid med appens egen tekst «dette er et
+formbrød». Modellen anbefalte form-brød-hydrering (81 % på 50 % grovt) til et
+frittstående emne på butikkmel, som flyter ut. Nå to separate tak i `engine.js`
+(~1471): `takVaat` (absorpsjon, = gammelt tak, gjelder brødform) og `takFri`
+(struktur, `76 + (styrkeVektet−4)×4`, uten absFaktor, FALLER med grovhet, gjelder
+frittstående/kurv). Gryte med lokk = `takFri+3`. Formvalget (`state.form`/`state.lokk`)
+velger. `hydAnbefalt` klemmes mot form-taket. Resultat på Regal: 50 % grovt
+frittstående → ~75 % (bakbart) mot 81 % før; brødform → fortsatt 81 %. Nytt varsel
+foreslår brødform når vannet blandingen *trenger* overstiger det frittstående bærer
+(>40 % grovt / >25 % rug). Eksponert: `takFri`, `takVaat`, `hydBehov`, `rugAndel`.
+
+**Frøvann-forvirringen.** «Effektiv hydrering» viste samme tall som valgt selv med
+frø. Bakefaglig korrekt (forbløtte frø får vann på toppen, melet beholder sin
+hydrering), men teksten var selvmotsigende. Ny tekst viser melets hydrering +
+«samlet deigfukt». Ny **bryter** (`froVannPaaToppen`): «Forbløtt — vann på toppen»
+(standard) vs «Tørre frø rett i deigen» (melets effektive hydrering synker, f.eks.
+77→60 %). Deigregnskapet: «Vann i deigen» → «Vann i hoveddeigen» + egen linje «Vann
+til frøene», så vannet ikke ser ut til å forsvinne når melet krymper.
+
+**Egendefinert tidsvindu (nytt).** Plan-valg «Egendefinert vindu»: sett tidligst
+start + senest ferdig, så strekker `tilpassVindu()` det fleksible leddet
+(kaldhevingen) til prosessen fyller vinduet og løser gjæren automatisk. Flagger for
+korte vinduer. `vinduStart` i OPPSKRIFT_FELT.
+
+**Mindre feil ryddet:**
+- Rå floats i steppere («1.834…») → `stepperRad` bruker `fmt` + runder til steg.
+- Biga-temp: fjernet stille 16–20-klemming («22 ett sted, 20 et annet»); nå råd i tekst.
+- `gradTxt()`: smarte desimaler på temp-etiketter («Kjøleskapet 4 °C» viste 4 mens
+  feltet viste 3,5 — samme verdi, to tall). Hydrering på 0,1-rutenett, skyver 0,5-steg.
+- Egen melblanding: grovhetspillene lyser ikke lenger feil trinn; header sier «egen blanding».
+- Formingsteksten følger formvalget (rund boule / avlang bâtard / brødform) + form-spesifikt snitt.
+- Scroll-anker: raden du trykker på (tillegg) holder seg i ro når kort dukker opp over den.
+- Timerpanel: fast rekkefølge, så +5/−5 ikke bytter hvilken timer du justerer.
+- Mel-raden: gramtall og prosent sentrert over hverandre.
+
+**Åpent:** V1 (`js/app.js`, frosset) har samme gamle takfeil (`takHyd` linje ~951) —
+ikke fikset, siden V2 er aktiv. Web Push for varsling med låst skjerm står fortsatt
+som mulig neste steg (krever push-server via Supabase).
+
+---
+
 ## 31.07.2026 (natt, aller sist) — De ti anslagene er nede i tre
 
 Bjørn: «melprisene har du jo akkurat sjekket, så det finner du vel ut av selv?»
