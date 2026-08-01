@@ -7,7 +7,56 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
-## 01.08.2026 (kveld) — Seks funn fra fulltestingen: graf-tidslinja, hydreringsmargin og melfakta
+## 01.08.2026 (natt) — Release-review: fire nye agenter, 46 funn, 30 fikset
+
+Bjørn ba om full release-gjennomgang med en NY agentrekke (teknisk, baker på
+stegkjeden, UX for førstegangsbruker, release-ingeniør med live kjøring).
+De viktigste fiksene, alle verifisert med røyktest + alle 9 suiter grønne:
+
+**Synk (KRITISK).** `_synkOk` ble aldri satt — den løpende opplastingen var DØD;
+endringer nådde skyen bare ved innlogging/fokus. Settes nå etter vellykket
+fletting, slippes ved utlogging. Sky-stempelet er nå ENDRINGSTID (statens
+`oppdatert`), ikke opplastingstid — en uendret enhet kunne se «nyest» ut og
+rulle tilbake ekte endringer. Push ved fokus skjer bare når flettingen faktisk
+har noe skyen mangler. Feilet push re-køes (15 s). Feilet nedhenting prøves på
+nytt. Kontobytte-vernet (lagretUid) er koblet på: bytter man konto på samme
+enhet vinner skyen ubetinget, og forrige brukers poster følger ikke med.
+Logg-arkivet leses nå faktisk inn igjen ved innlogging. Full localStorage viser
+varig banner (før: stille datatap). Bildekvote-vakten måler alle
+forgebakery-nøklene, ikke bare hovedtilstanden.
+
+**Preset-prosessene (KRITISK, baker).** Ciabatta/baguette/focaccia fikk generisk
+brødprosess: nå eier presetet forferment-spec-en (Giorilli-biga 50 %),
+stekeprofilen (nyBakst), og forme-/snitte-stegene («Del emnene» med skrape for
+ciabatta, løse rektangler + uttrekk for baguette, ingen damp/snitt for
+focaccia). Focaccia får igjen sine 4 % olje i deigen (ble bare lest av V1).
+Dessuten: varm POSTPROOF 30→15 min (ubudsjettert gjæringstid), formbrød vendes
+ikke ut ved snitt, lang kaldheving = utildekket 30 min + pose (ikke lærskinn),
+skåld får 90 min (varm skåld velter varmebalansen), refPlan-trinnene fikk
+utbakt-flagg, varmested-råd når trinn ligger over romtemp.
+
+**Motor.** `isFinite(null)`-fella tettet for romTemp/kjolskapTemp/kjolTemp/
+egenFriksjon (romTemp:null ga 0-graders rom). regn()-cachen serialiserer ikke
+lenger loggbildene (megabyte per tastetrykk). tilpassVindu gulver til 0,05 t
+(0-trinn forsvant ved reload). nyBakst nullstiller tidsvindu + ff-romtemp.
+Timerne teller nå ned også uten Notification-API.
+
+**PWA.** sw.js v11: V1-filene (index-v1.html, style.css, app.js) stemples —
+V1 deler motor med V2 og kunne kjøre med ny motor + gammel app i 10 min etter
+deploy. Fonter + maskable-ikon i skallet. V1-navigasjoner caches under egen
+nøkkel (før kunne V1-HTML bli forsiden offline).
+
+**UX.** Manglende CSS-token `--color-accent-2-600` definert (målekrukkas «bak
+ut»-merke var usynlig). «Videre: Deig/Tid/Prosess»-knapp på steg 1–3.
+Bytt-bekreftelsen rett under kortet man trykket. Tidsoversikten: strek viser
+til-ovnen-tid, ny «KLAR»-rad med nedkjølingen. Timer-knappene fikk 44 px
+trykkflate. Backup-teksten motsier ikke lenger sky-modellen. Intern sjargong
+ute av Oppslag og Logg-tomtilstanden. Bak-navnet lagres på blur. Aria på
+bunnstripa og kort-ⓘ.
+
+Åpent etter reviewen (bevisst ikke tatt nå): ordliste-lenker fra sjargong-
+etikettene, dynamisk kortnummerering på Deig, offline-testens setOffline-hull,
+gravsteins-beskjæring, ffTimer-kontroll i UI, egen preset-heveplan i kjeden.
 
 Bjørn meldte seks punkter med skjermbilder. To var ekte feil (merket FEIL), resten
 forbedringer. Alle 9 suiter grønne, V1 kontrollert etter motorendringene.

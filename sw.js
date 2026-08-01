@@ -45,16 +45,28 @@
    tre. Versjonen heves for å rydde bort den gamle cachen med de gamle ikonene. */
 /* v10: timer-varselet sender med timer-id-en, så et trykk på varselet skrur av
    alarmen for nettopp den timeren (ikke bare åpner steget). */
-const VERSJON = 'forgebakery-v10';
+/* v11 (release-review 01.08): V1-filene (index-v1.html, css/style.css,
+   js/app.js) stemples nå også — V1 deler data.js/engine.js med V2, og uten
+   stempling kunne V1 kjøre i opptil 10 min (max-age=600) med NY motor og
+   GAMMEL app.js etter en deploy: nøyaktig cache-skjevheten denne workeren ble
+   bygget for å fjerne. Fontene og maskable-ikonet inn i skallet, så installert
+   app offline ikke faller tilbake på systemfont. */
+const VERSJON = 'forgebakery-v11';
 
 /* Filene HTML-en laster, og som derfor skal versjonsstemples. */
 const APPFILER = [
   'css/fonts.css', 'css/style-v2.css',
-  'js/vendor/supabase.js', 'js/data.js', 'js/engine.js', 'js/sky.js', 'js/app-v2.js'
+  'js/vendor/supabase.js', 'js/data.js', 'js/engine.js', 'js/sky.js', 'js/app-v2.js',
+  // V1 (frossen, men live på index-v1.html og deler motorfilene over)
+  'css/style.css', 'js/app.js'
 ];
 
 /* Appskallet — nok til at appen starter uten nett. */
-const SKALL = ['./', 'index.html', 'icons/icon-192-v2.png', 'icons/icon-512-v2.png', 'manifest.webmanifest'].concat(APPFILER);
+const SKALL = ['./', 'index.html', 'index-v1.html',
+  'icons/icon-192-v2.png', 'icons/icon-512-v2.png', 'icons/maskable-512-v2.png', 'icons/apple-touch-icon-v2.png',
+  'css/fonts/caprasimo-latin.woff2', 'css/fonts/caprasimo-latinext.woff2',
+  'css/fonts/figtree-latin.woff2', 'css/fonts/figtree-latinext.woff2',
+  'manifest.webmanifest'].concat(APPFILER);
 
 /* Same-origin-henting med revalidering.
    Bare URL + opsjoner: å bygge en Request fra den innkommende er en felle —
@@ -107,8 +119,9 @@ async function stempleFor(sti) {
 /* Navigasjon: hent index.html ferskt og stemple alle appfil-URL-ene i den. */
 async function navigasjon(req) {
   let svar;
+  // Offline: prøv den EKSAKTE siden først (index-v1.html skal få V1, ikke rota).
   try { svar = await ferskt(req.url); }
-  catch (e) { return (await caches.match(absolutt('./'))) || (await caches.match(req)); }
+  catch (e) { return (await caches.match(req)) || (await caches.match(absolutt('./'))); }
   if (!svar.ok) return svar;
 
   let html = await svar.text();
@@ -119,7 +132,10 @@ async function navigasjon(req) {
   }
   const h = new Headers({ 'Content-Type': 'text/html; charset=utf-8' });
   const ut = new Response(html, { status: 200, headers: h });
-  caches.open(VERSJON).then(c => c.put(absolutt('./'), ut.clone()));
+  // V1-navigasjoner caches under SIN url — å legge dem på rot-nøkkelen ville
+  // servert V1-HTML som forside neste gang man var uten nett.
+  const nokkel = new URL(req.url).pathname.endsWith('index-v1.html') ? req.url : absolutt('./');
+  caches.open(VERSJON).then(c => c.put(nokkel, ut.clone()));
   return ut;
 }
 

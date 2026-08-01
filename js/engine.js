@@ -1201,9 +1201,17 @@ function delfriksjon(state) {
    for et par renders, og gammelt faller ut av seg selv. */
 const _regnCache = new Map();
 const _REGN_CACHE_MAX = 16;
+/* Felter regnKjerne ALDRI leser, men som kan veie megabyte (base64-bildene i
+   loggen) eller endre seg uten å påvirke oppskriften. De holdes UTENFOR
+   cache-nøkkelen: å serialisere 4–5 MB logg for hvert av titalls regn-kall per
+   tastetrykk var den dyreste operasjonen i hele appen (teknisk review 01.08). */
+const REGN_IRRELEVANT = new Set(['loggListe', 'loggSlettet', 'lgBilder', 'lgNavn', 'lgRediger',
+  'lgSlett', 'bildeVis', 'standardBrod', 'timere', 'favoritter', 'kalibDelt', 'kalib']);
+// NB: `delteKalib` er BEVISST ikke i lista — delfriksjon(state) leser den, så en
+// ny delt måling må gi ny cache-nøkkel.
 function regn(state) {
   let key;
-  try { key = JSON.stringify(state); } catch (e) { key = null; }
+  try { key = JSON.stringify(state, (k, v) => REGN_IRRELEVANT.has(k) ? undefined : v); } catch (e) { key = null; }
   if (key !== null && _regnCache.has(key)) {
     // Flytt til «nyest brukt» (LRU) og returner det huskede resultatet.
     const v = _regnCache.get(key);
@@ -1246,8 +1254,10 @@ function regnKjerne(state) {
 
   /* Rommet og kjøleskapet, slik brukeren har oppgitt dem. Alt som skal stå
      «i rommet» eller «på kjøl» måles mot disse to, ikke mot tabellens tall. */
-  const romT = isFinite(state.romTemp) ? +state.romTemp : ROM_NOMINELL;
-  const kjolskapT = isFinite(state.kjolskapTemp) ? +state.kjolskapTemp : KJOLSKAP_STD;
+  // num(), ikke isFinite direkte: isFinite(null) er TRUE, og romTemp: null ville
+  // gitt 0-graders rom og en gjærdose løst mot vinterkulde (teknisk review 01.08).
+  const romT = num(state.romTemp, ROM_NOMINELL);
+  const kjolskapT = num(state.kjolskapTemp, KJOLSKAP_STD);
   /* Rommet der FORFERMENTEN står kan være et annet enn der deigen hever — den
      settes ofte kvelden før (kjøligere kjøkken), mens bake-ut skjer på dagen med
      ovnen på. Egen verdi, med bulk-romtemp som fallback til brukeren setter den. */
@@ -1258,7 +1268,10 @@ function regnKjerne(state) {
   // Forferment: TYPEN eies av valget, TIDSPLANEN (timer, andel) av planen.
   const ffT = ffTypeFor(state.ffType);
   const ffPaa = !!state.ff && ffT.id !== 'ingen';
-  const pf = plan.forferment || {};
+  /* Presetets forferment-spec eier over planens: ciabattaen er kalibrert mot
+     Giorilli-bigaen (50 % av melet, 45 % hydrering, 18 t) — planens generiske
+     25–30 %-spec ga en annen deig enn den presetet lover (baker-review 01.08). */
+  const pf = (preset && preset.forferment) || plan.forferment || {};
   /* Forfermentens temperatur: planen/typen foreslår, brukeren bestemmer.
      `ffTemp` er null når man ikke har rørt den, og da gjelder forslaget som før.
      Gjærdosen i forfermenten løses mot NETTOPP denne temperaturen
@@ -1344,6 +1357,11 @@ function regnKjerne(state) {
   const oppskrift = (gjaerPct, mFro) => beregnOppskrift({
     melListe, froListe: tilleggOppdelt(state.tillegg, mFro).froListe,
     hydrering: hyd, saltPct, ...smak,
+    /* Presetets egne smakstillegg — focaccia eier 4 % olje i deigen. De ble
+       bare lest av V1; i V2 nullstiller nyBakst tilleggene for presets, så
+       focacciaen mistet oljen sin og ble «et flatbrød» med datafilas egne ord
+       (baker-review 01.08). Presetets felt legges OPPÅ brukerens tillegg. */
+    ...(preset && preset.oljePct ? { oljePct: preset.oljePct } : {}),
     gjaerPct, gjaerType: 'torr', forferment,
     antall: state.antall || 1, vektPerBrod,
     froVannPaaToppen: state.froVannPaaToppen !== false
@@ -1450,14 +1468,14 @@ function regnKjerne(state) {
     /* Rekkefølgen er: din egen måling → en delt måling for nettopp denne
        maskinen → klasseanslaget i tabellen. En ekte måling er mer verdt enn et
        anslag, også når det er en annen som har gjort den. */
-    friksjonPerMin: state.maskin === 'egen' && isFinite(state.egenFriksjon) ? state.egenFriksjon
+    friksjonPerMin: state.maskin === 'egen' && state.egenFriksjon != null && isFinite(state.egenFriksjon) ? state.egenFriksjon
       : delfriksjon(state),
     minutter: eltMin
   };
   const dt = vanntemperatur(dtInn);
   // Kaldeste vann brukeren faktisk får. Kjøleskap varierer, så det er en
   // innstilling og ikke en konstant.
-  const kaldest = isFinite(state.kjolTemp) ? +state.kjolTemp : VANN_KALDEST_STD;
+  const kaldest = num(state.kjolTemp, VANN_KALDEST_STD);
 
   // Løftindeks. Frø-leddet teller BARE ekte frø (ikke korn) — korn ligger
   // allerede i grovheten (brodskala), så å telle dem her ville vært dobbelt.
@@ -1668,7 +1686,16 @@ function kjede(state, r, ferdigMs) {
      planlagt temperering. Det varme utbakte tilfellet (bevisst underhevet, hever
      ferdig på benk) beholder 30 min, og uformet bulk i boks beholder UTBAK. */
   const POSTPROOF_KALD = 10;
-  const POSTPROOF = sisteUtbakt ? (sisteKaldt ? POSTPROOF_KALD : 30) : KJEDE.UTBAK;
+  /* Varmt utbakt sluttrinn: 15 min, ikke 30. Gjærdosen løses slik at FULL
+     hevegrad nås ved slutten av siste plantrinn — 30 min ekstra benkestå var
+     ubudsjettert gjæringstid dosemodellen aldri så: +40 % på «Samme dag» og
+     +67 % på «Ekspress», i planer der hevevinduet er 10–20 min bredt
+     (baker-review 01.08). Kvarteret dekker snitting og innlasting, ikke heving. */
+  const POSTPROOF = sisteUtbakt ? (sisteKaldt ? POSTPROOF_KALD : 15) : KJEDE.UTBAK;
+  // Preset-prosessene eier egne forme-/snitteinstruksjoner (ciabatta deles,
+  // baguetter trekkes ut) — se overstyringene der stegene bygges.
+  const presetId = r.preset ? r.preset.id : null;
+  const romTK = (state.romTemp != null && isFinite(state.romTemp)) ? +state.romTemp : 24;
 
   /* Formen bestemmer HVORDAN emnet hviler og hva teksten kan love.
      `kjede()` leste aldri `state.form`, så «Uten form» fikk beskjed om å legge
@@ -1778,9 +1805,13 @@ function kjede(state, r, ferdigMs) {
     { id: 'bloet', navn: 'Bløtlegg kaldt', varighet: KJEDE.PREP,
       gjor: 'Kaldt vann, ca. 1,85× det de binder, og hell av overskuddet før de går i deigen. Minst 30 minutter.',
       sjekk: 'Ingen tørre kjerner igjen. Bløtlegger du ikke, trekker de vann ut av glutenet gjennom hele bulken.' },
-    { id: 'skald', navn: 'Skåld', varighet: KJEDE.PREP,
-      gjor: 'Hell nøyaktig det som bindes, med KOKENDE vann. Alt skåldevannet skal med i deigen — det bærer sukkerartene og stivelsen skåldingen frigjør. Avkjøl grynene til romtemperatur før de går i deigen, ellers drar de opp deigtemperaturen.',
-      sjekk: 'Grynene skal være helt mettede og kladde seg sammen. Kaldbløtlagt rugknekk blir grus i brødet.' }
+    /* Skåld: 90 min, ikke PREP-30. Steget krever selv «avkjøl til romtemp», men
+       150–260 g nykokt skåld holder 40–60 °C etter en halvtime og drar deig-
+       temperaturen 2–4 °C opp — mot en varmebalanse appen ellers regner på
+       tidels grad (baker-review 01.08). Bredt utover et brett rekker det på 90. */
+    { id: 'skald', navn: 'Skåld', varighet: 90,
+      gjor: 'Hell nøyaktig det som bindes, med KOKENDE vann. Alt skåldevannet skal med i deigen — det bærer sukkerartene og stivelsen skåldingen frigjør. Bre så skålden TYNT utover et brett: da er den romtemperert på en halvtimes tid. Varm skåld i deigen velter varmebalansen — vannet er regnet mot kald skåld.',
+      sjekk: 'Grynene skal være helt mettede og kladde seg sammen — og kjennes romtempererte før de går i. Kaldbløtlagt rugknekk blir grus i brødet.' }
   ];
   BEH.forEach(b => {
     const med = froAktive.filter(x => x.behandling === b.id);
@@ -1858,12 +1889,28 @@ function kjede(state, r, ferdigMs) {
       hoved: fmtTimer(tr.timer), hovedNote: 'ved ' + grader(tr.miljo, 1), sideK: 'Andel hoveddeig', sideV: pst(andel, 0),
       tall: [['Varighet', fmtTimer(tr.timer)], ['Ferdig', kl(tt.slutt)], ['Miljø', grader(tr.miljo, 1)],
              ['Andel av hoveddeigens gjæring', pst(andel, 0)], ...(tr.utbakt ? [['Emnestørrelse', gram(r.totalVekt / antall) + ' × ' + antall]] : [['Mål stigning', riseTxt]])],
-      gjor: kaldt
+      /* Kald-tekstene skiller nå på LENGDE og FORM (baker-review 01.08):
+         - «mesteparten skjer de første 6 timene» er sant for 14–20 t retard,
+           men meningsløst på et 3-timers kaldtrinn der hele trinnet ER
+           nedkjølingsfasen.
+         - utildekket HELE veien gir riktig skinn på 30–60 min, men lærskinn
+           etter 14+ timer — og for brødform gjelder skinn-argumentet ikke.
+         Varme trinn med miljø godt over rommet sier nå også HVORDAN man lager
+         de gradene — dosen er løst mot dem. */
+      gjor: (kaldt
         ? (tr.utbakt
-            ? 'Emnene står UTILDEKKET ' + hvileSted + ' på kjøl — utildekket gir skinn, og skinn gir blemmer og rent snitt. Mesteparten av gjæringen skjer de første 6 timene, mens deigen ennå kjøles ned.'
-            : 'Deigen står tett tildekket på kjøl. Mesteparten av gjæringen skjer de første 6 timene, mens den ennå kjøles ned.')
+            ? (iBrodform
+                ? 'Formen står løst tildekket på kjøl — formbrødet skal ikke bygge skinn, det stekes i formen uten snitt-krav.'
+                : (tr.timer >= 8
+                    ? 'Emnene står ' + hvileSted + ' på kjøl: UTILDEKKET den første halvtimen så overflaten setter seg (skinnet gir blemmer og rent snitt), deretter løst i pose resten av tiden — ' + fmtTimer(tr.timer) + ' utildekket gir lærskinn som hemmer ovnsløftet.'
+                    : 'Emnene står UTILDEKKET ' + hvileSted + ' på kjøl — utildekket gir skinn, og skinn gir blemmer og rent snitt.'))
+            : 'Deigen står tett tildekket på kjøl.')
         : (i === 0 ? 'Brett i første halvdel, så ikke rør deigen etterpå. Bretting bygger struktur bare mens glutenet er tøyelig.'
-                   : 'Følg emnene tett — hevevinduet er smalt når det er varmt.'),
+                   : 'Følg emnene tett — hevevinduet er smalt når det er varmt.'))
+        + (kaldt
+            ? (tr.timer >= 8 ? ' Mesteparten av gjæringen skjer de første 6 timene, mens deigen ennå kjøles ned.'
+                             : ' Trinnet er kort nok til at deigen gjærer aktivt hele tiden — det er nedkjølingen som er poenget, ikke stillstand.')
+            : (tr.miljo >= romTK + 2 ? ' Trinnet er regnet ved ' + grader(tr.miljo, 0) + ', over rommet ditt: avslått ovn med lyset på, eller en tett boks med en kopp nykokt vann, holder 26–28 °C.' : '')),
       sjekk: kaldt ? 'Se på emnet før du steker: det skal ha vokst tydelig og kjennes luftig, ikke stinnt.'
                    : (tr.utbakt ? 'Trykktest før ovnen: gropen skal fylle seg langsomt igjen over 5–10 sekunder.'
                                 : 'Sikt mot ' + riseTxt + ' stigning i målekrukka. Grovt mel og mye vann tåler mindre stigning enn en loff — går den lenger, mister den løftet i ovnen.'),
@@ -1878,17 +1925,33 @@ function kjede(state, r, ferdigMs) {
   });
 
   // Forming — foran det utbakte kaldhevingstrinnet (bare når et trinn er utbakt).
+  /* Preset-prosessene eier formingen sin: en ciabatta på 82 % DELES med skrape
+     (å forme en boule degasser nettopp hullene som er poenget), og baguetter
+     forformes til løse rektangler og trekkes ut — ikke rundes (baker-review
+     01.08: presetene fikk generisk boule-forming). */
+  const presetForming = {
+    ciabatta: {
+      gjor: 'Hell deigen ut på GODT melet benk og del den i ' + antall + ' rektangler med skrape — ett bestemt kutt per side, ikke sag. IKKE form, ikke stram opp, ikke rund: luftigheten er hele poenget. Melede hender, og løft hvert rektangel med skrapen.',
+      sjekk: 'Rektanglene skal beholde tykkelsen på benken. Siger de utover, var deigen for varm eller delingen for hardhendt — jobb raskere og kaldere neste gang.'
+    },
+    baguette: {
+      gjor: 'Forform til LØSE rektangler — ikke kuler; runding bygger spenning som kjemper mot uttrekket. Hvil 15–20 min under klede, og trekk så ut til lengder i to omganger med hvile imellom. Håndter bare de ytterste millimeterne.',
+      sjekk: 'Emnet skal strekke seg av egen vekt uten motstand. Kjemper det imot, gi det 10 minutter til før neste uttrekk.'
+    }
+  }[presetId];
   if (formTid) {
     steg.push({
-      id: 'form', navn: 'Form emnene', tid: formTid.start, varighet: KJEDE.FORM, tone: 'accent',
+      id: 'form', navn: presetId === 'ciabatta' ? 'Del emnene' : 'Form emnene', tid: formTid.start, varighet: KJEDE.FORM, tone: 'accent',
       hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Benkehvile', sideV: '15–20 min',
       tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)],
-             ['Forforming', 'rund opp, hvil 15–20 min'],
-             ['Forming', erAvlang ? 'stram, avlang — ' + hvileSted : 'stram overflatespenning, ' + hvileSted],
-             ...(formV ? [['Form', formV.navn]] : [])],
-      gjor: 'Forform lett til runde emner, la dem hvile 15–20 min under klede, form så til ' + formeOrd + ' og legg dem ' + hvileSted + '. Håndter bare de ytterste millimeterne.' +
+             ['Forforming', presetId === 'ciabatta' ? 'ingen — deles direkte' : 'rund opp, hvil 15–20 min'],
+             ['Forming', presetId === 'ciabatta' ? 'deles med skrape, formes ikke' : (erAvlang ? 'stram, avlang — ' + hvileSted : 'stram overflatespenning, ' + hvileSted)],
+             ...(formV && !presetForming ? [['Form', formV.navn]] : [])],
+      gjor: presetForming ? presetForming.gjor
+        : 'Forform lett til runde emner, la dem hvile 15–20 min under klede, form så til ' + formeOrd + ' og legg dem ' + hvileSted + '. Håndter bare de ytterste millimeterne.' +
             (ingenKurv ? ' Uten kurv er det bare glutennettverket som holder fasongen — form strammere enn du ville gjort i en kurv, og la emnet stå kort.' : ''),
-      sjekk: ingenKurv
+      sjekk: presetForming ? presetForming.sjekk
+        : ingenKurv
         ? 'Emnet skal holde en stram kuppel av seg selv. Flyter det utover på brettet allerede nå, er det for vått eller for lite utviklet for fri heving — bruk kurv eller form neste gang.'
         : 'Emnet skal holde en stram kuppel og ikke flyte ut når du slipper det. Flyter det, trenger deigen mer struktur eller mindre vann.'
     });
@@ -1910,7 +1973,12 @@ function kjede(state, r, ferdigMs) {
       id: 'snitt', navn: 'Snitt kaldt og sett inn', tid: postStart, varighet: POSTPROOF, tone: 'noytral',
       hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Rett fra kjøl', sideV: POSTPROOF + ' min',
       tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)], ['Rett fra kjøl', 'ikke temperer — snitt kaldt'], ['Benkestå', 'bare det snittingen tar'], ['Kald deig', '+2–4 min steketid']],
-      gjor: 'Ta emnene RETT FRA KJØL — ikke la dem stå og temperere. Vend på plata med god side opp og snitt kaldt: kald deig holder snittet bedre og gir bredere ovnsløft, fordi den kalde kjernen er strekkbar lenge etter at gassen har begynt å utvide seg. IKKE form på nytt: da degasser du blæreskinnet du nettopp bygde. Regn +2–4 min ekstra steketid siden emnet går kaldt inn.' + snittRaad,
+      /* Formbrød VENDES IKKE: formen er valgt fordi deigen trenger bæring, og
+         en våt, grov formdeig som vendes ut på plate kollapser. Det stekes i
+         formen, og kan stå usnittet (baker-review 01.08). */
+      gjor: iBrodform
+        ? 'Ta formen RETT FRA KJØL — ikke la den stå og temperere, og IKKE vend emnet ut: det stekes i formen. Ett langsgående snitt, eller ingen — riktig hevet sprekker det pent langs kanten. Regn +2–4 min ekstra steketid siden emnet går kaldt inn.'
+        : 'Ta emnene RETT FRA KJØL — ikke la dem stå og temperere. Vend på plata med god side opp og snitt kaldt: kald deig holder snittet bedre og gir bredere ovnsløft, fordi den kalde kjernen er strekkbar lenge etter at gassen har begynt å utvide seg. IKKE form på nytt: da degasser du blæreskinnet du nettopp bygde. Regn +2–4 min ekstra steketid siden emnet går kaldt inn.' + snittRaad,
       sjekk: 'Snittet skal åpne seg rent. Emnet er kaldt og fast — det er riktig; ovnsløftet kommer i ovnen, ikke på benken. Et fullhevet emne som får stå og bli varmt overhever i stedet.'
     });
   } else if (sisteUtbakt) {
@@ -1919,8 +1987,14 @@ function kjede(state, r, ferdigMs) {
       id: 'snitt', navn: 'Snitt og sett inn', tid: postStart, varighet: POSTPROOF, tone: 'noytral',
       hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Fra benken', sideV: POSTPROOF + ' min',
       tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)], ['Fra benken', 'romtemperert, ferdig hevet'], ['Benkestå', 'ingen ny heving']],
-      gjor: 'Emnet er ferdig hevet i romtemperatur. Vend det på plata med god side opp og snitt rett før det går inn. IKKE form på nytt: da degasser du det du nettopp bygde. Et romtemperert emne er mykere enn et kaldt, så bladet må være vått og draget bestemt.' + snittRaad,
-      sjekk: 'Trykktest: gropen skal fylle seg langsomt igjen over 5–10 sekunder. Fyller den seg ikke, er emnet overhevet — sett det inn med én gang.'
+      gjor: presetId === 'ciabatta'
+        ? 'Løft rektanglene over på bakepapir med skrapen — gjerne opp-ned, så melsiden vender opp. INGEN snitting: kuttene fra delingen er åpningene. Rett inn i ovnen; kvarteret her er flytting og innlasting, ikke en ny heving.'
+        : iBrodform
+          ? 'Emnet er ferdig hevet i formen — IKKE vend det ut, det stekes i formen. Ett langsgående snitt, eller ingen. Sett inn med én gang; kvarteret her er snitting og innlasting, ikke en ny heving.'
+          : 'Emnet er ferdig hevet i romtemperatur. Vend det på plata med god side opp og snitt rett før det går inn. IKKE form på nytt: da degasser du det du nettopp bygde. Et romtemperert emne er mykere enn et kaldt, så bladet må være vått og draget bestemt. Sett inn med én gang — kvarteret her er snitting og innlasting, ikke en ny heving.' + snittRaad,
+      sjekk: presetId === 'ciabatta'
+        ? 'Rektanglene skal være luftige og slappe — det er riktig. Har de sunket helt sammen, var benkehvilen for lang.'
+        : 'Trykktest: gropen skal fylle seg langsomt igjen over 5–10 sekunder. Fyller den seg ikke, er emnet overhevet — sett det inn med én gang.'
     });
   } else {
     steg.push({
@@ -1944,11 +2018,20 @@ function kjede(state, r, ferdigMs) {
        ikke har, og om at gryta ordner dampen. Da er rådet ikke bare unyttig, det
        er villedende: på brett er det nettopp mangelen på damp man må gjøre noe
        med. `lokket` står nå på profilen selv. */
+    /* To ULIKE «ingen»-verdier (baker-review 01.08): `damp:'ingen'` betyr at
+       brødet SKAL ha tørr varme (focaccia — damp mykner toppen, og et snitt
+       punkterer groppene), mens brett-profilens «ingen tilsatt — …» betyr at
+       dampen mangler og må lages. Før fikk focaccia-bakeren beskjed om både
+       vannform og snitt. */
     gjor: prof.lokket
       ? 'Ingen damp å tilsette — lokket/gryta gjør jobben. Ett bestemt drag med buet blad før lokket på.'
-      : (prof.damp === 'ingen' || String(prof.damp).startsWith('ingen'))
-        ? 'Ingen forvarmet masse og ingen gryte her, så dampen må du lage selv: sett en form med kokende vann i bunnen av ovnen når du setter inn brødet, og ta den ut etter 15 minutter. Ett bestemt drag med buet blad før det går inn.'
-        : 'Kokende vann fra kjelen i det du setter inn. Ett bestemt drag med buet blad.',
+      : prof.damp === 'ingen'
+        ? 'Ingen damp her — dette brødet skal ha tørr varme.' + (presetId === 'focaccia'
+            ? ' Ingen snitting: gropene fra fingrene er «snittet». Ringle over salamoiaen rett før den går inn.'
+            : ' Ingen snitting nødvendig.')
+        : String(prof.damp).startsWith('ingen')
+          ? 'Ingen forvarmet masse og ingen gryte her, så dampen må du lage selv: sett en form med kokende vann i bunnen av ovnen når du setter inn brødet, og ta den ut etter 15 minutter. Ett bestemt drag med buet blad før det går inn.'
+          : 'Kokende vann fra kjelen i det du setter inn. Ett bestemt drag med buet blad.',
     sjekk: 'Ovnsløftet varer 15–20 minutter, med 80 % levert i de første 10–12. Ikke åpne døra i den perioden.'
   });
 
