@@ -179,10 +179,10 @@ function lagre() {
     S.oppdatert = Date.now();
     _sisteAvtrykk = avtrykk;
   }
-  try { localStorage.setItem(LAGER, JSON.stringify(S)); }
+  try { localStorage.setItem(LAGER, JSON.stringify(S)); _lagringFull = false; }
   catch (e) {
     // Full kvote feilet før i stillhet: appen så ut til å lagre, og ved neste
-    // omstart var dagens arbeid borte.
+    // omstart var dagens arbeid borte. Flagget rendres som banner i toppen.
     if (String(e && e.name) === 'QuotaExceededError') _lagringFull = true;
   }
   if (endret && kanSynke()) Sky.lagreOpp(S);
@@ -470,6 +470,14 @@ function renderInner() {
     const km = byId('kompmodal'); if (km) km.remove();
     return;
   }
+  /* Kald forferment følger kjøleskapet — det er ÉN måling. `ffTemp` lagres som
+     tall når man velger «I kjøleskapet», og uten denne synken regnet motoren
+     videre på det gamle tallet etter at kjøleskapet ble justert på Tid, mens
+     pillen viste det nye (teknisk review 01.08). */
+  if (S.ffTemp != null && isFinite(S.ffTemp) && S.ffTemp <= KALDGRENSE_APP
+      && S.kjolskapTemp != null && isFinite(S.kjolskapTemp) && S.ffTemp !== +S.kjolskapTemp) {
+    S.ffTemp = +S.kjolskapTemp;
+  }
   const r = regn(S);
   const K = kjede(S, r, S.ferdigMs != null ? S.ferdigMs : standardFerdig());
   const sk = SKJERMER.find(s => s.id === S.skjerm) || SKJERMER[0];
@@ -477,6 +485,11 @@ function renderInner() {
   const toppBarn = [h('h1', null,
     sk.steg ? h('span', { class: 'steg-tall' }, sk.steg + ' av ' + ANTALL_STEG) : null,
     sk.tittel)];
+  /* Full lagring skal aldri feile i stillhet: banneret står til en lagring
+     lykkes igjen (flagget nullstilles i lagre()). */
+  if (_lagringFull) toppBarn.push(h('div', { class: 'varsel fare', style: 'margin-top:8px' },
+    h('b', null, 'Lagringen er full. '),
+    'Endringer lagres ikke lenger på denne enheten. Slett noen loggbilder, eller last ned en sikkerhetskopi (Logg → Sikkerhetskopi) og rydd — så virker lagringen igjen.'));
   // Aktiv timer bindes til topplinja, så den er synlig uansett hvilken skjerm
   // man står på — og alarmen kan skrus av herfra.
   const tt = tegnTopplinjeTimer();
@@ -492,6 +505,13 @@ function renderInner() {
 
   const tegner = { brodet: tegnBrodet, deigen: tegnDeigen, tid: tegnTid, prosess: tegnProsess, logg: tegnLogg, oppslag: tegnOppslag }[S.skjerm];
   innhold.replaceChildren(tegner(r, K));
+  /* Synlig vei VIDERE på steg 1–3: steg-pillen sier «1 av 4», men uten denne
+     knappen var bunnmenyen eneste hint om at fanene er en sekvens — en
+     førstegangsbruker ble stående (ux-review 01.08). */
+  const neste = { brodet: ['deigen', 'Deig'], deigen: ['tid', 'Tid'], tid: ['prosess', 'Prosess'] }[S.skjerm];
+  if (neste) innhold.appendChild(h('button', {
+    class: 'btn btn-primary btn-full', style: 'margin:14px 0 4px',
+    onClick: () => bytt(neste[0]) }, 'Videre: ' + neste[1] + ' ›'));
   innhold.scrollTop = scroll;
   /* Hold det trykte elementet i ro: fant vi et anker rett før denne renderen,
      flytt scrollen så elementet havner tilbake der det var da man traff det.
@@ -585,7 +605,11 @@ function tilpassVindu(startMs, ferdigMs) {
     span = (ferdigMs - K.start.getTime()) / 3600000;
     const diff = maalT - span;
     if (Math.abs(diff) < 0.05) break;
-    trinn[idx] = Object.assign({}, trinn[idx], { timer: Math.max(0, Math.round((trinn[idx].timer + diff) * 4) / 4) });
+    /* Gulv 0,05, ikke 0: `last()` kaster trinn med timer <= 0 ved neste
+       oppstart, så et 0-timers trinn (med utbakt-flagget sitt!) forsvant
+       stille etter reload og ga en ANNEN plan enn den brukeren så (teknisk
+       review 01.08). 0,05 t overlever lasting og leses som «i praksis null». */
+    trinn[idx] = Object.assign({}, trinn[idx], { timer: Math.max(0.05, Math.round((trinn[idx].timer + diff) * 4) / 4) });
   }
   // Etter klemming til 0: sjekk hva vinduet FAKTISK ble (for kort → span > mål).
   const st = Object.assign({}, S, { heveplan: trinn, ferdigMs });
@@ -621,7 +645,7 @@ function tegnBunnlinje(r, K) {
      stod åpent. Stabile noder er hele løsningen. */
   let stripe = byId('bunnStripe');
   if (!stripe) {
-    stripe = h('button', { class: 'stripe', id: 'bunnStripe',
+    stripe = h('button', { class: 'stripe', id: 'bunnStripe', 'aria-label': 'Deigregnskap — åpne eller lukk',
       onClick: () => { S.regnskapAapen = !S.regnskapAapen; oppdater(); } });
     bl.insertBefore(stripe, bl.firstChild);
   }
@@ -768,22 +792,21 @@ function tegnBrodet(r, K) {
     const boks = h('div');
     boks.appendChild(rad);
     if (S.brodInfo === bt.id) boks.appendChild(brodInfoBoks(bt, paa ? K : null));
+    /* «Er du sikker?» rett UNDER kortet man trykket, ikke etter hele lista:
+       med varselet under folden så trykket ut som det ikke virket (ux-review
+       01.08 — kortet lyser ikke opp før man har bekreftet). */
+    if (S.byttBekreft === bt.id) {
+      boks.appendChild(h('div', { class: 'varsel', style: 'margin-top:6px' },
+        h('div', { style: 'font-weight:800;margin-bottom:4px' }, 'Bytte til ' + bt.navn + ' — starte på nytt?'),
+        h('div', { style: 'font-size:.8rem;line-height:1.45' },
+          'Da nullstilles deigvalgene dine (tillegg, vann, salt, grovhet og heveplan) til ' +
+          bt.navn.toLowerCase() + 's egen oppskrift. Utstyr, maskin, logg og favoritter beholdes.'),
+        h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
+          h('button', { class: 'btn btn-primary', style: 'flex:1;font-size:.82rem', onClick: () => nyBakst(S.byttBekreft) }, 'Ja, start på nytt'),
+          h('button', { class: 'btn', style: 'flex:1;font-size:.82rem', onClick: () => { S.byttBekreft = null; oppdater(); } }, 'Avbryt'))));
+    }
     return boks;
   })));
-
-  // «Er du sikker?» — å bytte bakst er å starte på nytt, og det skal bekreftes.
-  // (Selve ⓘ-innholdet ligger i brodInfoBoks() rett under.)
-  if (S.byttBekreft) {
-    const ny = BTYPER.find(b => b.id === S.byttBekreft);
-    wrap.appendChild(h('div', { class: 'varsel' },
-      h('div', { style: 'font-weight:800;margin-bottom:4px' }, 'Bytte til ' + ny.navn + ' — starte på nytt?'),
-      h('div', { style: 'font-size:.8rem;line-height:1.45' },
-        'Da nullstilles deigvalgene dine (tillegg, vann, salt, grovhet og heveplan) til ' +
-        ny.navn.toLowerCase() + 's egen oppskrift. Utstyr, maskin, logg og favoritter beholdes.'),
-      h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
-        h('button', { class: 'btn btn-primary', style: 'flex:1;font-size:.82rem', onClick: () => nyBakst(S.byttBekreft) }, 'Ja, start på nytt'),
-        h('button', { class: 'btn', style: 'flex:1;font-size:.82rem', onClick: () => { S.byttBekreft = null; oppdater(); } }, 'Avbryt'))));
-  }
 
   // Størrelse
   const emneMasse = r.totalVekt / Math.max(S.antall, 1);
@@ -965,7 +988,12 @@ function nyBakst(id) {
        en ciabatta kunne bli bakt på 60 % sammalt rug — stikk i strid med det
        bekreftelsesteksten lover. */
     melOverstyr: null, melEndring: null, okDeig: false, autolyseMin: 0,
-    ffTemp: null, ffTimer: null, handlelisteOk: false, kompSporsmal: false, brodInfo: null
+    ffTemp: null, ffTimer: null, handlelisteOk: false, kompSporsmal: false, brodInfo: null,
+    /* Tidsvinduet og forferment-romtempen hører også til BAKSTEN: sto vindu-
+       modusen igjen etter et brødtypebytte, viste Tid et aktivt vindukort som
+       «fittet» mot en plan som alt var nullstilt — tallene stemte ikke med noe
+       (teknisk review 01.08). */
+    tidModus: 'ferdig', vinduStart: null, ffRomTid: null, ffRomTemp: null
   });
   if (bt.antall) S.antall = bt.antall;
   if (bt.vekt) S.vekt = bt.vekt;
@@ -974,6 +1002,11 @@ function nyBakst(id) {
   if (bt.rute === 'preset') {
     const pr = PRESETS.find(p => p.id === id);
     if (pr && pr.forferment) { S.ff = !!pr.forferment.bruk; S.ffType = pr.forferment.type === 'pate' ? 'biga' : pr.forferment.type; }
+    /* Presetet EIER stekingen sin (ciabatta 260° midt i ovnen, focaccia i form
+       uten damp) — utstyrsutledningen ga alle presetene generisk brød-profil,
+       så en ciabatta ble stekt 45 min under Pyrex-klokke (baker-review 01.08).
+       Finnes presetets profil, brukes den; brukeren kan fortsatt overstyre. */
+    if (pr && pr.steking && BAKE_PROFILES.find(p => p.id === pr.steking)) S.stekeProfil = pr.steking;
   }
   oppdater();
 }
@@ -1402,7 +1435,7 @@ function tegnMelEndring(r) {
 
 function kort(num, infoId, ...barn) {
   const hode = h('div', { class: 'kort-num' }, num);
-  if (infoId) hode.appendChild(h('button', { class: 'info-knapp ikon', 'aria-label': 'Info', onClick: () => toggleInfo(infoId) }, infoIkon(26)));
+  if (infoId) hode.appendChild(h('button', { class: 'info-knapp ikon', 'aria-label': 'Info om ' + num, onClick: () => toggleInfo(infoId) }, infoIkon(26)));
   return h('div', { class: 'kort' }, hode, ...barn);
 }
 function toggleInfo(id) { S.paramInfo = S.paramInfo === id ? null : id; oppdater(); }
@@ -2198,10 +2231,16 @@ function tegnTid(r, K) {
     h('span', { class: 'tid-dato' }, datoKort(ms)),
     h('span', { class: 'tid-kl' }, klHM(ms)),
     h('span', { class: 'tid-under' }, under));
+  /* Streken mellom radene viser strekningen MELLOM dem — tilOvnenT, ikke
+     totalen med nedkjøling (to skjermer sa ulike tall for samme spenn,
+     ux-review 01.08). Nedkjølingen har fått egen rad: «ferdig» i tittelens
+     forstand er når brødet kan skjæres, ikke når det kommer ut av ovnen. */
   const oppsum = h('div', { class: 'tid-oppsum' },
     tidRad('STARTER', 'start', startMs, 'du begynner: ' + forsteNavn),
-    h('div', { class: 'tid-strek' }, h('span', null, '↓ ' + fmt(K.totalT, 1) + ' t fra start til avkjølt brød')),
-    tidRad('UT AV OVNEN', 'ferdig', ferdigMs, 'brødet er stekt og skal kjøle'));
+    h('div', { class: 'tid-strek' }, h('span', null, '↓ ' + fmt(K.tilOvnenT, 1) + ' t fra start til ut av ovnen')),
+    tidRad('UT AV OVNEN', 'ferdig', ferdigMs, 'brødet er stekt og skal kjøle'),
+    h('div', { class: 'tid-strek' }, h('span', null, '↓ ' + fmt(K.kjolT, 1) + ' t nedkjøling på rist')),
+    tidRad('KLAR', 'ferdig', ferdigMs + K.kjolT * 3600000, 'avkjølt — nå kan det skjæres'));
   /* Ukedagene skrives ut, ikke forkortet til «fre» og «lør» midt i en setning.
      Der leste de som ord man snublet i; skrevet helt ut er de det man faktisk
      trenger å få med seg. */
@@ -2976,7 +3015,7 @@ function tegnTimerpanel() {
   } else if (varslingStottes() && Notification.permission === 'denied') {
     boks.appendChild(h('div', { class: 'timer-hint' },
       'Varsling er avslått for denne siden — timeren teller ned her, men ringer ikke. Slå den på igjen i nettleserens innstillinger.'));
-  } else if (Notification.permission === 'granted' && !planlagteVarslerStottes()) {
+  } else if (varslingStottes() && Notification.permission === 'granted' && !planlagteVarslerStottes()) {
     // Ærlig om den reelle begrensningen: uten en push-tjeneste kan ikke en PWA
     // vekke en LÅST telefon. Timeren holder skjermen på mens den går (wakelock),
     // så den ringer så lenge du ikke slår av skjermen selv.
@@ -3201,7 +3240,9 @@ function tegnLogg(r) {
     h('div', { class: 'kort-num' }, 'Loggfør dette baket'),
     h('div', { class: 'hjelpetekst', style: 'margin-top:6px' }, 'Forskjellen mellom en god og en fantastisk gjærbaker er en loggbok, ikke en surdeig. Endre én variabel per bak.'),
     h('input', { class: 'sok', style: 'margin-top:10px', placeholder: 'Navn — f.eks. Halvgrovt med svedjerug', value: S.lgNavn,
-      oninput: e => { S.lgNavn = e.target.value; } }),
+      // onblur lagrer: drepes fanen midt i et mange-timers bak (vanlig på
+      // mobil), skal ikke navnet være borte (ux-review 01.08).
+      oninput: e => { S.lgNavn = e.target.value; }, onblur: () => lagre() }),
     h('div', { style: 'display:flex;align-items:center;gap:12px;margin-top:4px' },
       h('div', { class: 'felt-label', style: 'flex:1' }, 'Karakter'),
       h('div', { class: 'stepper', style: 'width:170px' },
@@ -3235,7 +3276,7 @@ function tegnLogg(r) {
 
   if (!S.loggListe.length) {
     wrap.appendChild(h('div', { class: 'tomkort', style: 'margin-top:12px' },
-      h('div', { class: 'hjelpetekst' }, 'Ingen bak logget ennå. Referansen appen måler mot kommer fra forvalget til du lagrer ditt første bak — da får avvikstallene et ekte anker.')));
+      h('div', { class: 'hjelpetekst' }, 'Ingen bak logget ennå. Lagre det første når brødet er ute av ovnen — så kan du alltid hente oppskriften tilbake med «Bak dette på nytt».')));
   } else {
     wrap.appendChild(h('div', { class: 'seksjonstittel' }, 'Tidligere bakeøkter'));
     // Nyeste først, men med den EKTE indeksen i behold — reverse() på en kopi
@@ -3458,7 +3499,14 @@ function leggTilBilde(fil, loggIdx) {
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       const data = c.toDataURL('image/jpeg', 0.7);
       // Vern mot full localStorage: nekt heller ett nytt bilde enn å miste alt.
-      if (JSON.stringify(S).length + data.length > 4200000) {
+      // Målt mot ALT appen lagrer i origin (hovedtilstand + logg-arkiver +
+      // enhetsbøtte), ikke bare hovednøkkelen — arkivene kan alene doble
+      // forbruket, og da slapp vakten gjennom bilder som sprengte 5 MB-kvoten
+      // i stillhet (release-review 01.08).
+      let brukt = 0;
+      try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf('forgebakery') === 0) brukt += (localStorage.getItem(k) || '').length; } }
+      catch (e) { brukt = JSON.stringify(S).length; }
+      if (brukt + data.length > 4200000) {
         alert('Lagringen i nettleseren er nesten full — last ned en sikkerhetskopi og slett gamle bilder først.');
         return;
       }
@@ -3518,7 +3566,7 @@ function tegnBackup() {
     'aria-label': 'Velg sikkerhetskopi', onchange: e => hentInnKopi(e.target.files && e.target.files[0]) });
   const boks = kort('Sikkerhetskopi', null);
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:6px' },
-    'Alt du legger inn ligger kun i denne nettleseren — sletter du nettleserdata, er det borte. Last ned en kopi nå og da; fila kan hentes inn igjen på en ny telefon. Ekte innlogging med sky-lagring står på planen, men krever en server.'));
+    'Skyen er hovedlagringen når du er innlogget. Kopi-fila er en ekstra trygghet: last den ned nå og da, så kan alt hentes inn igjen på en ny telefon — også helt uten nett eller konto.'));
   boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
     h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: lastNedKopi }, 'Last ned kopi'),
     h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: () => inpFil.click() }, 'Hent inn kopi')));
@@ -3562,7 +3610,7 @@ function tegnOppslag(r) {
   const wrap = h('div');
   const punkter = [
     ['mel', 'Mel & korn', (typeof FLOURS !== 'undefined' ? FLOURS.length : 30) + ' meltyper: protein, glutenbidrag, absorpsjon, tak og pris. Stjernemerk favorittene.'],
-    ['teknikk', 'Teknikk og fagstoff', (typeof TIPS !== 'undefined' ? TIPS.length : 23) + ' seksjoner, verifisert mot forskning. Fire av dem motsier notatene.'],
+    ['teknikk', 'Teknikk og fagstoff', (typeof TIPS !== 'undefined' ? TIPS.length : 23) + ' seksjoner, verifisert mot forskning.'],
     ['steking', 'Stekeprofiler', 'Temperatur, damp og kjerne per metode — og hvilken planen din bruker. Stjernemerk favorittene.'],
     ['utstyr', 'Stekeutstyr', UTSTYR.length + ' oppsett: bunnvarme, damp og forvarming. Stjernemerk dem du faktisk bruker.'],
     ['ordliste', 'Ordliste', (typeof ORDLISTE !== 'undefined' ? ORDLISTE.length : 44) + ' fagord, gruppert, med kryssreferanser.']
@@ -3676,7 +3724,7 @@ function oppslagTeknikk() {
     const motsier = (t.tittel || '').includes('⚠') || (t.ikon === '⚠');
     const boks = h('details', { class: 'kort', style: 'padding:0' });
     boks.appendChild(h('summary', { style: 'padding:14px 16px;cursor:pointer;font-weight:700;font-size:.9rem;list-style:none;display:flex;gap:8px;align-items:center' },
-      motsier ? h('span', { class: 'pille', style: 'background:var(--color-accent-200);color:var(--color-accent-900)' }, '⚠ motsier') : null,
+      motsier ? h('span', { class: 'pille', style: 'background:var(--color-accent-200);color:var(--color-accent-900)' }, '⚠ vanlig råd som ikke stemmer') : null,
       t.tittel));
     const kropp = h('div', { style: 'padding:0 16px 14px' });
     (t.punkter || []).forEach(p => {
@@ -3983,6 +4031,8 @@ async function loggUtTrygt() {
          senere. Det var nettopp slik den lokale loggen kunne forsvinne for godt. */
   await Sky.loggUt();
   _harHentetNed = false;
+  _synkOk = false;                // porten lukkes med kontoen
+  settLagretUid(null);
 
   // 4 · Enhetens egne bak er tilbake — de var aldri kontoens.
   const arkivEnhet = lesArkiv(null);
@@ -4000,12 +4050,38 @@ async function synkVedInnlogging() {
   const sky = await Sky.hentNed();
   // Leseferil er IKKE det samme som «ingenting der oppe». Uten dette skillet
   // kunne et nettverksglipp få appen til å laste opp lokal tilstand over en
-  // historikk den aldri fikk lest.
-  if (sky && sky.feil) { render(); return; }
-  if (!sky || !sky.state) { Sky.lagreOpp(S); render(); return; }   // ingenting oppe ennå — legg opp det lokale
-  const skyMs = sky.oppdatert ? new Date(sky.oppdatert).getTime() : 0;
-  const lokaltMs = S.oppdatert || 0;
+  // historikk den aldri fikk lest. `_harHentetNed` slippes, så neste
+  // synlighetsbytte prøver igjen — før ble ett glipp stående til omstart
+  // (release-review 01.08).
+  if (sky && sky.feil) { _harHentetNed = false; render(); return; }
   const uid = naaKonto();
+  /* KONTOBYTTE PÅ SAMME ENHET: er den lokale tilstanden stemplet med en ANNEN
+     uid, er innstillingene, standardbrødet og kalibreringen forrige brukers —
+     de skal ikke flettes inn i (eller vinne over) den nye kontoens rad.
+     Loggen er alt vernet av eierskapsfeltene; her vernes resten: skyen vinner
+     ubetinget, og finnes ingenting der oppe, starter kontoen fra standard i
+     stedet for å arve naboens oppsett (teknisk review 01.08 — vernet var
+     skrevet, men aldri koblet på). */
+  const forrigeUid = lagretUid();
+  const kontoByttet = !!(forrigeUid && uid && forrigeUid !== uid);
+  settLagretUid(uid);
+  /* Kontoens ARKIV (skrevet ved forrige utlogging) flettes inn igjen — det er
+     hele grunnen til at utlogging flytter loggen dit i stedet for å slette
+     den. Før ble det skrevet, men aldri lest: en innlogging uten nett viste
+     tom logg tross at historikken lå lokalt (teknisk review 01.08). */
+  const arkiv = lesArkiv(uid);
+  if (arkiv.poster.length) {
+    const kjent = new Set((S.loggListe || []).map(b => b && b.id));
+    S.loggListe = (S.loggListe || []).concat(arkiv.poster.filter(b => b && !kjent.has(b.id)));
+    S.loggSlettet = [...new Set([].concat(S.loggSlettet || [], arkiv.slettet || []))];
+  }
+  if (!sky || !sky.state) {
+    if (kontoByttet) { S = nyStandard(); if (window.__FB) window.__FB.S = S; S.loggListe = arkiv.poster.slice(); S.loggSlettet = arkiv.slettet.slice(); }
+    _synkOk = true;                                                // flettet mot (tom) sky — porten kan åpnes
+    lagre(); Sky.lagreOpp(S); render(); return;                    // ingenting oppe ennå — legg opp det lokale
+  }
+  const skyMs = sky.oppdatert ? new Date(sky.oppdatert).getTime() : 0;
+  const lokaltMs = kontoByttet ? -1 : (S.oppdatert || 0);          // byttet konto → skyen vinner alltid
   // Del de lokale postene på eierskap FØR noe flettes. Bare kontoens egne skal
   // inn i kontoens logg; postene uten konto legges til side og spørres om.
   const lokalt = S.loggListe || [];
@@ -4015,7 +4091,9 @@ async function synkVedInnlogging() {
      forsvant fra kontoens logg — og ble lagt tilbake ved neste utlogging. Det
      er også grunnen til at en sletting på én enhet ikke ble borte på den andre:
      posten kom tilbake fra bøtta i stedet for å bli filtrert av gravsteinen. */
-  const mine = lokalt.filter(b => b && !erUtenKonto(b));
+  // Ved kontobytte: forrige brukers konto-poster (konto === en ANNEN uid) skal
+  // ikke inn i den nye kontoens logg — de tilhører raden de kom fra.
+  const mine = lokalt.filter(b => b && !erUtenKonto(b) && (!kontoByttet || !b.konto || b.konto === uid));
   const utenKonto = lokalt.filter(erUtenKonto);
   if (utenKonto.length) {
     const anon = lesAnon();
@@ -4043,8 +4121,23 @@ async function synkVedInnlogging() {
   // Loggen settes ETTER at innstillingene er avgjort, uansett hvem som vant.
   S.loggListe = flettet;
   S.loggSlettet = gravsteiner;
+  /* PORTEN ÅPNES FØRST NÅ: vi har hentet ned og flettet mot skyen for denne
+     kontoen — det er nøyaktig betingelsen `_synkOk` beskriver. Uten denne
+     tilordningen var den løpende synken DØD: `kanSynke()` ble aldri sann, og
+     endringer nådde skyen bare ved fokus-bytte og innlogging (funnet uavhengig
+     av to reviewer 01.08). */
+  _synkOk = true;
   lagre();                 // skriv det flettede lokalt (og stempl det, hvis det endret seg)
-  Sky.skyvNaa(S);          // og opp, så begge enhetene ender likt
+  /* Push tilbake bare når flettingen faktisk har noe skyen mangler: lokale
+     innstillinger som var nyest, eller poster/gravsteiner skyen ikke hadde. En
+     ubetinget push stemplet skyraden ved HVERT fokus-bytte — og siden stempelet
+     var opplastingstid, så en uendret enhet systematisk «nyere» ut enn enheten
+     med ekte endringer, som så ble rullet tilbake (release-review 01.08). */
+  const skyLogg = skyState.loggListe || [];
+  const skyGrav = skyState.loggSlettet || [];
+  if (lokaltMs > skyMs || flettet.length !== skyLogg.length || gravsteiner.length !== skyGrav.length) {
+    Sky.skyvNaa(S);
+  }
   render();
   hentDelteKalibreringer();
 }
@@ -4249,13 +4342,17 @@ function tikkTimere() {
 }
 
 function initTimere() {
-  if (typeof Notification === 'undefined') { S.timere = []; return; }
+  /* Uten Notification-API (iOS Safari i fane, eldre nettlesere) skal timerne
+     LIKEVEL telle ned og ringe i appen — bare OS-varslene mangler. Før
+     returnerte vi her, så tikken aldri startet: timere kunne legges til, men
+     sto frosset og ringte aldri (teknisk review 01.08). */
+  const harVarsel = typeof Notification !== 'undefined';
   const now = Date.now();
   // Rydd bort timere som gikk ut for mer enn en time siden; behold nye/pågående.
   S.timere = (S.timere || []).filter(t => t && isFinite(t.slutt) && t.slutt > now - 3600000);
   S.timere.forEach(t => {
     if (now >= t.slutt) t.ringt = true;                 // alt utgått: ikke pip på nytt ved lasting
-    else if (Notification.permission === 'granted') planleggVarsel(t);   // re-arm etter omstart
+    else if (harVarsel && Notification.permission === 'granted') planleggVarsel(t);   // re-arm etter omstart
   });
   if (_timerTikk == null) _timerTikk = setInterval(tikkTimere, 1000);
   // Wakelock slippes automatisk når fanen skjules — hent den igjen når appen

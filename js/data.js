@@ -326,7 +326,9 @@ const PRESETS = [
     refPlan:[
       { navn:'Bulk (romtemp)',    timer:2,  temp:25, miljo:25 },
       { navn:'Kjøleskap over natt', timer:16, temp:25, miljo:3.5 },
-      { navn:'Benkehvile utbakt', timer:0.75, temp:8, miljo:24 }
+      // utbakt:true — uten flagget regnet dosemodellen trinnet som hel batch i
+      // tett boks, og gjærkalibreringen bommet (baker-review 01.08).
+      { navn:'Benkehvile utbakt', timer:0.75, temp:8, miljo:24, utbakt:true }
     ],
     steking:'ciabatta',
     notat:'Ciabatta beholdes i boks over natta og bakes ut rett før steking. Deles opp 30–45 min før ovnen. Ett bestemt kutt med skrape — ikke sag, da river du glutenet og slipper ut gassen i sidene.'
@@ -342,7 +344,8 @@ const PRESETS = [
     gjaerType:'torr', gjaerPct:0.446,   // kalibrert til dose 1,84 (var 0,367 → 1,53 — den eneste som lå FOR LAVT)
     refPlan:[
       { navn:'Bulk (romtemp)',    timer:2,   temp:24, miljo:24 },
-      { navn:'Etterheving kurv',  timer:1.25, temp:24, miljo:24 }
+      // utbakt:true — se ciabatta-kommentaren; delte emner, ikke bulk i boks.
+      { navn:'Etterheving kurv',  timer:1.25, temp:24, miljo:24, utbakt:true }
     ],
     steking:'baguette',
     notat:'Forform til løse rektangler, ikke kuler — runding bygger spenning som kjemper mot uttrekket. Benkehvilen dømmes på følelse: emnet skal strekke seg av egen vekt uten motstand.'

@@ -182,9 +182,20 @@ async function skyv() {
   if (!klient || !bruker || !venterState) return;
   const nyttState = venterState; venterState = null;
   synkStatus = 'synker'; varsle();
-  const rad = { bruker_id: bruker.id, state: nyttState, oppdatert: new Date().toISOString() };
+  /* Stempelet er ENDRINGSTID (statens eget `oppdatert`), ikke opplastingstid.
+     Med opplastingstid så en uendret enhet som pushet en no-op «nyere» ut enn
+     enheten med ekte, upushede endringer — og «nyeste vinner» rullet så de
+     ekte endringene tilbake (release-review 01.08). */
+  const naar = isFinite(nyttState && nyttState.oppdatert) && nyttState.oppdatert > 0
+    ? new Date(nyttState.oppdatert) : new Date();
+  const rad = { bruker_id: bruker.id, state: nyttState, oppdatert: naar.toISOString() };
   const { error } = await klient.from(TABELL).upsert(rad, { onConflict: 'bruker_id' });
-  if (error) { sisteFeil = norsk(error); synkStatus = 'feil'; }
+  if (error) {
+    sisteFeil = norsk(error); synkStatus = 'feil';
+    /* Feilet push skal IKKE miste køen: legg tilstanden tilbake og prøv igjen
+       om en stund — før lå endringen bare lokalt til neste tastetrykk. */
+    if (!venterState) { venterState = nyttState; tidsavbrudd = setTimeout(skyv, 15000); }
+  }
   else { sisteFeil = null; synkStatus = 'lagret'; }
   varsle();
 }
