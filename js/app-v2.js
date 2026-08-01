@@ -53,6 +53,7 @@ const STANDARD = {
   kurvMaal: {},               // brukerens kurvstørrelser i cm, per form-id
   kjolTemp: 3.5,              // kaldeste vann du får ut av kranen/kjøleskapet
   kjolskapTemp: 4,            // lufta i kjøleskapet — kaldhevingen skjer i den
+  svalTemp: 16,               // det svale stedet (kjeller/bod) — mellom skap og rom
   ffTimer: null,              // egen modningstid på forfermenten; null = planens
   delteKalib: null,           // delte maskinmålinger hentet fra skyen
   kalibFor: null,             // hvilken maskin din egen måling gjelder
@@ -641,25 +642,35 @@ function tegnBunnlinje(r, K) {
   const gammeltArk = byId('regnskapArk');
   if (!S.regnskapAapen) { if (gammeltArk) gammeltArk.remove(); return; }
 
+  /* Med forferment: PARET tabell — samme ingrediens på samme linje, forferment i
+     venstre kolonne og hoveddeig i høyre, så øyet kan sammenligne uten å lete
+     (Bjørn 01.08: «vann i forferment til venstre, vann i hoveddeig til høyre»).
+     Det gamle 2-kolonners-rutenettet parret radene tilfeldig etter rekkefølge. */
+  const ffSaltG = r.ffPaa && r.forferment ? (r.forferment.salt || 0) : 0;
+  const parTabell = r.ffPaa ? h('div', { class: 'regnskap-par' },
+    h('span'), h('span', { class: 'rp-hode' }, 'Forferment'), h('span', { class: 'rp-hode' }, 'Hoveddeig'),
+    ...[
+      ['Mel', g0(r.forferment.mel), g0(r.melTotal - r.forferment.mel)],
+      ['Vann', g0(r.forferment.vann), g0(r.vannHoved)],
+      /* Gjærtallene per bolle: det som skal på vekta i HVER av dem. Totalen står
+         i listen under — å vise bare totalen ga 35 % overdose i hoveddeigen. */
+      ['Gjær (tørr)', fmt(r.forferment.gjaer, 2) + ' g', fmt(r.gjaerHoved, 2) + ' g'],
+      ['Salt', ffSaltG > 0.05 ? fmt(ffSaltG, 1) + ' g' : '–', fmt(r.salt - ffSaltG, 1) + ' g']
+    ].flatMap(([lab, fv, hv]) => [
+      h('span', { class: 'rp-lab' }, lab), h('b', null, fv), h('b', null, hv)])) : null;
   const rader = [
     ['Mel totalt', g0(r.melTotal)],
     /* «Vann i hoveddeigen» = det du faktisk heller i bollen (vannHoved). Frøvannet
        står på EGEN linje under, ellers så det ut som vann forsvant når man la til
        frø: melet krymper (fast deigvekt), hovedvannet krymper med det, og frøenes
        vann var usynlig. Nå balanserer regnskapet. */
-    ['Vann i hoveddeigen', g0(r.vannHoved)],
+    r.ffPaa ? null : ['Vann i hoveddeigen', g0(r.vannHoved)],
     r.froAbsorbert > 0.5 ? ['Vann til frøene (bløtlegg)', g0(r.froAbsorbert)] : null,
-    r.ffPaa ? ['Forferment', g0(r.forferment.total)] : null,
-    ['Salt', fmt(r.salt, 1) + ' g'],
-    /* Med forferment er totalen IKKE det man veier opp i hoveddeigen.
-       Sto det bare «Gjær (tørr) 0,72 g» og forfermenten alt hadde tatt 0,25 av
-       dem, veide man opp 0,72 til og fikk 35 % for mye gjær i deigen. Nå står
-       begge tallene, og det som skal på vekta står først. */
+    r.ffPaa ? ['Forferment totalt', g0(r.forferment.total)] : null,
+    r.ffPaa ? null : ['Salt', fmt(r.salt, 1) + ' g'],
     r.ffPaa
-      ? ['Gjær i hoveddeigen (tørr)', fmt(r.gjaerHoved, 2) + ' g']
+      ? ['Gjær totalt', fmt(r.gjaerTotal, 2) + ' g']
       : ['Gjær (tørr)', fmt(r.gjaerTotal, 2) + ' g'],
-    r.ffPaa ? ['Gjær i forfermenten', fmt(r.forferment.gjaer, 2) + ' g'] : null,
-    r.ffPaa ? ['Gjær totalt', fmt(r.gjaerTotal, 2) + ' g'] : null,
     ['Effektiv hydrering', pst(r.effektivHydrering * 100, 1)],
     ['Brødskala', fmt(r.brodskala.pct, 0) + ' % · ' + r.brodskala.kort],
     ['Løftindeks', r.loft.loft + ' / 100'],
@@ -672,6 +683,7 @@ function tegnBunnlinje(r, K) {
   const innmat = [
     h('div', { class: 'ark-hank' }),
     h('div', { class: 'ark-tittel' }, 'Deigregnskap'),
+    parTabell,
     h('div', { class: 'regnskap' }, ...rader.map(([k, v]) =>
       h('div', { class: 'rad' }, h('span', null, k), h('b', null, v)))),
     avvik.length ? h('div', { class: 'ark-tittel', style: 'margin-top:12px' }, 'Hva tilleggene gjør med brødet') : null,
@@ -707,7 +719,10 @@ function regnskapGraf(r, K) {
   const bulkStart = (K.find(x => x.id === 'trinn-0') || {}).tid || K.start;
   return h('div', { style: 'margin-top:12px' },
     h('div', { class: 'ark-tittel' }, 'Gjæringen over tid'),
-    gjaeringsGraf(pts, r, bulkStart, S.tidModus === 'naa'),
+    // K MÅ med: uten den finner ikke grafen forferment-steget, og da forsvant
+    // bigaen og klokkeslettene stemte ikke med planen — men bare i DENNE
+    // mini-utgaven, ikke på Tid (Bjørn 01.08, «bigaen borte — hva skjedde?»).
+    gjaeringsGraf(pts, r, bulkStart, S.tidModus === 'naa', K),
     h('div', { style: 'font-size:.68rem;color:var(--color-neutral-600);margin-top:2px' },
       'Grønn kurve: andel av gjæringen som er gjort (høyre akse). Stiplet: deigtemperatur (venstre).'));
 }
@@ -1926,15 +1941,27 @@ function tegnHeveplan(r) {
      trinn planen legger over romtemp fortsatt ligger over DITT rom. */
   const rt = isFinite(S.romTemp) ? +S.romTemp : 22;
   const kjt = isFinite(S.kjolskapTemp) ? +S.kjolskapTemp : 4;
+  /* Det SVALE stedet er den tredje målingen (Bjørn 01.08: «16 grader er vel
+     kanskje middels — vi trenger kanskje en til parameter»): kjelleren, boden,
+     garasjen — der bigaen trives og en heving kan bremses uten kjøleskap. */
+  const svt = isFinite(S.svalTemp) ? +S.svalTemp : 16;
   boks.appendChild(miniStepper('Romtemp der deigen hever', rt, 'romTemp', 14, 30, 0.5, ' °C'));
   boks.appendChild(miniStepper('Kjøleskapet ditt', kjt, 'kjolskapTemp', 1, 12, 0.5, ' °C'));
+  boks.appendChild(miniStepper('Svalt sted (kjeller/bod)', svt, 'svalTemp', 8, 20, 0.5, ' °C'));
   boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:4px' },
     'Begge er målinger, ikke valg: å skru på dem gjør ikke planen egendefinert — den blir den først når du endrer hvor lenge et trinn står. Gjærmengden løses om automatisk mot temperaturene du oppgir.'));
   trinn.forEach((tr, i) => {
     const kaldt = tr.miljo <= KALDGRENSE_APP;
+    /* Tre soner, ikke to: 16 °C er verken kjøleskap eller romtemperatur — det er
+       svalt (kjeller/sval bod, der bigaen trives). Med bare kaldt/varmt fikk
+       16 °C merkelappen «varmt», som leste som feil (Bjørn 01.08). Grensene:
+       ≤12 kaldt (samme KALDGRENSE som motoren), 12–18 svalt, >18 varmt. */
+    const svalt = !kaldt && tr.miljo <= 18;
     boks.appendChild(h('div', { style: 'border-top:1px solid var(--color-neutral-200);padding:9px 0' },
       h('div', { style: 'display:flex;align-items:center;gap:8px' },
-        h('span', { class: 'pille', style: kaldt ? 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)' : 'background:var(--color-accent-100);color:var(--color-accent-700)' }, kaldt ? 'kaldt' : 'varmt'),
+        h('span', { class: 'pille', style: kaldt ? 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)'
+          : svalt ? 'background:var(--color-neutral-200);color:var(--color-neutral-700)'
+          : 'background:var(--color-accent-100);color:var(--color-accent-700)' }, kaldt ? 'kaldt' : svalt ? 'svalt' : 'varmt'),
         h('input', { type: 'text', value: tr.navn, 'aria-label': 'Trinnnavn', style: 'flex:1;border:none;background:none;font:inherit;font-weight:700;font-size:.86rem;min-width:0', onblur: e => redigerTrinn(i, 'navn', e.target.value) }),
         trinn.length > 1 ? h('button', { class: 'info-knapp', 'aria-label': 'Fjern trinn', onClick: () => fjernTrinn(i) }, '×') : null),
       // Timer og Miljø UNDER hverandre, ikke side ved side: to felt på delt
@@ -1942,16 +1969,24 @@ function tegnHeveplan(r) {
       h('div', { style: 'display:flex;flex-direction:column;gap:6px;margin-top:6px' },
         trinnFelt('Timer', tr.timer, 't', v => redigerTrinn(i, 'timer', v)),
         trinnFelt('Miljø', tr.miljo, '°C', v => redigerTrinn(i, 'miljo', v))),
-      // Hurtigvalg for hvor deigen står: kjøleskapet eller rommet ditt.
-      h('div', { class: 'piller', style: 'margin-top:6px' },
+      // Hurtigvalg for hvor deigen står: kjøleskapet, det svale stedet eller rommet.
+      h('div', { class: 'piller', style: 'margin-top:6px;flex-wrap:wrap' },
         h('button', { class: Math.abs(tr.miljo - kjt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', kjt) }, 'Kjøleskapet ' + gradTxt(kjt) + ' °C'),
+        h('button', { class: Math.abs(tr.miljo - svt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', svt) }, 'Svalt ' + gradTxt(svt) + ' °C'),
         h('button', { class: Math.abs(tr.miljo - rt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', rt) }, 'Rommet ditt ' + gradTxt(rt) + ' °C')),
       // Eksplisitt utbakt-toggle: styrer om emnet er formet (kjøles som ett emne,
       // uten lokk) — en modellforskjell som ikke kan avledes av temperaturen alene.
       h('label', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.78rem;color:var(--color-neutral-700);cursor:pointer' },
         h('input', { type: 'checkbox', checked: tr.utbakt ? 'checked' : null, style: 'width:20px;height:20px;accent-color:var(--color-accent-500)',
           onchange: e => redigerTrinn(i, 'utbakt', e.target.checked) }),
-        'Utbakt i hevekurv (formet emne, ikke bulk i boks)')));
+        'Utbakt i hevekurv (formet emne, ikke bulk i boks)'),
+      /* En kaldheving på minutter er ikke en kaldheving — deigen rekker knapt å
+         begynne nedkjølingen (tau er 3–5 timer for en boks). Vindu-fittingen kan
+         klemme trinnet dit; da skal appen SI det, ikke servere «0,3 t på kjøl»
+         som om det var en plan (Bjørn 01.08). */
+      kaldt && tr.timer < 1 ? h('div', { class: 'varsel', style: 'margin-top:8px' },
+        h('b', null, fmtTimer(tr.timer) + ' på kjøl gjør nesten ingenting. '),
+        'Deigen rekker knapt å begynne nedkjølingen (en boks bruker 3–5 timer). Gi trinnet minst et par timer — smaken bygges først etter 6+ — eller ta det bort og la tiden gå til et varmt trinn.') : null));
   });
   boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
     h('button', { class: 'btn', style: 'flex:1', onClick: () => leggTilTrinn() }, '+ Trinn'),
@@ -2227,6 +2262,11 @@ function tegnTid(r, K) {
         det.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' },
           'Appen fyller vinduet med ', h('b', null, fmtTimer(flex.timer) + ' ' + (flex.miljo <= 12 ? 'kaldheving' : 'heving')),
           ' og løser gjæren til ', h('b', null, fmt(r.gjaerTotal, 2) + ' g'), '. Endrer du start eller ferdig, regnes resten om.'));
+        // Klemte fittingen kaldhevingen ned til minutter, er den i praksis borte
+        // — si det her, der vinduet ble satt, ikke bare nede i heveplanen.
+        if (flex.miljo <= 12 && flex.timer < 1) det.appendChild(h('div', { class: 'varsel', style: 'margin-top:8px' },
+          h('b', null, 'Vinduet er for trangt for kaldheving. '),
+          'Det ble bare ' + fmtTimer(flex.timer) + ' på kjøl — det gjør nesten ingenting for smak eller struktur. Utvid vinduet, eller fjern kaldhevingstrinnet i heveplanen og bak varmt.'));
       }
       egen.appendChild(det);
     }

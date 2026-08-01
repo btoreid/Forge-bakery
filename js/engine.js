@@ -1233,7 +1233,10 @@ function regnKjerne(state) {
      tall, så dette er en teoretisk luke, men en korrupt lagret tilstand
      (saltPct: NaN fra en gammel migrering) skal ikke velte regnestykket.
      Derfor `isFinite`-gulv på alt som mater melTotal/totalVekt. */
-  const num = (v, fallback) => (isFinite(v) ? +v : fallback);
+  /* NB: `isFinite(null)` er TRUE (Number(null) === 0), så null må sjekkes FØRST
+     — ellers ble `saltPct: null` (standardtilstanden!) til 0 % salt i motoren
+     mens skyveren viste 1,8. Samme felle som ffTemp-stepperen gikk i (01.08). */
+  const num = (v, fallback) => (v != null && isFinite(v) ? +v : fallback);
   const melListe = gyldigOverstyring(state.melOverstyr)
     || (preset ? preset.mel.map(m => ({ ...m })) : melblandingForGrov(num(state.grov, 40)));
 
@@ -1379,6 +1382,14 @@ function regnKjerne(state) {
     }
     return t;
   });
+  /* UTBAKT ARVES FRAMOVER: et emne som er formet og lagt i kurv, blir ikke bulk
+     igjen — forming er en enveisdør. Uten arven fikk et egendefinert trinn LAGT
+     TIL etter kaldhevingen (utbakt) bulk-behandling: målekrukke, «mål stigning»
+     og emnemasse regnet som hel batch — instruksjoner for en deig som ikke
+     lenger finnes (Bjørn 01.08). Kjeden, dosen og stegtekstene leser alle
+     `utbakt` herfra, så arven retter alle tre på ett sted. */
+  let harUtbakt = false;
+  planTrinn.forEach(t => { harUtbakt = harUtbakt || !!t.utbakt; t.utbakt = harUtbakt; });
   if (planTrinn.length) planTrinn[0].temp = state.startTemp ?? 24;
   /* Forfermentens EFFEKTIVE andel, ikke bare melandelen.
      `maalDoseFor` senket måldosen ut fra hvor stor andel av melet som ligger i
@@ -1856,9 +1867,12 @@ function kjede(state, r, ferdigMs) {
       sjekk: kaldt ? 'Se på emnet før du steker: det skal ha vokst tydelig og kjennes luftig, ikke stinnt.'
                    : (tr.utbakt ? 'Trykktest før ovnen: gropen skal fylle seg langsomt igjen over 5–10 sekunder.'
                                 : 'Sikt mot ' + riseTxt + ' stigning i målekrukka. Grovt mel og mye vann tåler mindre stigning enn en loff — går den lenger, mister den løftet i ovnen.'),
-      // Målekrukka gjelder trinn der du kan FØLGE stigningen: bulk i boks, og
-      // varme trinn. Et kaldt utbakt emne i hevekurv trykktestes i stedet.
-      krukke: !tr.utbakt || !kaldt,
+      // Målekrukka gjelder trinn der du kan FØLGE stigningen: bulk i boks.
+      // Et UTBAKT emne — kaldt eller varmt — trykktestes i stedet: krukka ble
+      // fylt av bulkdeigen, og etter forming svarer den ikke lenger for emnet.
+      // (Før fikk varme utbakte trinn både trykktest-tekst OG målekrukke —
+      // to sjekker som kunne peke hver sin vei. Bjørn 01.08.)
+      krukke: !tr.utbakt,
       maalRise, maalRiseTxt: riseTxt
     });
   });

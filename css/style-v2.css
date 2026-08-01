@@ -181,6 +181,12 @@ input[type=range] { accent-color: var(--color-accent); }
 .bunnlinje.open .stripe .pil { transform: rotate(180deg); }
 .regnskap-ark { max-height: 74vh; }
 .bunnlinje .regnskap { padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+/* Paret forferment/hoveddeig-tabell: samme ingrediens på samme linje, én kolonne
+   per bolle — øyet sammenligner vannrett i stedet for å lete i to lister. */
+.bunnlinje .regnskap-par { display: grid; grid-template-columns: auto 1fr 1fr; gap: 5px 14px; font-size: .82rem; font-variant-numeric: tabular-nums; margin-bottom: 12px; }
+.bunnlinje .regnskap-par .rp-hode { font-size: .6rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--color-neutral-600); text-align: right; }
+.bunnlinje .regnskap-par .rp-lab { color: var(--color-neutral-600); border-bottom: 1px dotted var(--color-neutral-300); padding-bottom: 3px; }
+.bunnlinje .regnskap-par b { text-align: right; font-weight: 700; border-bottom: 1px dotted var(--color-neutral-300); padding-bottom: 3px; }
 .bunnlinje .regnskap .rad { display: flex; justify-content: space-between; font-size: .82rem; border-bottom: 1px dotted var(--color-neutral-300); padding: 4px 0; font-variant-numeric: tabular-nums; }
 .bunnlinje .regnskap .rad span:first-child { color: var(--color-neutral-600); }
 .bunnlinje .regnskap .rad b { font-weight: 700; }
