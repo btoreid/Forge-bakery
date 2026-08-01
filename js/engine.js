@@ -1709,6 +1709,18 @@ function kjede(state, r, ferdigMs) {
   const melTyper = andelG => ((r.mel || []).length > 1 && andelG > 0.5)
     ? r.mel.filter(m => m.gram > 0.5).map(m => ['· ' + m.navn, gram(m.gram * andelG / Math.max(r.melTotal, 1))])
     : [];
+  /* `ingredienser` per steg: DET SOM FAKTISK TILSETTES DER, som egen liste UI-et
+     kan kvittere av (Bjørn 01.08: «må være mulig å bekrefte at man har tatt i
+     alle ingrediensene — honning nevnes f.eks. ikke»). Meltypene enkeltvis når
+     blandingen har flere; smakstilleggene hører til eltingen. */
+  const melIngredienser = andelG => (r.mel || []).length > 1
+    ? r.mel.filter(m => m.gram > 0.5).map(m => [m.navn, gram(m.gram * andelG / Math.max(r.melTotal, 1))])
+    : [['Mel', gram(andelG)]];
+  const smakIngredienser = [
+    ['honning', 'Honning'], ['olje', 'Olje'], ['sukker', 'Sukker'], ['smor', 'Smør'], ['malt', 'Malt']
+  ].filter(([k]) => (r[k] || 0) > 0.5).map(([k, navn]) => [navn, gram(r[k])]);
+  const froIngredienser = (r.fro || []).filter(f => (f.gram || 0) > 0.5)
+    .map(f => [f.navn + ' (klargjort)', gram(f.gram)]);
 
   /* Formen bestemmer HVORDAN emnet hviler og hva teksten kan love.
      `kjede()` leste aldri `state.form`, så «Uten form» fikk beskjed om å legge
@@ -1780,15 +1792,19 @@ function kjede(state, r, ferdigMs) {
     steg.push({
       id: 'ff', navn: 'Sett ' + r.ffT.navn.toLowerCase() + 'en', tid: ffStart, varighet: ff.timer * 60, tone: 'noytral',
       hoved: gram(ff.mel), hovedNote: 'mel i forfermenten', sideK: 'Modning', sideV: fmtTimer(ff.timer),
-      tall: [['Mel', gram(ff.mel)], ...melTyper(ff.mel), ['Vann', gram(ff.vann)],
-             ff.kultur
-               ? ['Moden starter', fmt(ff.starter, 0) + ' g (' + fmt(ff.podePct, 0) + ' % av melet)']
-               : ['Tørrgjær', fmt(ff.gjaer, 2) + ' g'],
-             ...(harHold
+      ingredienser: [
+        ...melIngredienser(ff.mel),
+        ['Vann', gram(ff.vann)],
+        ff.kultur ? ['Moden starter', fmt(ff.starter, 0) + ' g'] : ['Tørrgjær', fmt(ff.gjaer, 2) + ' g'],
+        ...(ff.salt > 0.05 ? [['Salt', fmt(ff.salt, 2) + ' g']] : [])
+      ],
+      // Mengdene bor i `ingredienser` (sjekklista) — tall-radene har bare det
+      // som IKKE er noe man tilsetter: tid og temperatur.
+      tall: [...(harHold
                  ? [['Romtemp-start', fmtTimer(ff.romTid) + ' ved ' + grader(ff.mikstemp, 0)],
                     ['Så i kjøl', fmtTimer(kjolDel) + ' ved ' + grader(ff.temp, 0)]]
                  : [['Temperatur', grader(ff.temp, 0)]]),
-             ...(ff.salt > 0.05 ? [['Salt', fmt(ff.salt, 2) + ' g']] : [])],
+             ...(ff.kultur ? [['Podning', fmt(ff.podePct, 0) + ' % av melet']] : [])],
       gjor: (ff.kultur
         ? 'Rør ut ' + fmt(ff.starter, 0) + ' g moden surdeigsstarter i vannet, så melet i. Ingen kommersiell gjær her — det er kulturen som skal bygge levainen. Lokk på.'
         : 'Visp ut gjæren i vannet FØR melet — noen tiendedels gram fordeler seg ikke i tørt mel. ' +
@@ -1836,6 +1852,10 @@ function kjede(state, r, ferdigMs) {
     steg.push({
       id: 'prep-' + b.id, navn: b.navn + ' ' + med.map(x => x.f.navn.toLowerCase().split(' (')[0]).join(' og '),
       tid: prepStart, varighet: b.varighet, tone: 'noytral',
+      ingredienser: [
+        ...med.map(x => [x.f.navn, gram(x.f.gram)]),
+        ...(b.id === 'rist' ? [] : [['Vann (' + (b.id === 'skald' ? 'kokende' : 'kaldt') + ')', gram(bundet * (b.id === 'bloet' ? 1.85 : 1))]])
+      ],
       hoved: gram(gramSum), hovedNote: med.map(x => pst(x.pct, 1) + ' ' + x.f.navn.toLowerCase().split(' (')[0]).join(' · '),
       // Ristede frø bløtlegges ikke — de tørrises og suger så fra deigen. Da er
       // «binder vann» feil etikett (teknisk review #4); tallet er det de trekker.
@@ -1880,10 +1900,13 @@ function kjede(state, r, ferdigMs) {
       // vanntemperaturen til på dette steget, ikke bare på eltingen. Og IKKE
       // alt vannet: en reserve holdes igjen til eltingen — saltet løses i den,
       // og den gir rom til å justere deigen (bassinage). Bjørn 01.08.
-      tall: [['Varighet', fmtTimer(autoMin / 60)], ['Mel (hoveddeigen)', gram(autoMel)], ...melTyper(autoMel),
-             ['Vann nå (' + grader(r.vannTempMulig, 1) + ')', gram(r.vannHoved - vannReserve)],
-             ['Saltvannet — alt skal i', gram(saltVann)],
-             ...(bassinage > 0 ? [['Justeringsvann (bassinage)', gram(bassinage)]] : []),
+      ingredienser: [
+        ...melIngredienser(autoMel),
+        ['Vann (' + grader(r.vannTempMulig, 1) + ')', gram(r.vannHoved - vannReserve)],
+        ['Saltvannet settes til side', gram(saltVann)],
+        ...(bassinage > 0 ? [['Justeringsvann settes til side', gram(bassinage)]] : [])
+      ],
+      tall: [['Varighet', fmtTimer(autoMin / 60)],
              ['Salt og gjær', 'holdes utenfor'],
              ...(r.ffPaa ? [['Forfermenten', 'står for seg — kommer i ved elting']] : [])],
       gjor: 'Bland hoveddeigens mel og ' + gram(r.vannHoved - vannReserve) + ' av vannet til det ikke er tørt mel igjen — ikke elt. Hold igjen ' +
@@ -1908,6 +1931,21 @@ function kjede(state, r, ferdigMs) {
        faktisk lander på. */
     hoved: grader(state.startTemp ?? 24, 1), hovedNote: 'deigtemp ut av maskinen', sideK: 'Vann inn',
     sideV: grader(r.vannTempMulig, 1) + (r.vannForKaldt ? ' (kaldest du får)' : ''),
+    /* ALT som går i bollen under eltingen — inkludert smakstilleggene, som før
+       ikke var nevnt på noe steg i det hele tatt (honning-funnet, Bjørn 01.08),
+       og frøene fra klargjøringssteget. */
+    ingredienser: [
+      ...(autoMin > 0
+        ? [['Saltvannet (med alt saltet)', gram(saltVann)],
+           ...(bassinage > 0 ? [['Justeringsvann — mot slutten', gram(bassinage)]] : [])]
+        : [...melIngredienser(melHovedG),
+           ['Vann (' + grader(r.vannTempMulig, 1) + ')', gram(r.vannHoved)],
+           ['Salt', fmt(saltHovedG, 1) + ' g']]),
+      ['Tørrgjær', fmt(r.ffPaa ? r.gjaerHoved : r.gjaerTotal, 2) + ' g'],
+      ...(r.ffPaa ? [['Forfermenten', gram(r.forferment.total)]] : []),
+      ...froIngredienser,
+      ...smakIngredienser
+    ],
     /* Gjærmengden hører hjemme HER, i steget der den skal på vekta — og det er
        hoveddeigens gjær, ikke totalen. Med forferment er differansen opptil en
        tredjedel, og totalen lest som «det du veier opp nå» er en overdose. */
@@ -1915,15 +1953,8 @@ function kjede(state, r, ferdigMs) {
        skal meltypene og vannet stå her, med gram. Med autolyse er de alt
        blandet (og listet på autolyse-steget), så her gjenstår reserven, salt
        og gjær. */
-    tall: [...(autoMin > 0
-             ? [['Saltvannet — alt i', gram(saltVann)],
-                ...(bassinage > 0 ? [['Justeringsvann mot slutten', gram(bassinage)]] : [])]
-             : [['Mel (hoveddeigen)', gram(melHovedG)], ...melTyper(melHovedG),
-                ['Vann (' + grader(r.vannTempMulig, 1) + ')', gram(r.vannHoved)]]),
-           ['Tørrgjær nå', fmt(r.ffPaa ? r.gjaerHoved : r.gjaerTotal, 2) + ' g'],
-           ...(r.ffPaa ? [['(forfermenten har alt tatt', fmt(r.forferment.gjaer, 2) + ' g)']] : []),
-           ['Salt', fmt(r.salt - (r.ffPaa && r.forferment ? (r.forferment.salt || 0) : 0), 1) + ' g'],
-           ...(r.ffPaa ? [['Forfermenten (alt i)', gram(r.forferment.total)]] : []),
+    // Mengdene bor i `ingredienser` — her står bare regnestykket rundt eltingen.
+    tall: [...(r.ffPaa ? [['(forfermenten har alt tatt', fmt(r.forferment.gjaer, 2) + ' g gjær)']] : []),
            ['Friksjon, ' + r.eltMin + ' min', '+' + grader(r.friksjon, 1)], ['Arbeid', fmt(r.wh, 1) + ' Wh/kg'],
            ['Meltemperatur', grader(state.melTemp ?? 21, 0)], ['Deigvekt', gram(r.totalVekt)],
            ...(r.vannForKaldt ? [['NB — vannet rekker ikke alene', 'deigen lander på ' + grader(r.deigTempMulig, 1) + ' — kort ned eltingen eller kjøl melet']] : [])],

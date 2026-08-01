@@ -7,7 +7,38 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
-## 01.08.2026 (natt) — Release-review: fire nye agenter, 46 funn, 30 fikset
+## 02.08.2026 (natt) — Prosesstegene redesignet: kvittering, sjekkliste, plan-korrigering og stegnotater
+
+Bjørns natt-bestilling. Fire nye byggeklosser, alle verifisert i nettleser og
+med alle 9 suiter grønne:
+
+**Ingrediens-sjekkliste per steg.** Hvert steg der noe tilsettes har nå en
+`ingredienser`-liste i kjeden (forferment, frø-klargjøring, autolyse, elting),
+og det aktive stegkortet viser den som avkryssbare rader med navn og gram.
+Smakstilleggene (honning, olje, sukker, smør, malt) og de klargjorte frøene
+står nå på ELTESTEGET — før var de ikke nevnt på noe steg i det hele tatt.
+Tall-radene under er ryddet for duplikater; de har bare det som ikke er
+ingredienser (friksjon, arbeid, deigvekt, temperatur).
+
+**Kvittering med grønn hake.** «✓ Alt i — fullfør steget» (huker samtidig av
+hele lista) eller «Hopp over» — og først DA får steget grønn hake i
+framdriftsprikkene og prosesslista. Å bla forbi teller ikke lenger som gjort.
+Angre-knapp finnes. Tilstanden bor i `stegKvitt` (synkes, nullstilles av
+nyBakst/bakPaaNytt/lagreBak).
+
+**Plan-korrigering ved avvik.** Fullfører du et steg mer enn 20 min før eller
+etter planlagt slutt (eksempel fra virkeligheten: bulken trengte 3 t, ikke 4),
+tilbyr kortet «Flytt planen X fram/bak» — ferdig-ankeret justeres, og hele
+resten av kjeden følger med (den regnes bakover fra ferdig). «Behold planen»
+avfeier tilbudet. I vindu-modus går appen over til ferdig-modus ved justering.
+
+**Stegnotater → loggen.** Hvert steg har et kommentarfelt («hva skjedde?»).
+Ved «Lagre baket» følger notatene, hoppede steg og avvikene med inn i
+loggposten som `stegNotater`, og vises under «Fra prosessen» på posten —
+læringsdataene for neste bak, og for å gjøre appen bedre.
+
+test-r5 oppdatert: to assertions leste mengdene fra `tall`; de bor nå i
+`ingredienser`.
 
 Bjørn ba om full release-gjennomgang med en NY agentrekke (teknisk, baker på
 stegkjeden, UX for førstegangsbruker, release-ingeniør med live kjøring).
