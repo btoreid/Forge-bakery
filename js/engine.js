@@ -341,7 +341,10 @@ function forfermentGjaerPct(timer, temp, o = {}) {
 
 /* ---------- Deigtemperatur: ekte varmebalanse ---------- */
 const CP = { mel: 1.81, vann: 4.181, forferment100: 2.99, fro: 2.0 };
-const FRIKSJON = { hand: 0.15, planet: 0.6, spiralHjemme: 0.4, spiralProff: 1.0 };
+/* spiralHjemme = 1,0: Bjørns eget anslag for Ooni Halo Pro (01.08.2026, står
+   til kalibrering er gjort) — klasseanslaget 0,40 ga «veldig feile tall» på
+   hans kraftige maskin. Holdes i synk med MASKIN_INFO i data.js. */
+const FRIKSJON = { hand: 0.15, planet: 0.6, spiralHjemme: 1.0, spiralProff: 1.0 };
 
 function vanntemperatur(o) {
   const {

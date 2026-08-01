@@ -2183,7 +2183,12 @@ function tegnTid(r, K) {
       const res = tilpassVindu(startNaa, ferdigMs);
       const flex = (res.trinn && res.flexIdx != null) ? res.trinn[res.flexIdx] : null;
       const det = h('div', { style: 'padding:0 16px 14px' },
-        h('div', { class: 'felt-label' }, 'Tidligst jeg kan starte'),
+        h('div', { style: 'display:flex;align-items:center;justify-content:space-between;gap:8px' },
+          h('div', { class: 'felt-label' }, 'Tidligst jeg kan starte'),
+          // «Nå»: det vanligste svaret på «når kan du starte?» fortjener én
+          // knapp i stedet for to velgerhjul (Bjørn 01.08).
+          h('button', { class: 'btn', style: 'font-size:.78rem;padding:4px 16px;min-height:32px',
+            onClick: () => settVindu(Date.now(), ferdigMs) }, 'Nå')),
         datoTidVelger(startNaa, t => settVindu(t, ferdigMs), 'Tidligst start'),
         h('div', { class: 'felt-label', style: 'margin-top:10px' }, 'Ferdig senest (ut av ovnen)'),
         datoTidVelger(ferdigMs, t => settVindu(startNaa, t), 'Ferdig senest'));
@@ -2287,10 +2292,11 @@ function tegnTid(r, K) {
         legendePrikk('var(--color-neutral-500)', 'Deigtemp (venstre)'),
         legendePrikk('var(--color-accent-500)', 'Gjæringsfart'),
         legendePrikk('var(--color-accent-2-700)', 'Halvveis'),
+        r.ffPaa ? legendePrikk('var(--color-accent-2-500)', 'Forfermentens modning (0–100 %)') : null,
         visNaa ? legendePrikk('var(--color-danger)', 'Nå') : null),
       h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:8px;line-height:1.45' },
         'Arealet under fartskurven er dosen. Grønne bånd er kald heving (≤ 12 °C), varme bånd romtemperatur — se hvordan farten stuper i kulda og skyter fart igjen når deigen tempereres.' +
-        (r.ffPaa ? ' Skravert bånd først er forfermentens modning — den skjer i egen bolle, så deigens kurver starter først ved eltingen.' : ''))));
+        (r.ffPaa ? ' I det første båndet gjærer forfermenten for fullt: den stiplede grønnkurven er dens egen modning mot 100 % ferdig. Den korte stiplede broen derfra opp til deigkurven er eltingen — varmt vann og friksjon løfter temperaturen før bulken starter.' : ''))));
   }
 
   // Rate-tabell: gjæringsfart mot temperatur
@@ -2553,10 +2559,11 @@ function gjaeringsGraf(pts, r, bulkStart, visNaa, K) {
   let s = '';
   let sistLabelX = -Infinity;   // kollisjonsvern for fasebånd-etikettene
 
-  // Forfermentens modning: skravert bånd med navn + temperaturkurve (venstre
-  // akse). Gjæringen dens deler IKKE deigens doseskala (den er en egen kultur i
-  // egen bolle), så fart/dose-kurvene starter fortsatt ved deigen — det ærlige
-  // er å vise NÅR den står og HVOR VARM den er, ikke å blande dosene.
+  // Forfermenten i grafen: skravert bånd med navn, temperaturkurve (venstre
+  // akse) OG dens egen modningskurve (høyre akse, 0–100 % av dens ferdige
+  // modning). Forfermenten gjærer for fullt hele tiden den står — det er hele
+  // poenget med den — men den gjærer i egen bolle mot sitt eget mål, så kurven
+  // er normalisert mot dens egen modning, ikke deigens doseskala.
   if (ffSteg && r.forferment) {
     const ff = r.forferment;
     const ffTimer = (ffSteg.varighet || 0) / 60;
@@ -2564,7 +2571,6 @@ function gjaeringsGraf(pts, r, bulkStart, visNaa, K) {
     const kaldFf = ff.temp <= 12;
     s += `<rect x="${n(X(tMin))}" y="${pad.t}" width="${n(X(ffSlutt) - X(tMin))}" height="${iH}" fill="${kaldFf ? 'var(--color-accent-2-500)' : 'var(--color-accent-500)'}" opacity="0.09"/>`;
     s += `<line x1="${n(X(ffSlutt))}" y1="${pad.t}" x2="${n(X(ffSlutt))}" y2="${pad.t + iH}" stroke="var(--color-neutral-300)" stroke-dasharray="3 3"/>`;
-    s += `<line x1="${n(X(0))}" y1="${pad.t}" x2="${n(X(0))}" y2="${pad.t + iH}" stroke="var(--color-neutral-300)" stroke-dasharray="3 3"/>`;
     if (X(ffSlutt) - X(tMin) > 42) {
       const midt = (X(tMin) + X(ffSlutt)) / 2;
       s += `<text x="${n(midt)}" y="${pad.t - 15}" fill="var(--color-neutral-700)" font-size="9.5" font-weight="700" text-anchor="middle">${esc(r.ffT ? r.ffT.navn : 'Forferment')}</text>`;
@@ -2577,14 +2583,35 @@ function gjaeringsGraf(pts, r, bulkStart, visNaa, K) {
     const tau = (typeof tauHours === 'function') ? tauHours(Math.max(masse, 0.1), { lokk: true }) : 4;
     const T0 = (ff.mikstemp != null && isFinite(ff.mikstemp)) ? ff.mikstemp : ff.temp;
     const romTid = ff.romTid || 0;
-    let ftl = '';
+    const dt = ffTimer / 40;
+    const temps = [];
     for (let i = 0; i <= 40; i++) {
-      const t = ffTimer * i / 40;
-      const temp = ff.temp >= T0 - 0.05 ? ff.temp
-        : (t < romTid ? T0 : (typeof doughTempAt === 'function' ? doughTempAt(t - romTid, T0, ff.temp, tau) : ff.temp));
-      ftl += `${i ? 'L' : 'M'} ${n(X(tMin + t))} ${n(Yt(temp))} `;
+      const t = i * dt;
+      temps.push(ff.temp >= T0 - 0.05 ? ff.temp
+        : (t < romTid ? T0 : (typeof doughTempAt === 'function' ? doughTempAt(t - romTid, T0, ff.temp, tau) : ff.temp)));
     }
+    let ftl = '';
+    temps.forEach((temp, i) => { ftl += `${i ? 'L' : 'M'} ${n(X(tMin + i * dt))} ${n(Yt(temp))} `; });
     s += `<path d="${ftl}" fill="none" stroke="var(--color-neutral-500)" stroke-width="1.6" stroke-dasharray="5 3" opacity="0.7"/>`;
+    // Modningskurven: akkumulert gjæringsaktivitet langs temperaturbanen (samme
+    // rateFactor som motoren), normalisert til 100 % når den er ferdig modnet.
+    if (typeof rateFactor === 'function') {
+      const akk = [0];
+      for (let i = 1; i <= 40; i++) akk.push(akk[i - 1] + rateFactor((temps[i - 1] + temps[i]) / 2) * dt);
+      const tot = akk[40] || 1;
+      let ml = '';
+      akk.forEach((a, i) => { ml += `${i ? 'L' : 'M'} ${n(X(tMin + i * dt))} ${n(Yd(a / tot))} `; });
+      s += `<path d="${ml}" fill="none" stroke="var(--color-accent-2-500)" stroke-width="1.8" stroke-dasharray="4 3" opacity="0.75"/>`;
+    }
+    /* Overgangen forferment → deig: en stiplet bro fra forfermentens siste
+       temperatur opp til deigens starttemp. Det er ELTINGEN som løfter den —
+       varmt vann + friksjon — og uten broen så spranget ut som et hull i
+       kurven (Bjørn 01.08). Broen starter der forfermenten slutter og lander
+       der deigens tempkurve begynner (bulkstart). */
+    if (pts.length) {
+      s += `<path d="M ${n(X(ffSlutt))} ${n(Yt(temps[40]))} L ${n(X(0))} ${n(Yt(pts[0].temp))}" fill="none" stroke="var(--color-neutral-500)" stroke-width="1.4" stroke-dasharray="2 4" opacity="0.8"/>`;
+    }
+    s += `<line x1="${n(X(0))}" y1="${pad.t}" x2="${n(X(0))}" y2="${pad.t + iH}" stroke="var(--color-neutral-400)" stroke-dasharray="3 3"/>`;
   }
 
   // Fasebånd med navn, tid og temperatur — kald heving (≤12 °C) i grønt, varm i terrakotta.
@@ -2983,7 +3010,10 @@ function tegnKrukke(steg) {
     }
   };
   const inn = h('input', {
+    // Full bredde: .gramfelt er 5,2 em, og der ble selv plassholderen «f.eks.
+    // 500» kuttet — raden har hele kortbredden å ta av (Bjørn 01.08).
     class: 'gramfelt', type: 'number', inputmode: 'numeric', min: 0, step: 10,
+    style: 'flex:1;width:auto;min-width:0;text-align:left',
     value: S.krukkeStart != null ? S.krukkeStart : '', placeholder: 'f.eks. 500',
     'aria-label': 'Startnivå i målekrukka',
     onchange: e => {

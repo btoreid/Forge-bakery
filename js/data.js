@@ -1418,16 +1418,18 @@ const MASKIN_INFO = {
      Bjørn: «det skal ikke oppgis noe der før jeg har kalibrert den — stå heller
      mangler kalibrering». Tallet trengs likevel for å kunne regne i det hele
      tatt, men appen presenterer det ikke som maskinens verdi. */
-  spiralHjemme: { navn:'Ooni Halo Pro (spiral hjemme)', friksjon:0.4, anslag:true,
+  spiralHjemme: { navn:'Ooni Halo Pro (spiral hjemme)', friksjon:1.0, anslag:true,
     hva:'Spiralmikser i husholdningsstørrelse, som Ooni Halo Pro. Spiralen står i ro mens bollen roterer, så deigen bearbeides jevnere og mer skånsomt enn i en planetmaskin.',
-    tid:'~8 min mot improved mix. Jevn, moderat oppvarming.',
+    tid:'~4–6 min mot improved mix — kraftig maskin som varmer fort.',
     fart:'Lav fart til deigen er samlet (~3 min), så middels fart til utvikling. Spiralen bygger nettverk fort — ta vindusprøven før du øker farten, og la deigtempen styre når du stopper.',
     faser:[ { fart:'Lav', andel:0.38, min:3, hva:'til deigen er samlet' },
             { fart:'Middels', andel:0.62, min:3, hva:'til utvikling — ta vindusprøven før du eventuelt øker' } ],
-    /* 0,40 °C/min er et KLASSEANSLAG, ikke en Halo Pro-måling: Ooni oppgir ingen
-       verdi, og de publiserte tallene gjelder bakerimaskiner (6–9 °F over ~8 min
-       = 0,42–0,63 °C/min). Full gjennomgang i PARAMETERREVISJON.md, 31.07.2026. */
-    note:'Appens standardvalg — balansert friksjon mellom hånd og proffmaskin. Merk at 0,40 °C/min er et anslag for klassen «husholdningsspiral»; Ooni oppgir ingen verdi for Halo Pro, og publiserte spiraltall ligger på 0,42–0,63 °C/min for bakerimaskiner. Vil du ha det presist, mål ditt eget under «Egen (kalibrer)»: deigtemp rett før og rett etter elting, delt på minuttene.' },
+    /* 1,0 °C/min er BJØRNS EGET ANSLAG for Halo Pro (01.08.2026: «kraftig
+       maskin, jeg tror den genererer mye varme — ca. der jeg har vært før»), og
+       står til han har kalibrert. Klasseanslaget var 0,40, publiserte spiraltall
+       0,42–0,63 (bakerimaskiner) — se PARAMETERREVISJON.md. Fortsatt anslag:true,
+       for en måling finnes ikke. */
+    note:'Appens standardvalg. 1,0 °C/min er eierens eget anslag for Halo Pro (kraftig maskin) — ikke en måling; klasseanslaget for husholdningsspiral er 0,40, og publiserte bakerispiraltall 0,42–0,63. Med 1,0 °C/min nås målsonen 3–5 Wh/kg på ~4–6 minutter. Mål det presist under «Egen (kalibrer)»: deigtemp rett før og rett etter elting, delt på minuttene.' },
   spiralProff: { anslag:true, navn:'Spiral proff', friksjon:1.0,
     hva:'Profesjonell spiralmikser som på et bakeri. Kraftig og effektiv — bygger glutennettverk fort.',
     tid:'~4–6 min er nok. Varmer raskest av alle maskinene.',
