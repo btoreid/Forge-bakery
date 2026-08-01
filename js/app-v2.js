@@ -2091,7 +2091,13 @@ function tegnTid(r, K) {
     // «Start nå» ankrer kjeden til NÅ: ferdig settes til nå + total tid. Uten
     // dette viste den bare starttiden som fulgte av gammelt ferdigtidspunkt —
     // og nå-markøren i grafen hadde ingenting ekte å peke på.
-    h('button', { class: S.tidModus === 'start' ? 'paa' : '', onClick: () => { S.tidModus = 'start'; S.ferdigMs = Date.now() + K.tilOvnenT * 3600000; oppdater(); } }, 'Start nå')));
+    // I EGENDEFINERT VINDU er ferdig-tidspunktet brukerens harde grense og skal
+    // ALDRI flyttes av en nå-knapp: der betyr «Start nå» at vinduet begynner nå,
+    // og appen refitter planen innenfor samme ferdig (Bjørn 01.08).
+    h('button', { class: S.tidModus === 'start' ? 'paa' : '', onClick: () => {
+      if (S.tidModus === 'vindu') { settVindu(Date.now(), ferdigMs); return; }
+      S.tidModus = 'start'; S.ferdigMs = Date.now() + K.tilOvnenT * 3600000; oppdater();
+    } }, 'Start nå')));
   const erStart = S.tidModus === 'start';
   const startMs = K.start.getTime();
   const visMs = erStart ? startMs : ferdigMs;
@@ -2292,11 +2298,11 @@ function tegnTid(r, K) {
         legendePrikk('var(--color-neutral-500)', 'Deigtemp (venstre)'),
         legendePrikk('var(--color-accent-500)', 'Gjæringsfart'),
         legendePrikk('var(--color-accent-2-700)', 'Halvveis'),
-        r.ffPaa ? legendePrikk('var(--color-accent-2-500)', 'Forfermentens modning (0–100 %)') : null,
+        r.ffPaa ? legendePrikk('var(--color-accent-2-500)', 'Forfermentens del (stiplet)') : null,
         visNaa ? legendePrikk('var(--color-danger)', 'Nå') : null),
       h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:8px;line-height:1.45' },
         'Arealet under fartskurven er dosen. Grønne bånd er kald heving (≤ 12 °C), varme bånd romtemperatur — se hvordan farten stuper i kulda og skyter fart igjen når deigen tempereres.' +
-        (r.ffPaa ? ' I det første båndet gjærer forfermenten for fullt: den stiplede grønnkurven er dens egen modning mot 100 % ferdig. Den korte stiplede broen derfra opp til deigkurven er eltingen — varmt vann og friksjon løfter temperaturen før bulken starter.' : ''))));
+        (r.ffPaa ? ' Gjæringen starter i forfermentbåndet: den stiplede grønnkurven er forfermentens del av totalen, og deigens kurve fortsetter derfra til 100 % — den starter ikke på null, for forfermentens gjæring er alt gjort når deigen eltes. Den stiplede grå broen opp til deigtempen er eltingen (varmt vann + friksjon).' : ''))));
   }
 
   // Rate-tabell: gjæringsfart mot temperatur
@@ -2550,6 +2556,16 @@ function gjaeringsGraf(pts, r, bulkStart, visNaa, K) {
   const ffSteg = (K && K.find) ? K.find(x => x.id === 'ff') : null;
   const tMin = ffSteg ? Math.min(0, (ffSteg.tid.getTime() - startMs) / 3600000) : 0;
   const span = totalT - tMin || 1;
+  /* Forfermentens DEL av totalgjæringen. Motoren senker deigens måldose når
+     forfermenten bidrar (maalDoseFor), så andelen er differansen mellom målet
+     uten og med forferment. Den grønne akkumulert-kurven skal starte HER ved
+     bulkstart — ikke på 0 % — for gjæringen begynte da forfermenten ble satt
+     (Bjørn 01.08: «burde ikke den vært med fra forfermenteringen?»). */
+  const ffShare = (ffSteg && typeof maalDoseFor === 'function' && (r.ffAndelEffektiv || 0) > 0)
+    ? Math.max(0, Math.min(0.6, 1 - maalDoseFor(r.grovMelAndel, r.ffAndelEffektiv) / Math.max(maalDoseFor(r.grovMelAndel, 0), 1e-9)))
+    : 0;
+  // Total gjæring 0–1: forfermentens del først, deigens dose skalert inn etterpå.
+  const Ytot = andel => Yd(ffShare + (1 - ffShare) * andel);
   const X = t => pad.l + (t - tMin) / span * iW;
   const Yt = v => pad.t + (1 - v / tempMax) * iH;   // temperatur 0..tempMax (venstre)
   const Yd = f => pad.t + (1 - f) * iH;             // gjæringsandel 0..1 (høyre)
@@ -2594,14 +2610,19 @@ function gjaeringsGraf(pts, r, bulkStart, visNaa, K) {
     temps.forEach((temp, i) => { ftl += `${i ? 'L' : 'M'} ${n(X(tMin + i * dt))} ${n(Yt(temp))} `; });
     s += `<path d="${ftl}" fill="none" stroke="var(--color-neutral-500)" stroke-width="1.6" stroke-dasharray="5 3" opacity="0.7"/>`;
     // Modningskurven: akkumulert gjæringsaktivitet langs temperaturbanen (samme
-    // rateFactor som motoren), normalisert til 100 % når den er ferdig modnet.
-    if (typeof rateFactor === 'function') {
+    // rateFactor som motoren). Kurven stiger fra 0 til forfermentens ANDEL av
+    // totalgjæringen (ffShare) — så deigens kurve kan fortsette derfra, som én
+    // sammenhengende historie på samme akse.
+    if (typeof rateFactor === 'function' && ffShare > 0) {
       const akk = [0];
       for (let i = 1; i <= 40; i++) akk.push(akk[i - 1] + rateFactor((temps[i - 1] + temps[i]) / 2) * dt);
       const tot = akk[40] || 1;
       let ml = '';
-      akk.forEach((a, i) => { ml += `${i ? 'L' : 'M'} ${n(X(tMin + i * dt))} ${n(Yd(a / tot))} `; });
+      akk.forEach((a, i) => { ml += `${i ? 'L' : 'M'} ${n(X(tMin + i * dt))} ${n(Yd(ffShare * a / tot))} `; });
       s += `<path d="${ml}" fill="none" stroke="var(--color-accent-2-500)" stroke-width="1.8" stroke-dasharray="4 3" opacity="0.75"/>`;
+      // Bind sammen med deigkurven over elte-gapet (samme nivå, ingen gjæring
+      // regnes i selve eltingen).
+      s += `<path d="M ${n(X(ffSlutt))} ${n(Yd(ffShare))} L ${n(X(0))} ${n(Yd(ffShare))}" fill="none" stroke="var(--color-accent-2-500)" stroke-width="1.8" stroke-dasharray="2 3" opacity="0.6"/>`;
     }
     /* Overgangen forferment → deig: en stiplet bro fra forfermentens siste
        temperatur opp til deigens starttemp. Det er ELTINGEN som løfter den —
@@ -2656,16 +2677,21 @@ function gjaeringsGraf(pts, r, bulkStart, visNaa, K) {
   area += ` L ${n(X(totalT))} ${n(pad.t + iH)} Z`;
   s += `<path d="${area}" fill="var(--color-accent-500)" opacity="0.18"/>`;
 
-  // Akkumulert dose (hovedkurven, høyre akse).
-  let dl = ''; pts.forEach((p, i) => dl += `${i ? 'L' : 'M'} ${n(X(p.t))} ${n(Yd(p.dose / doseMax))} `);
+  // Akkumulert gjæring (hovedkurven, høyre akse). Starter på forfermentens
+  // andel (ffShare), ikke på null — den gjæringen er alt gjort når deigen eltes.
+  let dl = ''; pts.forEach((p, i) => dl += `${i ? 'L' : 'M'} ${n(X(p.t))} ${n(Ytot(p.dose / doseMax))} `);
   s += `<path d="${dl}" fill="none" stroke="var(--color-accent-2-500)" stroke-width="2.6"/>`;
 
   // Deigtemperatur (venstre akse, stiplet).
   let tl = ''; pts.forEach((p, i) => tl += `${i ? 'L' : 'M'} ${n(X(p.t))} ${n(Yt(p.temp))} `);
   s += `<path d="${tl}" fill="none" stroke="var(--color-neutral-500)" stroke-width="1.6" stroke-dasharray="5 3"/>`;
 
-  // Halvveismerke — når er 50 % av gjæringen gjort?
-  const halv = pts.find(p => p.dose >= doseMax * 0.5);
+  // Halvveismerke — når er 50 % av HELE gjæringen gjort (forfermenten medregnet)?
+  // Med stor forferment-andel flytter det seg mot venstre; bidrar den over
+  // halvparten, ligger halvveis inne i forfermentperioden og merket droppes
+  // (kurven der er en modellert modningsbane, ikke et klokkeslett å planlegge mot).
+  const halvAndel = ffShare < 0.5 ? (0.5 - ffShare) / (1 - ffShare) : null;
+  const halv = halvAndel != null ? pts.find(p => p.dose >= doseMax * halvAndel) : null;
   if (halv) {
     s += `<line x1="${n(X(halv.t))}" y1="${pad.t}" x2="${n(X(halv.t))}" y2="${pad.t + iH}" stroke="var(--color-accent-2-700)" stroke-width="1" stroke-dasharray="2 3"/>`;
     s += `<circle cx="${n(X(halv.t))}" cy="${n(Yd(0.5))}" r="3.4" fill="var(--color-accent-2-700)"/>`;
