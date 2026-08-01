@@ -1587,7 +1587,11 @@ function regnKjerne(state) {
     deigTempMulig: dt.vannTemp < kaldest
       ? faktiskDeigTemp(dtInn, kaldest)
       : (state.startTemp ?? 24),
-    prof, eltMin, vannTemp: dt.vannTemp, friksjon: dt.friksjonsOkning, wh: dt.friksjonsOkning / ELTING.GRAD_PER_WH,
+    /* Gulvet er 0 °C: vann under null er is, ikke vann (Bjørn 01.08 — regne-
+       stykket kunne be om −2 °C). Det teoretiske underskuddet forsvinner ikke
+       av å klippes; det bæres videre av vannForKaldt/deigTempMulig over, som
+       sier hva deigen FAKTISK lander på og hva som må gjøres i stedet. */
+    prof, eltMin, vannTemp: Math.max(0, dt.vannTemp), friksjon: dt.friksjonsOkning, wh: dt.friksjonsOkning / ELTING.GRAD_PER_WH,
     // Anbefalt eltetid MED autolysen: melet er alt hydrert og glutenet delvis
     // organisert, så samme utvikling nås på kortere tid.
     eltMinAnbefalt: Math.max(2, Math.round(eltMin * autolyseFaktor(state.autolyseMin || 0).elt)),
@@ -1843,6 +1847,13 @@ function kjede(state, r, ferdigMs) {
     });
   });
 
+  /* Vann-reserven ved autolyse: ca. 5 % av hovedvannet (rundet til 5 g, minst
+     40, aldri over 20 % av vannet). Holdes igjen til eltingen — saltet løses i
+     den, og den er bassinage-rommet for å justere deigen. */
+  const vannReserve = autoMin > 0
+    ? Math.min(Math.max(40, Math.round(r.vannHoved * 0.05 / 5) * 5), Math.round(r.vannHoved * 0.2))
+    : 0;
+
   // 2b · Autolyse (bare hvis på)
   if (autoMin > 0) {
     /* Melet som skal autolyseres er HOVEDDEIGENS mel, ikke alt melet.
@@ -1855,12 +1866,16 @@ function kjede(state, r, ferdigMs) {
       id: 'autolyse', navn: 'Autolyse', tid: autoStart, varighet: autoMin, tone: 'noytral',
       hoved: fmtTimer(autoMin / 60), hovedNote: 'mel og vann hviler', sideK: 'Uten', sideV: 'salt og gjær',
       // Vannet går i bollen HER når autolysen er på — da hører også
-      // vanntemperaturen til på dette steget, ikke bare på eltingen.
+      // vanntemperaturen til på dette steget, ikke bare på eltingen. Og IKKE
+      // alt vannet: en reserve holdes igjen til eltingen — saltet løses i den,
+      // og den gir rom til å justere deigen (bassinage). Bjørn 01.08.
       tall: [['Varighet', fmtTimer(autoMin / 60)], ['Mel (hoveddeigen)', gram(autoMel)], ...melTyper(autoMel),
-             ['Vann (' + grader(r.vannTemp, 1) + ')', gram(r.vannHoved)],
+             ['Vann nå (' + grader(r.vannTempMulig, 1) + ')', gram(r.vannHoved - vannReserve)],
+             ['Holdes igjen til eltingen', gram(vannReserve)],
              ['Salt og gjær', 'holdes utenfor'],
              ...(r.ffPaa ? [['Forfermenten', 'står for seg — kommer i ved elting']] : [])],
-      gjor: 'Bland hoveddeigens mel og vann til det ikke er tørt mel igjen — ikke elt. La det hvile tildekket. Salt og gjær' +
+      gjor: 'Bland hoveddeigens mel og ' + gram(r.vannHoved - vannReserve) + ' av vannet til det ikke er tørt mel igjen — ikke elt. Hold igjen ' +
+            gram(vannReserve) + ' til eltingen: saltet løses i det, og du kan justere deigen med det. La det hvile tildekket. Salt og gjær' +
             (r.ffPaa ? ' og forfermenten' : '') + ' kommer i når eltingen begynner.',
       sjekk: 'Deigen skal kjennes tydelig mykere og mer strekkbar enn da du blandet den. Det er enzymene og vannet som har gjort jobben elting ellers måtte gjort. ' +
              (autoMin <= 45
@@ -1872,22 +1887,32 @@ function kjede(state, r, ferdigMs) {
   // 3 · Elting
   steg.push({
     id: 'elt', navn: 'Elt deigen', tid: eltStart, varighet: eltSteg, tone: 'accent',
-    hoved: grader(state.startTemp ?? 24, 1), hovedNote: 'deigtemp ut av maskinen', sideK: 'Vann inn', sideV: grader(r.vannTemp, 1),
+    /* `vannTempMulig`, ikke rå teori: teorien kan ligge under det kaldeste
+       vannet du får (og under null — som er is, ikke vann; Bjørn 01.08).
+       Rekker ikke vannet alene, står det som egen NB-rad med hva deigen
+       faktisk lander på. */
+    hoved: grader(state.startTemp ?? 24, 1), hovedNote: 'deigtemp ut av maskinen', sideK: 'Vann inn',
+    sideV: grader(r.vannTempMulig, 1) + (r.vannForKaldt ? ' (kaldest du får)' : ''),
     /* Gjærmengden hører hjemme HER, i steget der den skal på vekta — og det er
        hoveddeigens gjær, ikke totalen. Med forferment er differansen opptil en
        tredjedel, og totalen lest som «det du veier opp nå» er en overdose. */
     /* Uten autolyse er ELTINGEN stedet mel og vann faktisk går i bollen — da
        skal meltypene og vannet stå her, med gram. Med autolyse er de alt
-       blandet (og listet på autolyse-steget), så her gjenstår salt og gjær. */
-    tall: [...(autoMin > 0 ? [] : [['Mel (hoveddeigen)', gram(melHovedG)], ...melTyper(melHovedG),
-             ['Vann (' + grader(r.vannTemp, 1) + ')', gram(r.vannHoved)]]),
+       blandet (og listet på autolyse-steget), så her gjenstår reserven, salt
+       og gjær. */
+    tall: [...(autoMin > 0
+             ? [['Resten av vannet', gram(vannReserve)]]
+             : [['Mel (hoveddeigen)', gram(melHovedG)], ...melTyper(melHovedG),
+                ['Vann (' + grader(r.vannTempMulig, 1) + ')', gram(r.vannHoved)]]),
            ['Tørrgjær nå', fmt(r.ffPaa ? r.gjaerHoved : r.gjaerTotal, 2) + ' g'],
            ...(r.ffPaa ? [['(forfermenten har alt tatt', fmt(r.forferment.gjaer, 2) + ' g)']] : []),
            ['Salt', fmt(r.salt - (r.ffPaa && r.forferment ? (r.forferment.salt || 0) : 0), 1) + ' g'],
            ...(r.ffPaa ? [['Forfermenten (alt i)', gram(r.forferment.total)]] : []),
            ['Friksjon, ' + r.eltMin + ' min', '+' + grader(r.friksjon, 1)], ['Arbeid', fmt(r.wh, 1) + ' Wh/kg'],
-           ['Meltemperatur', grader(state.melTemp ?? 21, 0)], ['Deigvekt', gram(r.totalVekt)]],
-    gjor: (r.ffPaa ? 'Bruk ' + fmt(r.gjaerHoved, 2) + ' g tørrgjær her — resten står alt i forfermenten. ' : '') +
+           ['Meltemperatur', grader(state.melTemp ?? 21, 0)], ['Deigvekt', gram(r.totalVekt)],
+           ...(r.vannForKaldt ? [['NB — vannet rekker ikke alene', 'deigen lander på ' + grader(r.deigTempMulig, 1) + ' — kort ned eltingen eller kjøl melet']] : [])],
+    gjor: (autoMin > 0 ? 'Løs saltet i vannet du holdt igjen (' + gram(vannReserve) + ') og tilsett det utover i eltingen. ' : '') +
+          (r.ffPaa ? 'Bruk ' + fmt(r.gjaerHoved, 2) + ' g tørrgjær her — resten står alt i forfermenten. ' : '') +
           'Salt de siste 2–3 minuttene. Stopp ved 60–75 % glutenutvikling — IKKE full vindusrute.',
     sjekk: 'Deigen slipper bollen, men er fortsatt litt klissete. Dømm på deigen, ikke på klokka.', veie: true
   });
