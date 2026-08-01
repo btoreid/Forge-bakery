@@ -228,6 +228,11 @@ function favKnapp(ns, id, navn) {
 
 /* ---------- Formattering (motorens hjelpere er globale) ---------- */
 const g0 = v => gram(v, 0);
+/* Temperatur-tall UTEN enhet, med smarte desimaler: heltall står som «22», en
+   halv grad som «3,5». Kjøleskapet kan settes i halvtrinn (0,5 °C), og da rundet
+   «Kjøleskapet 4 °C»-knappen 3,5 opp til 4 mens miljø-feltet viste 3,5 — samme
+   verdi, to ulike tall. Denne holder alle temp-etikettene på samme presisjon. */
+const gradTxt = v => fmt(v, (isFinite(v) && v % 1) ? 1 : 0);
 /* Vektoppløsning: rund til det vekta faktisk kan vise (hele gram / 0,1 / 0,01),
    med færre desimaler når mengden vokser — det andre sifferet er støy over 100 g. */
 function vektDesimaler() { const t = S.vektTrinn || 0.01; return t >= 1 ? 0 : t >= 0.1 ? 1 : 2; }
@@ -1590,9 +1595,9 @@ function tegnFfTemp(r, f) {
   const ffRom = (S.ffRomTemp != null && isFinite(S.ffRomTemp)) ? +S.ffRomTemp : (isFinite(S.romTemp) ? +S.romTemp : 22);
   boks.appendChild(h('div', { class: 'piller', style: 'margin-top:4px' },
     h('button', { class: kald ? '' : 'paa', onClick: () => { S.ffTemp = null; oppdater(); } },
-      'I rommet ' + fmt(ffRom, 0) + ' °C'),
+      'I rommet ' + gradTxt(ffRom) + ' °C'),
     h('button', { class: kald ? 'paa' : '', onClick: () => { S.ffTemp = S.kjolskapTemp || 4; oppdater(); } },
-      'I kjøleskapet ' + fmt(S.kjolskapTemp || 4, 0) + ' °C')));
+      'I kjøleskapet ' + gradTxt(S.kjolskapTemp || 4) + ' °C')));
 
   /* EGEN romtemp for forfermenten. Brukeren har bedt om dette gjentatte ganger:
      romtemperaturen ved forfermentering er ofte en annen enn ved bake-ut —
@@ -1821,8 +1826,8 @@ function tegnHeveplan(r) {
         trinnFelt('Miljø', tr.miljo, '°C', v => redigerTrinn(i, 'miljo', v))),
       // Hurtigvalg for hvor deigen står: kjøleskapet eller rommet ditt.
       h('div', { class: 'piller', style: 'margin-top:6px' },
-        h('button', { class: Math.abs(tr.miljo - kjt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', kjt) }, 'Kjøleskapet ' + fmt(kjt, 0) + ' °C'),
-        h('button', { class: Math.abs(tr.miljo - rt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', rt) }, 'Rommet ditt ' + fmt(rt, 0) + ' °C')),
+        h('button', { class: Math.abs(tr.miljo - kjt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', kjt) }, 'Kjøleskapet ' + gradTxt(kjt) + ' °C'),
+        h('button', { class: Math.abs(tr.miljo - rt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', rt) }, 'Rommet ditt ' + gradTxt(rt) + ' °C')),
       // Eksplisitt utbakt-toggle: styrer om emnet er formet (kjøles som ett emne,
       // uten lokk) — en modellforskjell som ikke kan avledes av temperaturen alene.
       h('label', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.78rem;color:var(--color-neutral-700);cursor:pointer' },
@@ -1841,7 +1846,7 @@ function trinnFelt(lab, val, enhet, onSet) {
   return h('div', { style: 'flex:1' },
     h('div', { class: 'felt-label' }, lab),
     h('div', { style: 'display:flex;align-items:center;gap:4px;margin-top:2px' },
-      h('input', { type: 'text', inputmode: 'decimal', 'aria-label': lab, value: fmt(val, 1),
+      h('input', { type: 'text', inputmode: 'decimal', 'aria-label': lab, value: gradTxt(val),
         style: 'width:100%;min-height:40px;text-align:center;font:inherit;font-weight:700;font-variant-numeric:tabular-nums;background:var(--color-neutral-100);border:1px solid var(--color-neutral-300);border-radius:10px', onblur: e => onSet(e.target.value) }),
       h('span', { style: 'font-size:.75rem;color:var(--color-neutral-600)' }, enhet)));
 }
@@ -1939,16 +1944,28 @@ function vannGuide(hyd, anb, tak) {
   return 'Over taket: mer vann enn denne melblandingen holder på, så deigen flyter ut i stedet for å reise seg. Bruk form, brett ofte under heving, og regn med tettere bunn.';
 }
 function vannKonsekvens(r) {
-  const froPp = (r.oppgittHydrering - r.effektivHydrering) * 100;
-  /* «Etter at frøene har tatt sitt» skal BARE opp når det faktisk er frø/korn i
-     deigen som binder vann. Uten tillegg er effektiv = oppgitt hydrering, og da
-     var setningen bare forvirrende — den snakket om frø i et brød uten frø. */
-  if (froPp <= 0.1) {
-    return 'Deigen ligger på ' + pst(r.oppgittHydrering * 100, 1) + ' hydrering.';
+  const eff = r.effektivHydrering * 100;
+  const harFro = r.froAbsorbert > 0.5;
+  // Uten frø/korn: rett fram, ingen frø-snakk.
+  if (!harFro) return 'Deigen ligger på ' + pst(eff, 1) + ' hydrering.';
+  /* Med frø, men UTEN vann på toppen: da tar frøene faktisk fra deigvannet, og
+     melets effektive hydrering SYNKER under det valgte. Da er «stjeler»-språket
+     riktig. (I dag finnes ingen UI-bryter for dette, men motoren støtter det.) */
+  if (r.froVannPaaToppen === false) {
+    return 'Frøene tar ' + g0(r.froAbsorbert) + ' fra deigvannet, så melet sitter igjen med '
+      + pst(eff, 1) + ' effektiv hydrering — regn med en stram deig. Bløtlegg frøene og legg vannet på toppen om du vil beholde den valgte hydreringen.';
   }
-  let s = 'Effektiv hydrering ' + pst(r.effektivHydrering * 100, 1) + ' etter at frøene har tatt sitt.';
-  if (froPp > 1.5) s += ' Frøene stjeler ' + fmt(froPp, 1) + ' prosentpoeng — kompenser med litt mer vann om deigen kjennes stram.';
-  return s;
+  /* Standard (vann på toppen): melet BEHOLDER sin hydrering — frøene er forbløtt
+     og får vannet sitt i tillegg. Tallet skal derfor IKKE synke; det var den
+     gamle teksten som var selvmotsigende («effektiv 77 %, frøene stjeler 12 pp»
+     samtidig). Vi viser melets hydrering som hovedtall og samlet deigfukt (alt
+     vann mot alt tørt, frø medregnet) som et eget, sekundært tall. */
+  const seedDry = (r.fro || []).reduce((s, f) => s + (f.gram || 0), 0);
+  const vannMedStarter = r.vannTotal + (r.starterVann || 0);
+  const deigfukt = vannMedStarter / Math.max(r.sumTort + seedDry, 1) * 100;
+  return 'Melet jobber på ' + pst(eff, 1) + ' hydrering. Frøene binder ' + g0(r.froAbsorbert)
+    + ' vann i tillegg, så samlet deigfukt er ' + pst(deigfukt, 1)
+    + '. Vannet deres er lagt på toppen, så melet beholder hydreringen sin gjennom hevingen.';
 }
 
 /* ============================================================
