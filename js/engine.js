@@ -1482,16 +1482,24 @@ function regnKjerne(state) {
      egen tekst («dette er et formbrød»). Nå velger formvalget hvilket tak som
      gjelder, så vannet deigen TRENGER rutes til riktig leveringsmåte. */
   const takVaat = Math.max(70, Math.min(92, (79 + (r.styrkeVektet - 4) * 4) * r.absFaktor));
-  const takFri  = Math.max(68, Math.min(82, 76 + (r.styrkeVektet - 4) * 4));
-  // Rugandel: rug har nesten ikke gluten, så >25 % rug krever form uansett grovhet.
-  let rugAndel = 0;
-  (r.mel || []).forEach(m => { const f = (typeof FLOURS !== 'undefined') && FLOURS.find(x => x.id === m.id); if (f && f.gruppe === 'Rug') rugAndel += (m.pct || 0) / 100; });
   const formDef = (typeof FORMER !== 'undefined' && FORMER.find(f => f.id === state.form)) || null;
   const erBrodform = !!(formDef && formDef.id === 'form');
   const medLokk = !!state.lokk;                         // gryte/boks med lokk: vegger bærer under steking
-  // Brødform bærer hele veien → absorpsjonstaket. Gryte med lokk gir litt støtte
-  // (+3 pp). Frittstående og åpen kurv står på strukturtaket.
-  const tak = erBrodform ? takVaat : (medLokk ? Math.min(takVaat, takFri + 3) : takFri);
+  /* Benkhevet uten kurv trekkes 3 pp under kurvtaket: kurven holder emnet i
+     fasong helt til ovnen, mens et benkhevet emne må bære seg selv gjennom HELE
+     etterhevingen. Appens egen FORMER-tekst sier «over ~75 % på butikkmel flyter
+     emnet ut» — uten dette fradraget regnet motoren 78 for nettopp det emnet
+     (baker-review 01.08). */
+  const takFriKurv = Math.max(68, Math.min(82, 76 + (r.styrkeVektet - 4) * 4));
+  const takFri = (formDef && formDef.ingenKurv) ? Math.max(65, takFriKurv - 3) : takFriKurv;
+  // Rugandel: rug har nesten ikke gluten, så >25 % rug krever form uansett grovhet.
+  let rugAndel = 0;
+  (r.mel || []).forEach(m => { const f = (typeof FLOURS !== 'undefined') && FLOURS.find(x => x.id === m.id); if (f && f.gruppe === 'Rug') rugAndel += (m.pct || 0) / 100; });
+  /* Brødform bærer hele veien → absorpsjonstaket. Gryte med lokk gir damp og
+     litt sideveis støtte — men en 800 g-boule fyller ikke gryteveggene, så
+     bonusen er +2 pp over strukturtaket, ikke +3 (baker-review 01.08: +3 var
+     øvre grense av det som kan forsvares). Frittstående står på strukturtaket. */
+  const tak = erBrodform ? takVaat : (medLokk ? Math.min(takVaat, takFri + 2) : takFri);
   const loft = loftIndeks({
     plan, grovPct: r.brodskala.pct, froPct: froPctEkte, tortFrak,
     hydPct: hyd * 100, tak,
@@ -1527,11 +1535,12 @@ function regnKjerne(state) {
     rugAndel,
     /* Én desimal, ikke hele prosent: 74×1,020 = 75,5 og 74×1,037 = 76,7 rundet
        til hele tall ble 75 og 77 — et «hopp» over 76 som bare var avrunding. Med
-       én desimal blir trappa jevn. Klemmes mot form-taket (`tak`), så et
-       frittstående brød ikke får en form-hydrering. Taket GULVES til 0,1 før
-       klemmingen: ellers kunne anbefalingen rundes 0,05 OVER det rå taket og havne
-       i rød sone — anbefalingen ville overskredet sitt eget tak. */
-    hydAnbefalt: Math.max(62, Math.min(Math.round(74 * r.absFaktor * 10) / 10, Math.min(88, Math.floor(tak * 10) / 10))),
+       én desimal blir trappa jevn. Klemmes mot form-taket (`tak`) MED 1,5 pp
+       margin: taket er per definisjon der emnet flyter ut, og å ANBEFALE nøyaktig
+       den grensen er å anbefale null feilmargin — akkurat i de grove blandingene
+       der deigen er vanskeligst (baker-review 01.08). Marginen biter bare når
+       behovet ligger over taket; en anbefaling som alt har luft, står urørt. */
+    hydAnbefalt: Math.max(62, Math.min(Math.round(74 * r.absFaktor * 10) / 10, Math.min(88, Math.floor((tak - 1.5) * 10) / 10))),
     gjaerTorr: torr, maalDose, gjaerUnderskudd,
     doseProfil, loft,
     ffAktiv, ffAndelEffektiv: pff,

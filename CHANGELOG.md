@@ -7,7 +7,63 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
-## 01.08.2026 — Fulltesting: hydreringsmodell, frøvann, tidsvindu og UI-polish
+## 01.08.2026 (kveld) — Seks funn fra fulltestingen: graf-tidslinja, hydreringsmargin og melfakta
+
+Bjørn meldte seks punkter med skjermbilder. To var ekte feil (merket FEIL), resten
+forbedringer. Alle 9 suiter grønne, V1 kontrollert etter motorendringene.
+
+**FEIL — varmebalansen så ut til å regne feil (den regnet riktig).** «Vann inn
+23,1 °C» mot ønsket deigtemp 24 leste som om friksjonen var glemt. Motoren er
+ettergått: tallet stemmer — en kald forferment (~690 g fra kjøl) skal også opp til
+deigtemp, og det er vannet som må løfte den. Feilen var TEKSTEN, som bare nevnte mel
+og elting; av de to alene følger ~17 °C, så leseren kunne ikke få 23 til å stemme.
+Regnesetningen i Varmebalanse-kortet nevner nå forfermentens temperatur, og en egen
+forklaring vises når den er kald (`js/app-v2.js`, `tegnTid`).
+
+**FEIL — gjæringsgrafens tidslinje stemte ikke med planen.** Grafen startet ved
+bulk (f.eks. 23:06) mens vinduet over sa start 10:51 — forfermentens 12 timer var
+usynlige. Nå henter grafen forferment-steget fra KJEDEN (samme kilde som stegene,
+dynamisk mot alle endringer) og strekker aksen bakover: skravert bånd med navn,
+timer og temperatur, pluss forfermentens temperaturkurve (blandes varm → kjøles mot
+skapet). Deigens fart/dose-kurver starter fortsatt ved eltingen — forfermenten er
+en egen kultur i egen bolle og deler ikke deigens doseskala. Etikettene fikk
+kollisjonsvern (smalere bånd → kortere navn, hopp over ved overlapp).
+`gjaeringsGraf(pts, r, bulkStart, visNaa, K)` i `js/app-v2.js`.
+
+**Dato + klokkeslett som to native kontroller.** datetime-local føltes som
+fritekst på telefon. Ny `datoTidVelger()`: `<input type="date">` + `<select>` med
+kvarters oppløsning (eksakt tid utenfor nettet beholdes som eget valg øverst).
+Brukt i egendefinert vindu (begge feltene) og «Ferdig»-velgeren. Egendefinert-
+kortet ble samtidig lagt i kolonneretning — i .valgkort-raden presset velgerne
+kortet bredere enn skjermen. `test-v2.js` oppdatert til de nye kontrollene.
+
+**Timer/Miljø i heveplanen ligger nå UNDER hverandre** — to felt på delt bredde
+ble trange på 390 px (`tegnHeveplan`).
+
+**ⓘ-knappen: runding på runding fjernet.** SVG-ikonet er selv en sirkel; knappens
+egen ring oppå var dobbel. Ny klasse `.info-knapp.ikon` (uten ramme, ikonet fyller
+knappen, trykkflaten uendret). ×- og ★-knappene beholder ringen.
+
+**Hydreringsanbefalingen fikk sikkerhetsmargin (baker-review).** Bjørns spørsmål
+«er 78,4 % realistisk å bake ut?» — svar: nei, ikke frittstående. 78,4 var
+gryte-med-lokk-anbefalingen klemt HELT opp på sitt eget tak, presentert med
+«frittstående»-tekst. Fire endringer i `engine.js`/`app-v2.js`:
+`hydAnbefalt` klemmes nå mot `tak − 1,5` (aldri null margin mot flyt-grensen);
+lokk-bonusen justert +3 → +2 pp (gryta støtter mindre enn den lovte); benkhevet
+uten kurv får `takFri − 3` (kurven holder fasongen, benken gjør det ikke — konsistent
+med FORMER-teksten «over ~75 % flyter emnet ut»); og «I vinduet»-teksten sier nå
+hvilket OPPSETT den lover for (gryte med lokk / brødform / frittstående). Ny mild
+form-nudge også når lokk er på. Bjørns 25 %-blanding: anbefalt 78,4 → 76,2 % i
+gryte — midt i bakerens eget råd (75–77).
+
+**Melbiblioteket: Regal ≠ Møllerens, men tallene overdrev forskjellen.** To møller
+(Regal = Lantmännen Cerealia, Møllerens = Norgesmøllene), to produkter — beholdes
+begge. Men deklarasjonene er 12,0 og 11,2 g protein (verifisert mot matinfo/
+matoppskrift 01.08), ikke 13,0/12,2 som sto der; reell forskjell er askorbinsyren,
+og notatene sier nå det. «Sterkeste melet i dagligvare» nedjustert (appen rangerer
+selv Kolonihagen og Regal Tipo 00 sterkere). Tre gjenlevende «10 kr/kg»-tekster fra
+før prisrevisjonen rettet til 17/64 kr, og manitoba-minusens «24 kr/kg» til 62.
+Styrkefeltene (som motoren faktisk regner med) er uendret.
 
 Bjørns fulltesting av V2 avdekket én reell modellfeil og en rekke visnings-/logikk-
 feil. Alt er fikset, testet og live på `master`. Nyeste arbeid nederst i denne posten.

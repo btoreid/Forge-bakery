@@ -72,10 +72,16 @@ const PRIS_KILDE = 'Oda.no (kilopris per vare), Meny for 2 kg-posene av siktet h
 
 const FLOURS = [
   // Siktet hvete
-  { id:'regal_standard',  navn:'Regal Hvetemel standard',          gruppe:'Siktet hvete', protein:13.0, absorpsjon:1.02, styrke:'middels-sterk', maxPct:100, kr:17, grov:0,
-    notat:'Det sterkeste melet du får i vanlig daglivare. Møllas egen beskrivelse: «svært god glutenkvalitet og høyt falltall». Inneholder askorbinsyre, som er en fordel her — det er en oksidant som strammer deigen. Ingen norsk mølle publiserer W, men anslag er 250–300. Førstevalg når mye av melet er glutenfritt.' },
-  { id:'hvetemel',        navn:'Møllerens hvetemel siktet',        gruppe:'Siktet hvete', protein:12.2, absorpsjon:1.00, styrke:'middels',       maxPct:100, kr:17, grov:0,
-    notat:'78 % utmaling. Tåler mye juling i maskinen og er tilgivende under heving, men svakere enn Regal standard. Ikke sterk nok alene til 80 %+ ciabatta.' },
+  /* Regal (Lantmännen Cerealia) og Møllerens (Norgesmøllene) er TO møller og to
+     produkter — ikke samme mel med to navn. Den reelle forskjellen er liten i
+     protein (12,0 mot 11,2 deklarert) og ligger mest i askorbinsyren: Regal er
+     tilsatt den (strammer glutenet), Møllerens selges uten tilsetninger.
+     Proteintallene var før 13,0/12,2 — ingen av dem stemte med deklarasjonene
+     (verifisert mot matinfo/matoppskrift 01.08.2026). */
+  { id:'regal_standard',  navn:'Regal Hvetemel standard',          gruppe:'Siktet hvete', protein:12.0, absorpsjon:1.02, styrke:'middels-sterk', maxPct:100, kr:17, grov:0,
+    notat:'Sterkeste av standard-hvetemelene i dagligvare (Kolonihagen og Regal Tipo 00 er sterkere, men er spesialmel). Møllas egen beskrivelse: «svært god glutenkvalitet og høyt falltall». Inneholder askorbinsyre, som er en fordel her — det er en oksidant som strammer deigen. Ingen norsk mølle publiserer W, men anslag er 250–300. Førstevalg når mye av melet er glutenfritt.' },
+  { id:'hvetemel',        navn:'Møllerens hvetemel siktet',        gruppe:'Siktet hvete', protein:11.2, absorpsjon:1.00, styrke:'middels',       maxPct:100, kr:17, grov:0,
+    notat:'78 % utmaling, fra Norgesmøllene (Regal er Lantmännen — to møller, ikke samme mel). Tåler mye juling i maskinen og er tilgivende under heving. Uten askorbinsyre, så den strammer mindre enn Regal standard i svake blandinger. Ikke sterk nok alene over ~75 % hydrering.' },
   { id:'regal_relax',     navn:'Regal Hvetemel relax',             gruppe:'Siktet hvete', protein:12.0, absorpsjon:1.00, styrke:'middels',       maxPct:100, kr:17, grov:0,
     notat:'Uten askorbinsyre. Velg denne når du VIL ha ubehandlet mel — men til en deig med 30 % enkorn gir du fra deg strammingen du trenger.' },
   { id:'hvetemel_sterkt', navn:'Sterkt hvetemel / manitoba (W300+)', gruppe:'Siktet hvete', protein:14.0, absorpsjon:1.04, styrke:'sterk',        maxPct:100, kr:62, prisAnslag:true, grov:0,
@@ -83,7 +89,7 @@ const FLOURS = [
   { id:'hvetemel_stein',  navn:'Steinmalt hvetemel (Holli/Kvelde)', gruppe:'Siktet hvete', protein:12.5, absorpsjon:1.02, styrke:'middels',       maxPct:100, kr:47, grov:0,
     notat:'Smaker mye mer, men tåler mindre elting og kortere bulk. Halver eltetiden, forleng autolysen.' },
   { id:'caputo_cuoco',    navn:'Caputo Cuoco «rød» Tipo 00',       gruppe:'Siktet hvete', protein:13.0, absorpsjon:1.02, styrke:'sterk',         maxPct:100, kr:64, grov:0,
-    notat:'W 300–320, P/L 0,45–0,55. Det STERKESTE melet du har, og det eneste som når den publiserte terskelen på W 300+ for ciabatta over 80 % hydrering. Laget for 24–72 timers modning, altså nøyaktig det du driver med. 55 % utmaling og svært fint malt. Ulempen er prisen: ca. 60 kr/kg mot Regals 10. Bruk den der styrken faktisk betaler seg — ciabatta, biga, og som forsterkning når du går grovt eller vått.' },
+    notat:'W 300–320, P/L 0,45–0,55. Det STERKESTE melet du har, og det eneste som når den publiserte terskelen på W 300+ for ciabatta over 80 % hydrering. Laget for 24–72 timers modning, altså nøyaktig det du driver med. 55 % utmaling og svært fint malt. Ulempen er prisen: ca. 64 kr/kg mot Regals 17. Bruk den der styrken faktisk betaler seg — ciabatta, biga, og som forsterkning når du går grovt eller vått.' },
   { id:'caputo_blaa',     navn:'Caputo Pizzeria «blå» Tipo 00',     gruppe:'Siktet hvete', protein:12.5, absorpsjon:0.97, styrke:'middels-sterk', maxPct:100, kr:62.4, grov:0,
     notat:'W 260–280, P/L 0,50–0,60. Konstruert for 55–67 % hydrering og korte til middels modninger. God til pizza og til biga, men den røde Cuoco er et klart bedre valg til brød.' },
   { id:'tipo00',          navn:'Tipo 00 pizzamel (generisk)',       gruppe:'Siktet hvete', protein:12.5, absorpsjon:0.97, styrke:'middels',       maxPct:100, kr:32, grov:0,
@@ -724,23 +730,23 @@ const TILLEGG = [
    `tilgang`: daglivare · meny · helsekost · nett · vanskelig               */
 const MEL_INFO = {
   regal_standard: { glutenbidrag:'bidrar', tilgang:'daglivare',
-    plus:['Sterkeste melet i vanlig daglivare','Inneholder askorbinsyre, som strammer deigen — en fordel når resten av blandingen er svak','Billig, ca. 10 kr/kg'],
+    plus:['Sterkeste av standard-hvetemelene i dagligvare','Inneholder askorbinsyre, som strammer deigen — en fordel når resten av blandingen er svak','Billig, ca. 17 kr/kg'],
     minus:['Ingen norsk mølle publiserer W-verdi, så styrken er anslått','Ikke sterk nok alene til ciabatta over 80 %'] },
   hvetemel: { glutenbidrag:'bidrar', tilgang:'daglivare',
     plus:['Tåler mye juling i maskinen','Tilgivende under heving'],
-    minus:['Svakere enn Regal standard','Ikke nok til høy hydrering'] },
+    minus:['Uten askorbinsyre — strammer mindre enn Regal standard i svake blandinger','Ikke sterk nok alene over ~75 % hydrering'] },
   regal_relax: { glutenbidrag:'bidrar', tilgang:'daglivare',
     plus:['Uten askorbinsyre — velg denne når du vil ha ubehandlet mel'],
     minus:['Du gir fra deg strammingen askorbinsyren gir, og den trengs i svake blandinger'] },
   hvetemel_sterkt: { glutenbidrag:'bidrar', tilgang:'nett',
     plus:['Eneste trygge valg for ciabatta over 80 %','20–40 % forsterker svakt norsk mel merkbart'],
-    minus:['Dyrt, ca. 24 kr/kg','Kan gi seig krumme hvis du bruker det alene i et vanlig brød'] },
+    minus:['Dyrt, ca. 62 kr/kg','Kan gi seig krumme hvis du bruker det alene i et vanlig brød'] },
   hvetemel_stein: { glutenbidrag:'bidrar', tilgang:'helsekost',
     plus:['Smaker mye mer enn valsemalt','Beholder mer av kimen'],
     minus:['Tåler mindre elting — halver eltetiden','Kortere bulk','Dyrt'] },
   caputo_cuoco: { glutenbidrag:'bidrar', tilgang:'meny',
     plus:['W 300–320 — det eneste melet du får som når terskelen for ciabatta over 80 %','Laget for 24–72 timers modning','Bør brukes i bigaen, også når du ikke baker ciabatta'],
-    minus:['Ca. 60 kr/kg mot Regals 10','Overkill i et vanlig hverdagsbrød'] },
+    minus:['Ca. 64 kr/kg mot Regals 17','Overkill i et vanlig hverdagsbrød'] },
   caputo_blaa: { glutenbidrag:'bidrar', tilgang:'meny',
     plus:['God til pizza på 55–67 % hydrering','Fin i biga'],
     minus:['Konstruert for korte modninger','Den røde Cuoco er et klart bedre valg til brød'] },
