@@ -1927,17 +1927,22 @@ function kjede(state, r, ferdigMs) {
            ['Friksjon, ' + r.eltMin + ' min', '+' + grader(r.friksjon, 1)], ['Arbeid', fmt(r.wh, 1) + ' Wh/kg'],
            ['Meltemperatur', grader(state.melTemp ?? 21, 0)], ['Deigvekt', gram(r.totalVekt)],
            ...(r.vannForKaldt ? [['NB — vannet rekker ikke alene', 'deigen lander på ' + grader(r.deigTempMulig, 1) + ' — kort ned eltingen eller kjøl melet']] : [])],
-    /* Med autolyse: saltet kommer som lake TIDLIG (når deigen har samlet seg)
-       — å helle 100 g saltlake de siste to minuttene rekker ikke å innarbeides,
-       så «salt de siste 2–3 min»-rådet gjelder bare uten autolyse. Justerings-
-       vannet er RENT: det man dropper endrer ikke saltprosenten. */
+    /* Saltet kommer i TIDLIG i begge løp — når deigen har samlet seg, etter
+       2–3 minutter fra start. Med autolyse som lake (saltvannet), uten som
+       tørt salt. Det gamle «salt de siste 2–3 minuttene» telte fra feil ende:
+       på en lang elting rakk ikke saltet å fordele seg (Bjørn 01.08).
+       Justeringsvannet er RENT: det man dropper endrer ikke saltprosenten. */
     gjor: (autoMin > 0
             ? 'Løs ALT saltet i saltvannet (' + gram(saltVann) + ') og ha hele blandingen i når deigen har samlet seg, etter 2–3 minutter. '
               + (bassinage > 0 ? 'Justeringsvannet (' + gram(bassinage) + ') sper du inn i 2–3 omganger MOT SLUTTEN, når deigen har styrke — bruk bare så mye deigen tåler; det du dropper endrer ikke saltet. ' : '')
             : '') +
           (r.ffPaa ? 'Bruk ' + fmt(r.gjaerHoved, 2) + ' g tørrgjær her — resten står alt i forfermenten. ' : '') +
+          /* «Siste 2–3 minuttene» var feil vei å telle: på en lang elting kom
+             saltet for sent til å fordele seg jevnt. Fagpraksis teller fra
+             START — samle deigen først (salt bremser hydreringen), så salt inn
+             med hele resten av eltingen til å fordele seg (Bjørn 01.08). */
           (autoMin > 0 ? 'Stopp ved 60–75 % glutenutvikling — IKKE full vindusrute.'
-                       : 'Salt de siste 2–3 minuttene. Stopp ved 60–75 % glutenutvikling — IKKE full vindusrute.'),
+                       : 'Tilsett saltet når deigen har samlet seg, etter 2–3 minutter — da har melet fått drikke først, og saltet får resten av eltingen på å fordele seg. Stopp ved 60–75 % glutenutvikling — IKKE full vindusrute.'),
     sjekk: 'Deigen slipper bollen, men er fortsatt litt klissete. Dømm på deigen, ikke på klokka.', veie: true
   });
 
