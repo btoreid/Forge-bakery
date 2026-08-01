@@ -1693,6 +1693,25 @@ function tegnFfTemp(r, f) {
       'I rommet ' + gradTxt(ffRom) + ' °C'),
     h('button', { class: kald ? 'paa' : '', onClick: () => { S.ffTemp = S.kjolskapTemp || 4; oppdater(); } },
       'I kjøleskapet ' + gradTxt(S.kjolskapTemp || 4) + ' °C')));
+  /* Kjøleskapstemperaturen er justerbar DER spørsmålet oppstår (Bjørn 01.08:
+     «hvor justerer jeg hva kjøleskapet er?» — svaret lå gjemt i Heveplan-kortet
+     på Tid). Det er den samme ene målingen som overalt ellers (`kjolskapTemp`),
+     og forfermentens temperatur følger med i samme trykk — to tall som drev fra
+     hverandre ville betydd to ulike kjøleskap i samme app. */
+  if (kald) {
+    const kjt = isFinite(S.kjolskapTemp) ? +S.kjolskapTemp : 4;
+    const settKjol = v => {
+      const nv = Math.min(12, Math.max(1, Math.round(v * 2) / 2));
+      S.kjolskapTemp = nv; S.ffTemp = nv; oppdater();
+    };
+    boks.appendChild(h('div', { class: 'stepper-blokk' },
+      h('div', { class: 'felt-label' }, 'Kjøleskapet ditt (lufta i skapet)'),
+      h('div', { class: 'stepper' },
+        h('button', { 'aria-label': 'Kaldere kjøleskap', onClick: () => settKjol(kjt - 0.5) }, '−'),
+        h('input', { type: 'text', inputmode: 'numeric', value: fmt(kjt, 1), 'aria-label': 'Kjøleskapstemperatur',
+          onblur: e => { const v = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(v)) settKjol(v); else oppdater(); } }),
+        h('button', { 'aria-label': 'Varmere kjøleskap', onClick: () => settKjol(kjt + 0.5) }, '+'))));
+  }
 
   /* EGEN romtemp for forfermenten. Brukeren har bedt om dette gjentatte ganger:
      romtemperaturen ved forfermentering er ofte en annen enn ved bake-ut —
@@ -1722,9 +1741,11 @@ function tegnFfTemp(r, f) {
       v => { S.ffRomTid = v; oppdater(); }, ' t'));
   }
 
+  // Kald: skapets temperatur står i stepperen rett over — å gjenta tallet her
+  // (og peke til Tid) var både dobbelt og, når det ikke var oppdatert, feil.
   boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' },
     kald
-      ? 'Forfermenten settes i kjøleskapet på ' + grader(f.temp, 0) + '. Er skapet ditt kaldere eller varmere, still det under Tid.'
+      ? 'Forfermenten modnes i kjøleskapet på ' + grader(f.temp, 1) + ' — gjærdosen er løst mot nettopp den temperaturen. Kaldhevingen av selve deigen bruker det samme kjøleskapet.'
       : 'Forfermenten holder rommets temperatur — ' + grader(f.temp, 0) + '.'));
 
   /* Biga TRIVES svalere (16–18 °C). Motoren klemmer ikke lenger temperaturen ned
