@@ -738,7 +738,7 @@ function tegnBrodet(r, K) {
     // ⓘ per brødtype i stedet for ett kollapskort for den valgte. Da kan man
     // lese hva en ciabatta ER før man bytter til den — som er når man lurer.
     rad.appendChild(h('button', { class: 'info-ring', 'aria-label': 'Om ' + bt.navn,
-      onClick: () => { S.brodInfo = S.brodInfo === bt.id ? null : bt.id; oppdater(); } }, infoIkon()));
+      onClick: () => { S.brodInfo = S.brodInfo === bt.id ? null : bt.id; oppdater(); } }, infoIkon(26)));
     const boks = h('div');
     boks.appendChild(rad);
     if (S.brodInfo === bt.id) boks.appendChild(brodInfoBoks(bt, paa ? K : null));
@@ -1066,7 +1066,7 @@ function tegnDeigen(r) {
           oppdater();
         }, 'Gram ' + m.navn),
         h('div', { class: 'p' }, fmt(m.pct, 0) + ' %')),
-      h('button', { class: 'info-ring', 'aria-label': 'Info om ' + m.navn, onClick: () => { S.tilleggInfo = null; S.melInfo = S.melInfo === m.id ? null : m.id; oppdater(); } }, infoIkon()),
+      h('button', { class: 'info-ring', 'aria-label': 'Info om ' + m.navn, onClick: () => { S.tilleggInfo = null; S.melInfo = S.melInfo === m.id ? null : m.id; oppdater(); } }, infoIkon(26)),
       // × til HØYRE på raden, etter info — «fjern denne meltypen». Lå før inne i
       // navnekolonnen til venstre, der den svevde under undertoksten.
       r.mel.length > 1 ? h('button', { class: 'm-fjern', 'aria-label': 'Fjern ' + m.navn,
