@@ -2196,8 +2196,24 @@ function tegnTid(r, K) {
       h('span', { style: 'margin-left:auto;font-size:.8rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums' }, fmt(r.wh, 1) + ' Wh/kg')),
     h('div', { class: 'konsekvens', style: 'margin-top:8px' },
       'For å treffe ', h('b', null, grader(S.startTemp || 24, 0)), ' deigtemp med mel på ', h('b', null, grader(S.melTemp || 21, 0)),
+      /* Forfermenten MÅ nevnes når den er med: den er en stor masse med egen
+         temperatur, og med en kald biga/poolish dominerer den hele regnestykket.
+         Sto det bare «mel og elting», så et riktig svar (varmt vann tross
+         friksjon) ut som en regnefeil — mel 21 og +5 °C friksjon alene peker
+         mot ~17 °C vann, ikke 23. */
+      r.forferment ? [', forferment på ', h('b', null, grader(r.forferment.temp, 0))] : null,
       ' og ', h('b', null, (S.eltMin || 13) + ' min'), ' elting: bruk vann på ', h('b', null, grader(r.vannTemp, 1)), '.',
       r.wh < 3 ? ' Arbeidet er under målsonen (3–5 Wh/kg) — elt lengre for åpnere krumme.' : r.wh > 8.3 ? ' Over metning (8,3 Wh/kg) — mer elting gir ikke mer nettverk.' : ' Arbeidet er i målsonen 3–5 Wh/kg.'),
+    /* Kald forferment: vannet ender gjerne NÆR (eller over) ønsket deigtemp,
+       som strider mot intuisjonen «elting varmer, så vannet må være kaldt».
+       Begge deler er sant samtidig — friksjonen varmer, men den kalde massen
+       fra kjøleskapet skal også opp til deigtemp, og vannet er det eneste
+       leddet som kan bære begge. Uten denne setningen leses tallet som feil. */
+    r.forferment && r.forferment.temp <= KALDGRENSE ? h('div', { class: 'konsekvens', style: 'margin-top:8px' },
+      'Vannet er varmere enn friksjonen alene tilsier: ', h('b', null, g0(r.forferment.total)),
+      ' forferment rett fra kjøl (', h('b', null, grader(r.forferment.temp, 0)),
+      ') skal også opp til deigtemp, og det er vannet som må løfte den. Friksjonen (+',
+      fmt(r.friksjon, 1), ' °C) er regnet inn.') : null,
     /* Kan vannet appen ber om i det hele tatt skaffes?
        Regnestykket kan lande på 1 °C eller lavere, og da er tallet ubrukelig
        som instruksjon. Da skal appen si hva som FAKTISK skjer, og hva man kan
