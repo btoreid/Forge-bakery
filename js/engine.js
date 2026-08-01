@@ -1696,6 +1696,15 @@ function kjede(state, r, ferdigMs) {
   // baguetter trekkes ut) — se overstyringene der stegene bygges.
   const presetId = r.preset ? r.preset.id : null;
   const romTK = (state.romTemp != null && isFinite(state.romTemp)) ? +state.romTemp : 24;
+  /* INGREDIENSENE STÅR PÅ STEGET DER DE TILSETTES — meltypene med gram, ikke
+     bare «Mel 1770 g» som tvang brukeren tilbake til Deig-skjermen midt i
+     bakingen (Bjørn 01.08). Blandingen fordeles proporsjonalt mellom
+     forferment og hoveddeig — samme antakelse motoren alt gjør for absorpsjon
+     og styrke. Én meltype = ingen ekstra rader (totalen sier alt). */
+  const melHovedG = r.melTotal - (r.ffPaa && r.forferment ? r.forferment.mel : 0);
+  const melTyper = andelG => ((r.mel || []).length > 1 && andelG > 0.5)
+    ? r.mel.filter(m => m.gram > 0.5).map(m => ['· ' + m.navn, gram(m.gram * andelG / Math.max(r.melTotal, 1))])
+    : [];
 
   /* Formen bestemmer HVORDAN emnet hviler og hva teksten kan love.
      `kjede()` leste aldri `state.form`, så «Uten form» fikk beskjed om å legge
@@ -1767,7 +1776,7 @@ function kjede(state, r, ferdigMs) {
     steg.push({
       id: 'ff', navn: 'Sett ' + r.ffT.navn.toLowerCase() + 'en', tid: ffStart, varighet: ff.timer * 60, tone: 'noytral',
       hoved: gram(ff.mel), hovedNote: 'mel i forfermenten', sideK: 'Modning', sideV: fmtTimer(ff.timer),
-      tall: [['Mel', gram(ff.mel)], ['Vann', gram(ff.vann)],
+      tall: [['Mel', gram(ff.mel)], ...melTyper(ff.mel), ['Vann', gram(ff.vann)],
              ff.kultur
                ? ['Moden starter', fmt(ff.starter, 0) + ' g (' + fmt(ff.podePct, 0) + ' % av melet)']
                : ['Tørrgjær', fmt(ff.gjaer, 2) + ' g'],
@@ -1845,7 +1854,10 @@ function kjede(state, r, ferdigMs) {
     steg.push({
       id: 'autolyse', navn: 'Autolyse', tid: autoStart, varighet: autoMin, tone: 'noytral',
       hoved: fmtTimer(autoMin / 60), hovedNote: 'mel og vann hviler', sideK: 'Uten', sideV: 'salt og gjær',
-      tall: [['Varighet', fmtTimer(autoMin / 60)], ['Mel (hoveddeigen)', gram(autoMel)], ['Vann', gram(r.vannHoved)],
+      // Vannet går i bollen HER når autolysen er på — da hører også
+      // vanntemperaturen til på dette steget, ikke bare på eltingen.
+      tall: [['Varighet', fmtTimer(autoMin / 60)], ['Mel (hoveddeigen)', gram(autoMel)], ...melTyper(autoMel),
+             ['Vann (' + grader(r.vannTemp, 1) + ')', gram(r.vannHoved)],
              ['Salt og gjær', 'holdes utenfor'],
              ...(r.ffPaa ? [['Forfermenten', 'står for seg — kommer i ved elting']] : [])],
       gjor: 'Bland hoveddeigens mel og vann til det ikke er tørt mel igjen — ikke elt. La det hvile tildekket. Salt og gjær' +
@@ -1864,9 +1876,15 @@ function kjede(state, r, ferdigMs) {
     /* Gjærmengden hører hjemme HER, i steget der den skal på vekta — og det er
        hoveddeigens gjær, ikke totalen. Med forferment er differansen opptil en
        tredjedel, og totalen lest som «det du veier opp nå» er en overdose. */
-    tall: [['Tørrgjær nå', fmt(r.ffPaa ? r.gjaerHoved : r.gjaerTotal, 2) + ' g'],
+    /* Uten autolyse er ELTINGEN stedet mel og vann faktisk går i bollen — da
+       skal meltypene og vannet stå her, med gram. Med autolyse er de alt
+       blandet (og listet på autolyse-steget), så her gjenstår salt og gjær. */
+    tall: [...(autoMin > 0 ? [] : [['Mel (hoveddeigen)', gram(melHovedG)], ...melTyper(melHovedG),
+             ['Vann (' + grader(r.vannTemp, 1) + ')', gram(r.vannHoved)]]),
+           ['Tørrgjær nå', fmt(r.ffPaa ? r.gjaerHoved : r.gjaerTotal, 2) + ' g'],
            ...(r.ffPaa ? [['(forfermenten har alt tatt', fmt(r.forferment.gjaer, 2) + ' g)']] : []),
            ['Salt', fmt(r.salt - (r.ffPaa && r.forferment ? (r.forferment.salt || 0) : 0), 1) + ' g'],
+           ...(r.ffPaa ? [['Forfermenten (alt i)', gram(r.forferment.total)]] : []),
            ['Friksjon, ' + r.eltMin + ' min', '+' + grader(r.friksjon, 1)], ['Arbeid', fmt(r.wh, 1) + ' Wh/kg'],
            ['Meltemperatur', grader(state.melTemp ?? 21, 0)], ['Deigvekt', gram(r.totalVekt)]],
     gjor: (r.ffPaa ? 'Bruk ' + fmt(r.gjaerHoved, 2) + ' g tørrgjær her — resten står alt i forfermenten. ' : '') +
