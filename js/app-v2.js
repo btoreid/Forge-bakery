@@ -600,7 +600,12 @@ function tegnBunnlinje(r, K) {
 
   const rader = [
     ['Mel totalt', g0(r.melTotal)],
-    ['Vann i deigen', g0(r.vannHoved)],
+    /* «Vann i hoveddeigen» = det du faktisk heller i bollen (vannHoved). Frøvannet
+       står på EGEN linje under, ellers så det ut som vann forsvant når man la til
+       frø: melet krymper (fast deigvekt), hovedvannet krymper med det, og frøenes
+       vann var usynlig. Nå balanserer regnskapet. */
+    ['Vann i hoveddeigen', g0(r.vannHoved)],
+    r.froAbsorbert > 0.5 ? ['Vann til frøene (bløtlegg)', g0(r.froAbsorbert)] : null,
     r.ffPaa ? ['Forferment', g0(r.forferment.total)] : null,
     ['Salt', fmt(r.salt, 1) + ' g'],
     /* Med forferment er totalen IKKE det man veier opp i hoveddeigen.
@@ -974,12 +979,14 @@ function tegnDeigen(r) {
     const boks = h('div', { class: 'kort' },
       h('div', { class: 'kort-hode' },
         h('span', { class: 'kort-num', style: 'display:inline' }, '1 · Hvor grovt'),
-        h('span', { class: 'h-verdi' }, fmt(bk.pct, 0) + ' % · ' + bk.kort.toLowerCase())),
+        h('span', { class: 'h-verdi' }, fmt(bk.pct, 0) + ' % · ' + bk.kort.toLowerCase() + (S.melOverstyr ? ' · egen blanding' : ''))),
+      /* Har du en EGEN melblanding, stemmer den sjelden med et av de faste
+         trinnene — den faktiske grovheten står i overskriften (f.eks. 19 %). Da
+         skal ingen pille lyse «10 %», for det var bare startpunktet du siden
+         endret. Velger du en pille, ber du om den anbefalte blandingen for det
+         trinnet, og egenblandingen viker (melOverstyr = null). */
       h('div', { class: 'piller' }, ...trinn.map(t =>
-        // Å velge et grovhetstrinn er å be om den anbefalte blandingen for det
-        // trinnet, så en egen blanding må vike — ellers ville dialen sett ut som
-        // om den ikke virket.
-        h('button', { class: S.grov === t ? 'paa' : '', onClick: () => { S.grov = t; S.melOverstyr = null; oppdater(); } }, t + ' %'))),
+        h('button', { class: (!S.melOverstyr && S.grov === t) ? 'paa' : '', onClick: () => { S.grov = t; S.melOverstyr = null; oppdater(); } }, t + ' %'))),
       h('div', { class: 'konsekvens', style: 'margin-top:12px' }, grovKonsekvens(r)));
     wrap.appendChild(boks);
   }
