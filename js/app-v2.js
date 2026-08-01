@@ -1981,10 +1981,12 @@ function tegnHeveplan(r) {
         trinnFelt('Timer', tr.timer, 't', v => redigerTrinn(i, 'timer', v)),
         trinnFelt('Miljø', tr.miljo, '°C', v => redigerTrinn(i, 'miljo', v))),
       // Hurtigvalg for hvor deigen står: kjøleskapet, det svale stedet eller rommet.
-      h('div', { class: 'piller', style: 'margin-top:6px;flex-wrap:wrap' },
-        h('button', { class: Math.abs(tr.miljo - kjt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', kjt) }, 'Kjøleskapet ' + gradTxt(kjt) + ' °C'),
-        h('button', { class: Math.abs(tr.miljo - svt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', svt) }, 'Svalt ' + gradTxt(svt) + ' °C'),
-        h('button', { class: Math.abs(tr.miljo - rt) < 0.3 ? 'paa' : '', style: 'font-size:.78rem', onClick: () => redigerTrinn(i, 'miljo', rt) }, 'Rommet ditt ' + gradTxt(rt) + ' °C')),
+      // Kortere etiketter («Kjøleskap 3,5°», ikke «Kjøleskapet 3,5 °C») og
+      // nowrap: tre knapper på 390 px brakk ellers til to linjer (Bjørn 01.08).
+      h('div', { class: 'piller', style: 'margin-top:6px' },
+        h('button', { class: Math.abs(tr.miljo - kjt) < 0.3 ? 'paa' : '', style: 'font-size:.74rem;white-space:nowrap;flex:1;padding-left:4px;padding-right:4px', onClick: () => redigerTrinn(i, 'miljo', kjt) }, 'Kjøleskap ' + gradTxt(kjt) + '°'),
+        h('button', { class: Math.abs(tr.miljo - svt) < 0.3 ? 'paa' : '', style: 'font-size:.74rem;white-space:nowrap;flex:1;padding-left:4px;padding-right:4px', onClick: () => redigerTrinn(i, 'miljo', svt) }, 'Svalt ' + gradTxt(svt) + '°'),
+        h('button', { class: Math.abs(tr.miljo - rt) < 0.3 ? 'paa' : '', style: 'font-size:.74rem;white-space:nowrap;flex:1;padding-left:4px;padding-right:4px', onClick: () => redigerTrinn(i, 'miljo', rt) }, 'Rommet ' + gradTxt(rt) + '°')),
       // Eksplisitt utbakt-toggle: styrer om emnet er formet (kjøles som ett emne,
       // uten lokk) — en modellforskjell som ikke kan avledes av temperaturen alene.
       h('label', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.78rem;color:var(--color-neutral-700);cursor:pointer' },

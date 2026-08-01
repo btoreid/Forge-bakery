@@ -81,14 +81,16 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   // 10: romtemp + kjøleskap-pills i heveplanen
   const hp = page.locator('.kort:has-text("Heveplan")').first();
   ok('romtemp-stepper finnes', await hp.locator('text=Romtemp der deigen hever').count() > 0);
-  ok('kjøleskap-knapp per trinn', await hp.locator('button:has-text("Kjøleskapet")').count() >= 2);
-  ok('rommet ditt-knapp per trinn', await hp.locator('button:has-text("Rommet ditt")').count() >= 2);
+  // Etikettene ble kortet ned 01.08 («Kjøleskap 3,5°», «Rommet 22°») så tre
+  // knapper får plass på én linje — selektorene følger de nye tekstene.
+  ok('kjøleskap-knapp per trinn', await hp.locator('button:has-text("Kjøleskap")').count() >= 2);
+  ok('rommet-knapp per trinn', await hp.locator('button:has-text("Rommet")').count() >= 2);
   // Kaldtrinnet står nå på BRUKERENS kjøleskapstemperatur, ikke plantabellens
   // 3,5 — knappen skal derfor være aktiv på det trinnet uten at man har rørt noe.
-  ok('kaldheving markert som kjøleskap', await hp.locator('button.paa:has-text("Kjøleskapet")').count() >= 1);
+  ok('kaldheving markert som kjøleskap', await hp.locator('button.paa:has-text("Kjøleskap")').count() >= 1);
   ok('kjøleskaps-stepper finnes', await hp.locator('text=Kjøleskapet ditt').count() > 0);
-  // trykk «Rommet ditt» på første trinn og se at miljø-feltet følger med
-  await hp.locator('button:has-text("Rommet ditt")').first().click();
+  // trykk «Rommet» på første trinn og se at miljø-feltet følger med
+  await hp.locator('.piller button:has-text("Rommet")').first().click();
   await page.waitForTimeout(200);
   const miljoFelt = await page.locator('.kort:has-text("Heveplan")').first().locator('input[aria-label="Miljø"]').first().inputValue();
   ok('«Rommet ditt» satte miljø til 22', miljoFelt.startsWith('22'), miljoFelt);
