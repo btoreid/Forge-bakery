@@ -1112,16 +1112,19 @@ function tegnDeigen(r) {
   if (!erPreset) {
     // Taket og anbefalingen kommer nå fra motoren, ikke fra en formel gjentatt
     // her. To steder å regne det samme er to steder å komme i utakt.
-    const tak = Math.round(r.tak);
+    // Gulv til 0,1 (ikke hele tall): hydAnbefalt ligger nå på 0,1-rutenett, og et
+    // heltallsavrundet tak kunne runde NED under anbefalingen, så «bruk anbefalt»
+    // havnet i rød sone. Samme rutenett på begge holder dem i takt.
+    const tak = Math.floor(r.tak * 10) / 10;
     const anb = r.hydAnbefalt;
     const lab0 = vannMerke(S.hyd, anb, tak);
-    const verdiEl = h('span', { class: 'skyver-verdi' }, S.hyd + ' %');
+    const verdiEl = h('span', { class: 'skyver-verdi' }, gradTxt(S.hyd) + ' %');
     const merkeEl = h('span', { class: 'skyver-klasse', style: 'background:' + lab0.bg + ';color:' + lab0.farge }, lab0.merke);
     const guideEl = h('div', { class: 'konsekvens' }, vannGuide(S.hyd, anb, tak));
     // Live-oppdatering UNDER draget (oninput) uten full re-render — så tallet og
     // merkelappen følger fingeren. Selve utregningen skjer på slipp (onchange).
     const oppdaterLive = v => {
-      verdiEl.textContent = v + ' %';
+      verdiEl.textContent = gradTxt(v) + ' %';
       const m = vannMerke(v, anb, tak);
       merkeEl.textContent = m.merke;
       merkeEl.setAttribute('style', 'background:' + m.bg + ';color:' + m.farge);
@@ -1132,7 +1135,7 @@ function tegnDeigen(r) {
       h('div', { class: 'skyver-topp' }, verdiEl, merkeEl),
       // Taket kan ligge på 88 for en grov blanding. En skyver som stopper på 86
       // kan da ikke nå appens egen anbefaling.
-      h('input', { type: 'range', class: 'skyver', min: 62, max: 88, step: 1, value: S.hyd,
+      h('input', { type: 'range', class: 'skyver', min: 62, max: 88, step: 0.5, value: S.hyd,
         oninput: e => oppdaterLive(+e.target.value),
         onchange: e => { S.hyd = +e.target.value; oppdater(); } }),
       // Gramtallet er det man faktisk heller opp, og lå før bare som en bisetning
@@ -1146,16 +1149,25 @@ function tegnDeigen(r) {
          og fullkorn suger 16–19 % mer, og da er 74 % en tørr deig, ikke en
          normal en. */
       h('div', { style: 'font-size:.74rem;color:var(--color-neutral-600);margin-top:6px' },
-        anb === 74
-          ? 'Anbefalt 74 % for et frittstående brød på siktet butikkmel.'
-          : 'Anbefalt ' + anb + ' % for melblandingen din — grovt mel og fullkorn suger mer vann enn siktet hvete, så 74 % ville gitt en stram, tørr deig her.'),
+        r.grovAndel < 0.01
+          ? 'Anbefalt ' + gradTxt(anb) + ' % for et frittstående brød på siktet butikkmel.'
+          : 'Anbefalt ' + gradTxt(anb) + ' % for melblandingen din — grovt mel og fullkorn suger mer vann enn siktet hvete, så 74 % ville gitt en stram, tørr deig her.'),
       anbefaltKnapp(S.hyd, anb, v => { S.hyd = v; oppdater(); }, ' %'),
       guideEl,
       h('div', { style: 'font-size:.78rem;color:var(--color-neutral-600);margin-top:6px;font-variant-numeric:tabular-nums' }, vannKonsekvens(r)),
       infoUtfelling('hydrering'));
     vk.className = 'kort sone-' + lab0.sone;
     if (S.hyd > tak) vk.appendChild(h('div', { class: 'varsel fare' },
-      'Melblandingen din (vektet styrke ' + fmt(r.styrkeVektet, 1) + ') tåler anslagsvis ' + tak + ' % før deigen flyter ut i stedet for å reise seg. Du ligger ' + (S.hyd - tak) + ' pp over — bruk form, eller bytt inn sterkere mel.'));
+      (r.erBrodform ? 'Melblandingen din (vektet styrke ' + fmt(r.styrkeVektet, 1) + ') tåler anslagsvis ' + gradTxt(tak) + ' % vann. '
+                    : 'Et ' + (r.medLokk ? 'emne i gryte med lokk' : 'frittstående emne') + ' av denne melblandingen bærer anslagsvis ' + gradTxt(tak) + ' % før det flyter ut i stedet for å reise seg. ') +
+      'Du ligger ' + gradTxt(Math.round((S.hyd - tak) * 10) / 10) + ' pp over — ' + (r.erBrodform ? 'bytt inn sterkere mel eller senk vannet.' : 'bak i brødform, eller senk vannet.')));
+    /* Form-nudge (baker-funn): når vannet blandingen TRENGER overstiger det et
+       frittstående emne bærer, er det signalet om å bruke form — ikke om å tørke
+       ut deigen. Den snur en høy hydrering fra advarsel til begrunnelse for form. */
+    if (!r.erBrodform && !r.medLokk && (r.hydBehov > r.takFri + 2 || r.grovAndel > 0.40 || r.rugAndel > 0.25)) {
+      vk.appendChild(h('div', { class: 'varsel' },
+        'Denne melblandingen trenger ~' + gradTxt(r.hydBehov) + ' % vann for ikke å bake tørr, men et frittstående emne bærer bare ~' + gradTxt(r.takFri) + ' % før det flyter ut. Bak i brødform — da kan du gi deigen vannet den trenger uten at den mister fasongen. (Gryte med lokk hjelper litt, men ikke like mye.)'));
+    }
     wrap.appendChild(vk);
   }
 

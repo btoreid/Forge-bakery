@@ -1468,7 +1468,30 @@ function regnKjerne(state) {
      absorpsjon 1,00), som lander på 79 % — der den gamle formelen lå for siktet
      hvete, så hvetebrødene oppfører seg som før. Det som endrer seg er de grove
      blandingene, som var de eneste formelen tok feil på. */
-  const tak = Math.max(70, Math.min(92, (79 + (r.styrkeVektet - 4) * 4) * r.absFaktor));
+  /* TO ULIKE TAK — de var slått sammen før, og det lot melets VANNBEHOV overkjøre
+     deigens STRUKTUR. Det er to forskjellige fysiske grenser:
+       • takVaat  = når deigen kjennes for våt/klissete. Stiger med kli/fullkorn
+                    (absFaktor), for de drikker vannet. Dette er FORM-taket:
+                    formen bærer deigen, så bare absorpsjonen begrenser.
+       • takFri   = når et FRITTSTÅENDE emne flyter ut i ovnsløftet. Styres av
+                    hvor mye sammenhengende gluten blandingen har (styrkeVektet),
+                    og FALLER med grovhet — kli kutter glutennettverket. Ganges
+                    IKKE med absFaktor: et rent fullkornsbrød på 86 % kjennes ikke
+                    vått (klien drikker), men det står ikke frittstående.
+     Før steg frittstående-taket til 88 % på 100 % grovt, stikk i strid med appens
+     egen tekst («dette er et formbrød»). Nå velger formvalget hvilket tak som
+     gjelder, så vannet deigen TRENGER rutes til riktig leveringsmåte. */
+  const takVaat = Math.max(70, Math.min(92, (79 + (r.styrkeVektet - 4) * 4) * r.absFaktor));
+  const takFri  = Math.max(68, Math.min(82, 76 + (r.styrkeVektet - 4) * 4));
+  // Rugandel: rug har nesten ikke gluten, så >25 % rug krever form uansett grovhet.
+  let rugAndel = 0;
+  (r.mel || []).forEach(m => { const f = (typeof FLOURS !== 'undefined') && FLOURS.find(x => x.id === m.id); if (f && f.gruppe === 'Rug') rugAndel += (m.pct || 0) / 100; });
+  const formDef = (typeof FORMER !== 'undefined' && FORMER.find(f => f.id === state.form)) || null;
+  const erBrodform = !!(formDef && formDef.id === 'form');
+  const medLokk = !!state.lokk;                         // gryte/boks med lokk: vegger bærer under steking
+  // Brødform bærer hele veien → absorpsjonstaket. Gryte med lokk gir litt støtte
+  // (+3 pp). Frittstående og åpen kurv står på strukturtaket.
+  const tak = erBrodform ? takVaat : (medLokk ? Math.min(takVaat, takFri + 3) : takFri);
   const loft = loftIndeks({
     plan, grovPct: r.brodskala.pct, froPct: froPctEkte, tortFrak,
     hydPct: hyd * 100, tak,
@@ -1496,8 +1519,19 @@ function regnKjerne(state) {
        fullkorn lander den rundt 86 %, og den klippes mot melets eget tak.
        `tak` regnes én gang her og brukes både av løftmodellen og av UI-et, så
        de to ikke kan komme i utakt. */
-    tak,
-    hydAnbefalt: Math.round(Math.max(62, Math.min(tak, 88, 74 * r.absFaktor))),
+    tak, takFri, takVaat, erBrodform, medLokk,
+    // Vannet deigen TRENGER for ikke å bake tørr (før form-klemming). UI-et bruker
+    // differansen mot takFri til å foreslå brødform: trenger den mer enn et
+    // frittstående emne bærer, er det signalet om å bruke form — ikke å tørke ut.
+    hydBehov: Math.round(74 * r.absFaktor * 10) / 10,
+    rugAndel,
+    /* Én desimal, ikke hele prosent: 74×1,020 = 75,5 og 74×1,037 = 76,7 rundet
+       til hele tall ble 75 og 77 — et «hopp» over 76 som bare var avrunding. Med
+       én desimal blir trappa jevn. Klemmes mot form-taket (`tak`), så et
+       frittstående brød ikke får en form-hydrering. Taket GULVES til 0,1 før
+       klemmingen: ellers kunne anbefalingen rundes 0,05 OVER det rå taket og havne
+       i rød sone — anbefalingen ville overskredet sitt eget tak. */
+    hydAnbefalt: Math.max(62, Math.min(Math.round(74 * r.absFaktor * 10) / 10, Math.min(88, Math.floor(tak * 10) / 10))),
     gjaerTorr: torr, maalDose, gjaerUnderskudd,
     doseProfil, loft,
     ffAktiv, ffAndelEffektiv: pff,

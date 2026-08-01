@@ -58,16 +58,20 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   console.log('— Hydrering —');
   const hyd = await page.evaluate(() => {
     const S = window.__FB.S;
-    const v = g => {
-      const r = regn(Object.assign({}, S, { brotype: 'grovbrod', grov: g, melOverstyr: null }));
-      return { anb: r.hydAnbefalt, tak: r.tak, abs: r.absFaktor };
+    const v = (g, extra) => {
+      const r = regn(Object.assign({}, S, { brotype: 'grovbrod', grov: g, melOverstyr: null }, extra || {}));
+      return { anb: r.hydAnbefalt, tak: r.tak, takFri: r.takFri, takVaat: r.takVaat, behov: r.hydBehov, abs: r.absFaktor };
     };
-    return { fint: v(0), grovt: v(100) };
+    return { fint: v(0), grovtFritt: v(100, { form: 'ingen', lokk: false }), grovtForm: v(100, { form: 'form' }) };
   });
+  // Vannet deigen TRENGER stiger med grovheten (kli suger mer) — men det er FORMEN
+  // som avgjør hvor mye deigen faktisk bærer. Bakefaglig dom (baker-agent 01.08):
+  // frittstående-taket FALLER med grovhet, brødform bærer den høye hydreringen.
   ok('anbefalingen er lav på siktet mel', hyd.fint.anb >= 72 && hyd.fint.anb <= 78, hyd.fint.anb + ' %');
-  ok('anbefalingen stiger med grovheten', hyd.grovt.anb >= hyd.fint.anb + 8, hyd.grovt.anb + ' %');
-  ok('taket ligger over anbefalingen, også grovt', hyd.grovt.tak > hyd.grovt.anb, Math.round(hyd.grovt.tak) + ' > ' + hyd.grovt.anb);
-  ok('taket advarer IKKE på grovt brød ved 80 %', hyd.grovt.tak >= 80, Math.round(hyd.grovt.tak) + ' %');
+  ok('vannbehovet stiger med grovheten', hyd.grovtForm.behov >= hyd.fint.behov + 8, hyd.grovtForm.behov + ' %');
+  ok('frittstående-taket FALLER på grovt (struktur)', hyd.grovtFritt.takFri < hyd.fint.takFri, Math.round(hyd.grovtFritt.takFri) + ' < ' + Math.round(hyd.fint.takFri));
+  ok('frittstående grovt får IKKE en form-hydrering', hyd.grovtFritt.anb <= 76, hyd.grovtFritt.anb + ' %');
+  ok('brødform bærer høy hydrering på grovt', hyd.grovtForm.tak >= 84 && hyd.grovtForm.anb >= 84, Math.round(hyd.grovtForm.tak) + ' / ' + hyd.grovtForm.anb);
   // hydLoftFaktor hadde en 5-poengs kant ved 78 når taket lå lavere.
   const kant = await page.evaluate(() => {
     let verst = 0;
