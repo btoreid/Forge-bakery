@@ -1340,6 +1340,9 @@ function tilleggSeksjon(r) {
      har tatt plass fra melet (tap ≥ 1 g). */
   const komp = tegnKompensasjon(r, false);
   if (komp) wrap.appendChild(komp);
+  // Frøvann-konvensjon: bare relevant når det faktisk er frø/korn som binder vann.
+  const frov = tegnFrovann(r);
+  if (frov) wrap.appendChild(frov);
   grupper.forEach(gr => {
     const items = TILLEGG.filter(gr.filt);
     if (!items.length) return;
@@ -1348,6 +1351,27 @@ function tilleggSeksjon(r) {
     wrap.appendChild(boks);
   });
   return wrap;
+}
+
+/* Frøvann-bryter: to måter å håndtere vannet frøene binder på. Standard er
+   FORBLØTT (vann på toppen): melet beholder hydreringen sin, frøene får vannet
+   sitt i tillegg. Alternativet er TØRRE frø rett i deigen: da trekker frøene
+   vann ut av glutenet, og melets effektive hydrering synker. Vises bare når det
+   faktisk er frø/korn som binder vann. */
+function tegnFrovann(r) {
+  if (!(r.froAbsorbert > 0.5)) return null;
+  const paaTopp = S.froVannPaaToppen !== false;   // default: forbløtt
+  const boks = kort('Frøvann', null);
+  boks.appendChild(h('div', { class: 'felt-label' }, 'Hvordan får frøene vannet sitt?'));
+  boks.appendChild(h('div', { class: 'piller', style: 'margin-top:4px' },
+    h('button', { class: paaTopp ? 'paa' : '', onClick: () => { S.froVannPaaToppen = true; oppdater(); } },
+      'Forbløtt — vann på toppen'),
+    h('button', { class: paaTopp ? '' : 'paa', onClick: () => { S.froVannPaaToppen = false; oppdater(); } },
+      'Tørre frø rett i deigen')));
+  boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:6px' }, paaTopp
+    ? 'Du bløtlegger frøene først. Appen legger ' + g0(r.froAbsorbert) + ' vann på toppen, så melet beholder den valgte hydreringen — anbefalt for kornbrød.'
+    : 'Frøene går tørre i deigen og trekker ' + g0(r.froAbsorbert) + ' vann ut av glutenet under hevingen. Melets effektive hydrering synker (se tallet under Vann), og deigen blir strammere.'));
+  return boks;
 }
 
 /* «Hva vil du gjøre med endringen?» — tillegg tar plass i en fast deigvekt, så
@@ -2879,7 +2903,7 @@ function tegnLogg(r) {
 const OPPSKRIFT_FELT = ['brotype', 'grov', 'hyd', 'tid', 'ff', 'ffType', 'ffTemp', 'ffRomTemp', 'ffRomTid', 'ffTimer', 'ffKjol',
   'tillegg', 'antall', 'vekt', 'startTemp', 'melTemp', 'maskin', 'eltMin', 'romTemp', 'kjolskapTemp',
   'stekeProfil', 'stekeProfilManuell', 'lokk', 'fulltKjol', 'form', 'utstyr', 'pyrexIOvn',
-  'saltPct', 'heveplan', 'melOverstyr', 'okDeig'];
+  'saltPct', 'heveplan', 'melOverstyr', 'okDeig', 'froVannPaaToppen'];
 function oppskriftAvtrykk() {
   const o = {};
   OPPSKRIFT_FELT.forEach(k => { if (S[k] !== undefined) o[k] = S[k]; });
