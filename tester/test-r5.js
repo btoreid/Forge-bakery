@@ -107,12 +107,13 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
       kaldFersk: kald.forferment.gjaerPctAvFfMel * 3,
       paaTaket: kald.forferment.gjaerPaaTaket,
       bigaPaaTaket: bigaKald.forferment.gjaerPaaTaket,
-      eltTekst: JSON.stringify(elt.tall) + elt.gjor
+      eltTekst: JSON.stringify(elt.tall) + JSON.stringify(elt.ingredienser) + elt.gjor
     };
   });
   ok('hoveddeigens gjær er mindre enn totalen når forfermenten tar sitt',
     gj.hoved < gj.total - 1e-6, gj.hoved.toFixed(2) + ' av ' + gj.total.toFixed(2) + ' g');
-  ok('eltesteget oppgir hoveddeigens gjær, ikke totalen', /Tørrgjær nå/.test(gj.eltTekst));
+  // Mengden bor nå i ingrediens-sjekklista («Tørrgjær»), med forfermentens andel som egen tall-rad.
+  ok('eltesteget oppgir hoveddeigens gjær, ikke totalen', /Tørrgjær/.test(gj.eltTekst) && /forfermenten har alt tatt/.test(gj.eltTekst));
   /* Kjølebane-modellen: en vanlig kald over-natta-poolish (blandet i rommet)
      trenger MER gjær enn varm, men fornuftig mye — ~1,6 % fersk, godt under
      2 %-taket. Den gamle isoterme modellen ga 6,3 % og flagget «går ikke opp». */
@@ -186,7 +187,7 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
       gryteStek: gryte.find(s => s.id === 'stek').gjor,
       brettForm: (brett.find(s => s.id === 'form') || brett.find(s => s.id === 'utbak')).gjor,
       varmPost: (varm.find(s => s.id === 'snitt') || varm.find(s => s.id === 'utbak')).gjor,
-      autoSteg: JSON.stringify((auto.find(s => s.id === 'autolyse') || {}).tall),
+      autoSteg: JSON.stringify((auto.find(s => s.id === 'autolyse') || {}).ingredienser) + ((auto.find(s => s.id === 'autolyse') || {}).gjor || ''),
       autoMel: (() => {
         const st = Object.assign({}, S, { autolyseMin: 60, ff: true, ffType: 'poolish', tid: 'lang' });
         const r = regn(st);
@@ -201,7 +202,7 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   ok('varm plan sier ikke «fra kjøl»', !/fra kjøl/i.test(steg.varmPost), steg.varmPost.slice(0, 60));
   // Autolysen skal gjelde HOVEDDEIGENS mel — forfermentens står allerede og modner.
   ok('autolysen bruker hoveddeigens mel, ikke alt melet',
-    steg.autoSteg.includes('Mel (hoveddeigen)') &&
+    /hoveddeigens mel|Mel/.test(steg.autoSteg) &&
     !steg.autoSteg.includes(String(Math.round(steg.autoMel.total)) + ' g'),
     steg.autoSteg.slice(0, 90));
 

@@ -47,6 +47,7 @@ const STANDARD = {
   autolyseMin: 0,             // autolyse i minutter; 0 = av
   handlelisteOk: false,       // «dette må være i huset» er kvittert bort
   krukkeStart: null,          // startnivået du merker av i målekrukka (valgfritt)
+  stegKvitt: {},              // per steg-id: {ing:{navn:true}, ok:ts, hoppet, notat, avvikOk}
   timere: [],                 // aktive baketimere [{id, navn, slutt, stegId, ringt}]
   friksjonKalibrert: false,   // kalibreringsboksen er besvart eller avvist
   kalib: {},                  // {foer, etter, min} — målingene fra kalibreringen
@@ -96,6 +97,7 @@ function last() {
   s.favoritter = s.favoritter.filter(x => typeof x === 'string')
     .map(x => x.indexOf(':') > 0 ? x : 'mel:' + x);
   if (s.melOverstyr != null && !Array.isArray(s.melOverstyr)) s.melOverstyr = null;
+  if (!s.stegKvitt || typeof s.stegKvitt !== 'object' || Array.isArray(s.stegKvitt)) s.stegKvitt = {};
   // Tidsplanen «kort» (Ettermiddag) er slått sammen med «dag» (Samme dag).
   // Uten denne linja ville lagret tilstand falt tilbake på første plan i lista.
   if (s.tid === 'kort') s.tid = 'dag';
@@ -993,7 +995,8 @@ function nyBakst(id) {
        modusen igjen etter et brødtypebytte, viste Tid et aktivt vindukort som
        «fittet» mot en plan som alt var nullstilt — tallene stemte ikke med noe
        (teknisk review 01.08). */
-    tidModus: 'ferdig', vinduStart: null, ffRomTid: null, ffRomTemp: null
+    tidModus: 'ferdig', vinduStart: null, ffRomTid: null, ffRomTemp: null,
+    stegKvitt: {}               // kvitteringene hører til baket, ikke til det neste
   });
   if (bt.antall) S.antall = bt.antall;
   if (bt.vekt) S.vekt = bt.vekt;
@@ -3047,22 +3050,30 @@ function tegnProsess(r, K) {
     const n = Math.min(Math.max(0, j), K.length - 1);
     S.aktivSteg = n; S.aktivStegId = K[n] ? K[n].id : null; oppdater();
   };
+  /* Grønn hake kommer fra KVITTERINGEN, ikke fra hvor du står i lista: et steg
+     er gjort når du har fullført (eller hoppet over) det med knapp — å bla seg
+     forbi teller ikke (Bjørn 01.08). */
   wrap.appendChild(h('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:12px' },
     h('div', { class: 'framdrift', style: 'flex:1;margin:0' }, ...K.map((s, j) =>
-      h('div', { class: 'prikk' + (j < i ? ' gjort' : j === i ? ' naa' : '') }))),
+      h('div', { class: 'prikk' + (stegGjort(s.id) ? ' gjort' : j === i ? ' naa' : '') }))),
     h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);white-space:nowrap;font-variant-numeric:tabular-nums' }, 'steg ' + (i + 1) + ' av ' + K.length)));
 
-  wrap.appendChild(stegKort(K[i], 'I GANG'));
+  wrap.appendChild(stegKort(K[i], 'I GANG', { harFlere: i < K.length - 1 }));
 
   wrap.appendChild(h('div', { style: 'display:flex;gap:8px;margin:6px 0 14px' },
     h('button', { class: 'btn', style: 'flex:1', disabled: i === 0 ? '' : null, onClick: () => settSteg(i - 1) }, '‹ Forrige'),
     h('button', { class: 'btn btn-primary', style: 'flex:1', disabled: i === K.length - 1 ? '' : null, onClick: () => settSteg(i + 1) }, 'Neste ›')));
 
   wrap.appendChild(h('div', { class: 'seksjonstittel' }, 'Hele prosessen · totalt ' + fmt(K.totalT, 1) + ' t'));
-  K.forEach((s, j) => wrap.appendChild(h('button', { class: 'valgkort' + (j === i ? ' paa' : ''), style: 'min-height:48px', onClick: () => settSteg(j) },
-    h('span', { style: 'flex:0 0 24px;height:24px;border-radius:999px;display:grid;place-items:center;font-size:.72rem;font-weight:800;' + (j < i ? 'background:var(--color-accent-2-500);color:#fff' : 'background:var(--color-neutral-200)') }, j < i ? '✓' : String(j + 1)),
-    h('span', { style: 'flex:1;font-size:.86rem;font-weight:600' }, s.navn),
-    h('span', { style: 'font-size:.74rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums' }, klokke(s.tid)))));
+  K.forEach((s, j) => {
+    const gjort = stegGjort(s.id);
+    const kvI = stegKv(s.id);
+    wrap.appendChild(h('button', { class: 'valgkort' + (j === i ? ' paa' : ''), style: 'min-height:48px', onClick: () => settSteg(j) },
+      h('span', { style: 'flex:0 0 24px;height:24px;border-radius:999px;display:grid;place-items:center;font-size:.72rem;font-weight:800;' + (gjort ? 'background:var(--color-accent-2-500);color:#fff' : 'background:var(--color-neutral-200)') }, gjort ? '✓' : String(j + 1)),
+      h('span', { style: 'flex:1;min-width:0;font-size:.86rem;font-weight:600' }, s.navn,
+        kvI && kvI.notat ? h('span', { style: 'display:block;font-size:.68rem;font-weight:400;color:var(--color-neutral-600);overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, '💬 ' + kvI.notat) : null),
+      h('span', { style: 'font-size:.74rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums' }, klokke(s.tid))));
+  });
 
   // Diskré vei tilbake til handlelista når den er kvittert bort — den skal ikke
   // stå over stegene, men den skal fortsatt være å finne.
@@ -3190,7 +3201,28 @@ function tegnKrukke(steg) {
       'Klokka styrer rekkefølgen, men deigen bestemmer. Har krukka nådd målet før klokka, er den likevel ferdig — og blir de uenige, har krukka rett.'));
 }
 
-function stegKort(steg, status) {
+/* ---------- Kvittering per steg ----------
+   Hvert steg eier sin egen kvittering (Bjørn 01.08): ingrediensene hakes av,
+   steget fullføres (eller hoppes over) med knapp, og først da får det grønn
+   hake — tid alene gjør ikke et steg «gjort». Kvitteringene bor i `stegKvitt`
+   (data, synkes), nullstilles av nyBakst/bakPaaNytt, og notatene følger med
+   inn i loggposten når baket lagres. */
+function stegKv(id) { return (S.stegKvitt && S.stegKvitt[id]) || null; }
+function settKv(id, endr) {
+  const gml = stegKv(id) || { ing: {}, ok: null, hoppet: false, notat: '', avvikOk: false };
+  S.stegKvitt = Object.assign({}, S.stegKvitt, { [id]: Object.assign({}, gml, endr) });
+  oppdater();
+}
+function stegGjort(id) { const kv = stegKv(id); return !!(kv && (kv.ok || kv.hoppet)); }
+/* Avvik mot planen i minutter: + = ferdig ETTER planlagt slutt, − = før.
+   Regnes av kvitteringstidspunktet, så tallet står i ro etterpå. */
+function stegAvvikMin(steg) {
+  const kv = stegKv(steg.id);
+  if (!kv || !kv.ok) return 0;
+  return Math.round((kv.ok - (steg.tid.getTime() + steg.varighet * 60000)) / 60000);
+}
+
+function stegKort(steg, status, ctx) {
   const kropp = h('div', { class: 'kropp' });
   if (steg.hoved) {
     kropp.appendChild(h('div', { style: 'display:flex;align-items:flex-end;gap:12px' },
@@ -3200,6 +3232,24 @@ function stegKort(steg, status) {
       steg.sideV ? h('div', { style: 'text-align:right' },
         h('div', { style: 'font-size:.64rem;font-weight:800;letter-spacing:.06em;color:var(--color-neutral-500);text-transform:uppercase' }, steg.sideK || ''),
         h('div', { style: 'font-size:1.15rem;font-weight:800;font-variant-numeric:tabular-nums' }, steg.sideV)) : null));
+  }
+  /* Ingrediens-sjekklista — bare på det AKTIVE steget (status satt). Hver rad
+     er en avkryssbar knapp; «tall»-radene under er referanse, dette er
+     handlingene. Avhukingen huskes i stegKvitt. */
+  const kv = stegKv(steg.id);
+  if (status && steg.ingredienser && steg.ingredienser.length) {
+    const liste = h('div', { class: 'sjekkliste' },
+      h('div', { class: 'felt-label', style: 'font-weight:800;margin-bottom:4px' }, 'Ingredienser i dette steget — huk av'));
+    steg.ingredienser.forEach(([navn, mengde]) => {
+      const paa = !!(kv && kv.ing && kv.ing[navn]);
+      liste.appendChild(h('button', { class: 'sjekkrad' + (paa ? ' paa' : ''),
+        'aria-pressed': paa ? 'true' : 'false',
+        onClick: () => settKv(steg.id, { ing: Object.assign({}, (kv && kv.ing) || {}, { [navn]: !paa }) }) },
+        h('span', { class: 'sjekkboks' }, paa ? '✓' : ''),
+        h('span', { style: 'flex:1;min-width:0;text-align:left' }, navn),
+        h('span', { style: 'font-weight:800;font-variant-numeric:tabular-nums' }, mengde)));
+    });
+    kropp.appendChild(liste);
   }
   if (steg.tall && steg.tall.length) kropp.appendChild(h('div', { style: 'margin-top:8px' }, ...steg.tall.map(([k, v]) => h('div', { class: 'tallrad' }, h('span', null, k), h('b', null, v)))));
   if (steg.gjor) kropp.appendChild(h('div', { class: 'instruks' }, h('span', { class: 'lab' }, 'Slik gjør du'), steg.gjor));
@@ -3222,10 +3272,62 @@ function stegKort(steg, status) {
             onClick: () => startTimer(navn, Math.round(steg.varighet), steg.id) },
             '⏰ Sett timer på ' + fmtTimer(steg.varighet / 60))));
   }
-  const pilleBg = status === 'I GANG' ? 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)' : 'background:var(--color-neutral-200);color:var(--color-neutral-700)';
+  /* Kvittering: fullfør (grønn hake) eller hopp over. Fullføring før/etter
+     planlagt slutt utløser tilbudet om å FLYTTE resten av planen tilsvarende —
+     eksempelet fra virkeligheten: bulken trengte 3 timer, ikke 4, og da skal
+     resten av kjeden rykke fram i stedet for å lyve om klokkeslettene. Flyttingen
+     gjøres ved å justere ferdig-ankeret (kjeden regnes bakover fra det), så alle
+     gjenstående steg følger med. Kommentarfeltet lagres per steg og følger med
+     inn i loggposten — det er slik appen skal lære av bakene. */
+  if (status) {
+    const gjort = stegGjort(steg.id);
+    const kvitt = h('div', { style: 'margin-top:12px' });
+    if (!gjort) {
+      const alleIng = steg.ingredienser && steg.ingredienser.length
+        ? Object.fromEntries(steg.ingredienser.map(([navn]) => [navn, true])) : null;
+      kvitt.appendChild(h('div', { style: 'display:flex;gap:8px' },
+        h('button', { class: 'btn btn-primary', style: 'flex:1.4', onClick: () => {
+          settKv(steg.id, Object.assign({ ok: Date.now() }, alleIng ? { ing: alleIng } : {}));
+        } }, alleIng ? '✓ Alt i — fullfør steget' : '✓ Fullfør steget'),
+        h('button', { class: 'btn', style: 'flex:1', onClick: () => settKv(steg.id, { hoppet: true }) }, 'Hopp over')));
+    } else {
+      const avvik = stegAvvikMin(steg);
+      kvitt.appendChild(h('div', { style: 'display:flex;align-items:center;gap:8px' },
+        h('span', { class: 'pille', style: 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)' },
+          kv && kv.hoppet && !kv.ok ? 'HOPPET OVER' : '✓ FULLFØRT' + (kv && kv.ok ? ' ' + klHM(kv.ok) : '')),
+        h('button', { class: 'btn-ghost', style: 'margin-left:auto;font-size:.76rem',
+          onClick: () => settKv(steg.id, { ok: null, hoppet: false, avvikOk: false }) }, 'Angre')));
+      // Plan-korrigeringen: vis når avviket er reelt (>20 min), ikke avfeid, og
+      // det finnes gjenstående steg å flytte.
+      if (kv && kv.ok && !kv.avvikOk && Math.abs(avvik) > 20 && steg.id !== 'kjol' && ctx && ctx.harFlere) {
+        const foer = avvik < 0;
+        kvitt.appendChild(h('div', { class: 'varsel', style: 'margin-top:8px' },
+          h('b', null, 'Du ble ferdig ' + fmtTimer(Math.abs(avvik) / 60) + (foer ? ' FØR' : ' ETTER') + ' planen. '),
+          'Skal resten av planen flyttes tilsvarende, så klokkeslettene stemmer igjen?',
+          h('div', { style: 'display:flex;gap:8px;margin-top:8px' },
+            h('button', { class: 'btn btn-primary', style: 'flex:1.4;font-size:.8rem', onClick: () => {
+              S.ferdigMs = (S.ferdigMs != null ? S.ferdigMs : standardFerdig()) + avvik * 60000;
+              if (S.tidModus === 'vindu') S.tidModus = 'ferdig';   // vinduet er historie når man justerer underveis
+              oppdater();
+            } }, 'Flytt planen ' + fmtTimer(Math.abs(avvik) / 60) + (foer ? ' fram' : ' bak')),
+            h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: () => settKv(steg.id, { avvikOk: true }) }, 'Behold planen'))));
+      }
+    }
+    // Kommentar til steget — lagres i loggen sammen med baket.
+    kvitt.appendChild(h('textarea', { class: 'steg-notat', rows: 2,
+      placeholder: 'Kommentar til steget — hva skjedde? (lagres i loggen)',
+      'aria-label': 'Kommentar til steget ' + steg.navn,
+      onblur: e => { if (e.target.value !== ((kv && kv.notat) || '')) settKv(steg.id, { notat: e.target.value }); else lagre(); }
+    }, (kv && kv.notat) || ''));
+    kropp.appendChild(kvitt);
+  }
+  const gjortNaa = stegGjort(steg.id);
+  const pilleBg = status === 'I GANG'
+    ? (gjortNaa ? 'background:var(--color-accent-2-500);color:#fff' : 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)')
+    : 'background:var(--color-neutral-200);color:var(--color-neutral-700)';
   return h('div', { class: 'stegkort ' + (steg.tone || 'noytral') },
     h('div', { style: 'display:flex;align-items:center;padding:14px 16px 2px' },
-      status ? h('span', { class: 'pille', style: pilleBg }, status) : null,
+      status ? h('span', { class: 'pille', style: pilleBg }, gjortNaa && status === 'I GANG' ? '✓ GJORT' : status) : null,
       h('span', { style: 'margin-left:auto;font-size:.74rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums' }, klokke(steg.tid) + ' · ' + fmtTimer(steg.varighet / 60))),
     h('div', { style: 'font-family:var(--font-heading);font-size:1.3rem;line-height:1.15;padding:2px 16px 6px' }, steg.navn),
     kropp);
@@ -3307,6 +3409,21 @@ function oppskriftAvtrykk() {
 }
 function lagreBak(r) {
   const naa = Date.now();
+  /* Stegnotatene og avvikene fra prosess-skjermen følger med inn i posten —
+     «bulken trengte 3 t, ikke 4» skal kunne leses ut igjen senere og gjøre
+     neste bak (og appen) bedre (Bjørn 01.08). Navnene hentes fra kjeden slik
+     den så ut da baket ble lagret. */
+  const K = kjede(S, r, S.ferdigMs != null ? S.ferdigMs : standardFerdig());
+  const stegNotater = K.map(s => {
+    const kv = stegKv(s.id);
+    if (!kv || (!kv.notat && !kv.hoppet && !(kv.ok && Math.abs(stegAvvikMin(s)) > 20))) return null;
+    return {
+      steg: s.navn,
+      notat: kv.notat || '',
+      hoppet: !!kv.hoppet && !kv.ok,
+      avvikMin: kv.ok ? stegAvvikMin(s) : null
+    };
+  }).filter(Boolean);
   S.loggListe = S.loggListe.concat([{
     id: 'b' + naa,
     laget: naa, endret: naa,
@@ -3317,12 +3434,14 @@ function lagreBak(r) {
     kar: S.lgKar, dato: new Date().toLocaleDateString('nb-NO'),
     grov: fmt(r.brodskala.pct, 0), hyd: fmt(r.hyd * 100, 0), loft: r.loft.loft, dose: fmt(r.doseProfil.dose, 2),
     bilder: (S.lgBilder || []).slice(),
+    ...(stegNotater.length ? { stegNotater } : {}),
     // Selve oppskriften, ikke bare måletallene — det er dette «Bak dette på
     // nytt» henter tilbake. Poster fra før dette feltet fantes kan ikke
     // gjenskapes, og da vises knappen med vilje ikke.
     oppskrift: oppskriftAvtrykk()
   }]);
   S.lgNavn = ''; S.lgBilder = [];
+  S.stegKvitt = {};             // kvitteringene er levert — neste bak starter blankt
   oppdater();
 }
 /* Bak dette på nytt: legg oppskriften tilbake i tilstanden og gå til Brød.
@@ -3333,6 +3452,7 @@ function bakPaaNytt(b) {
   Object.keys(b.oppskrift).forEach(k => { S[k] = b.oppskrift[k]; });
   S.skjerm = 'brodet';
   S.lgRediger = null; S.lgSlett = null; S.byttBekreft = null;
+  S.stegKvitt = {};             // nytt bak, blanke kvitteringer
   oppdater();
 }
 
@@ -3354,6 +3474,19 @@ function loggPost(b, i) {
     h('div', { style: 'font-size:.8rem;color:var(--color-neutral-700);margin-top:4px;font-variant-numeric:tabular-nums' },
       b.grov + ' % grovt · ' + b.hyd + ' % vann · løft ' + b.loft + ' · dose ' + b.dose));
   if (b.notat) kortEl.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:6px' }, b.notat));
+  /* Stegnotatene fra prosessen: hva som faktisk skjedde, steg for steg —
+     avvik («1 t 0 min før planen»), hoppede steg og kommentarene. Det er
+     læringsdataene for neste bak. */
+  if (b.stegNotater && b.stegNotater.length) {
+    const sn = h('div', { class: 'info-boks', style: 'margin-top:8px' },
+      h('div', { style: 'font-size:.66rem;font-weight:800;letter-spacing:.06em;color:var(--color-neutral-600);text-transform:uppercase;margin-bottom:4px' }, 'Fra prosessen'));
+    b.stegNotater.forEach(n => sn.appendChild(h('div', { style: 'font-size:.78rem;line-height:1.45;margin-top:4px' },
+      h('b', null, n.steg + ': '),
+      [n.hoppet ? 'hoppet over' : null,
+       (n.avvikMin != null && Math.abs(n.avvikMin) > 20) ? 'ferdig ' + fmtTimer(Math.abs(n.avvikMin) / 60) + (n.avvikMin < 0 ? ' før planen' : ' etter planen') : null,
+       n.notat || null].filter(Boolean).join(' — '))));
+    kortEl.appendChild(sn);
+  }
   if (b.bilder && b.bilder.length) kortEl.appendChild(h('div', { class: 'logg-bilder' },
     ...b.bilder.map((src, j) => h('button', { class: 'logg-bilde', 'aria-label': 'Vis bilde ' + (j + 1) + ' i stort format',
       onClick: () => { S.bildeVis = { id: b.id, i: j }; oppdater(); } },
