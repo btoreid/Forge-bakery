@@ -833,13 +833,16 @@ svg.brodsvg .fyll { fill: var(--color-accent-200); }
   width: 56px; height: 56px; border-radius: 12px;
   border: 1.5px dashed var(--color-neutral-400); background: none;
   color: var(--color-neutral-600); font-size: 1.2rem; cursor: pointer; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
 }
-/* Bakstbildenes 📷/+-knapper (64 px, mot brødradenes 56). Var inline-stil på
-   én +-knapp; med kameraknappen ved siden av ble det en klasse. */
+/* Bakstbildenes kamera/+-knapper (64 px, mot brødradenes 56). Var inline-stil
+   på én +-knapp; med kameraknappen ved siden av ble det en klasse. Flex
+   sentrerer SVG-ikonet — tekstsentrering treffer ikke et inline-svg. */
 .bilde-ny {
   width: 64px; height: 64px; border-radius: 12px;
   border: 1.5px dashed var(--color-neutral-400); background: none;
   color: var(--color-neutral-600); font-size: 1.4rem; cursor: pointer; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 
 /* Bildet i stort format — dekker hele telefonrammen, over bunnmenyen (z 30). */

@@ -139,6 +139,59 @@ update — én felles policy ville ikke dekket begge riktig.
 
 ---
 
+## Bilder i Storage (lagt til 02.08.2026)
+
+Bjørn: «Vi må lagre bildene i databasen. Det gir ikke mening å bare ha dem i
+cache.» Før lå bildene som base64 inne i `bakerstate`-JSON-en — hele raden
+(med alle bildene) ble lastet opp på nytt ved hver endring, og localStorage
+(~5 MB) var det egentlige taket.
+
+Nå er bildene FILER i Storage-bøtta `bakebilder`: appen laster hvert bilde opp
+som `bruker-id/bilde-id.jpg`, og tilstanden bærer bare stien. Lokalt beholdes
+en nedskalert kopi så alt virker offline; en annen enhet henter fila fra bøtta
+når bildet vises. Slettes et bilde (eller en post) i appen, fjernes fila også.
+
+Kjør denne i Supabase → **SQL Editor**:
+
+```sql
+-- Privat bøtte. `on conflict` gjør spørringen trygg å kjøre flere ganger.
+insert into storage.buckets (id, name, public)
+values ('bakebilder', 'bakebilder', false)
+on conflict (id) do nothing;
+
+-- Samme lås som bakerstate, bare for filer: du ser og rører KUN mappa med din
+-- egen bruker-id som navn. (storage.foldername(name))[1] er første mappeledd.
+create policy "egne bakebilder lesing" on storage.objects for select
+  to authenticated
+  using (bucket_id = 'bakebilder' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "egne bakebilder innsetting" on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'bakebilder' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "egne bakebilder oppdatering" on storage.objects for update
+  to authenticated
+  using (bucket_id = 'bakebilder' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'bakebilder' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "egne bakebilder sletting" on storage.objects for delete
+  to authenticated
+  using (bucket_id = 'bakebilder' and (storage.foldername(name))[1] = auth.uid()::text);
+```
+
+Kjøres ikke SQL-en, sier synken fra («Bildebøtta ‹bakebilder› finnes ikke
+ennå …») og alt fortsetter å virke lokalt — opplastingen prøver igjen ved
+neste endring.
+
+**Slik henger det sammen i koden:** et bilde er `{id, data, sti}`.
+`id` er utledet av innholdet (samme bilde → samme id på alle enheter),
+`data` er den lokale JPEG-en (offline-visning), `sti` settes når fila er
+lastet opp. `tilSky()` i app-v2.js stripper `data` fra opplastede bilder før
+raden pushes; `synkBilder()` laster opp filene; `bildeSrc()` viser lokal data,
+øktens nedlastingsminne, eller en plassholder mens fila hentes.
+
+---
+
 ## Sjekk at det ble riktig
 
 Dette sto en kort stund som en knapp i appen også. Den er tatt ut igjen: begge

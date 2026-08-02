@@ -91,12 +91,14 @@ function last() {
   // Normaliser typer så korrupt lagret tilstand ikke velter appen (teknisk #4/#10)
   if (!Array.isArray(s.loggListe)) s.loggListe = [];
   if (!Array.isArray(s.favoritter)) s.favoritter = [];
-  if (!Array.isArray(s.lgBilder)) s.lgBilder = [];
+  // Bildene normaliseres til objektformen {id, data?, sti?} — gamle poster
+  // hadde rene base64-strenger, og skyen kan levere referanser uten data.
+  s.lgBilder = normBilder(s.lgBilder);
   if (!Array.isArray(s.lgBrod)) s.lgBrod = [];
   s.lgBrod = s.lgBrod.filter(x => x && typeof x === 'object')
     .map(x => ({ metode: typeof x.metode === 'string' ? x.metode : '',
       kommentar: typeof x.kommentar === 'string' ? x.kommentar : '',
-      bilder: Array.isArray(x.bilder) ? x.bilder.filter(b => typeof b === 'string') : [] }));
+      bilder: normBilder(x.bilder) }));
   if (!Array.isArray(s.loggSlettet)) s.loggSlettet = [];
   // Favorittene het før bare meltype-id-en. Nå kan også stekeutstyr og
   // stekeprofiler merkes, så id-ene er navnerom-prefikset for å unngå at to
@@ -118,6 +120,15 @@ function last() {
   // posisjon — og posisjon flytter seg når noe slettes eller når skyen synker
   // inn en annen liste. Eldre poster (lagret før id-en fantes) får en her.
   s.loggListe = s.loggListe.map((b, i) => (b && b.id) ? b : Object.assign({}, b, { id: 'b' + i + '-' + (b && b.dato ? b.dato : 'x') }));
+  // Samme bildenormalisering på postene som på skjemafeltene.
+  s.loggListe = s.loggListe.map(b => {
+    if (!b || typeof b !== 'object') return b;
+    const ny = Object.assign({}, b);
+    if (ny.bilder != null) ny.bilder = normBilder(ny.bilder);
+    if (Array.isArray(ny.brod)) ny.brod = ny.brod.map(r =>
+      (r && r.bilder != null) ? Object.assign({}, r, { bilder: normBilder(r.bilder) }) : r);
+    return ny;
+  });
   if (!s.tillegg || typeof s.tillegg !== 'object') s.tillegg = {};
   s.tillegg = Object.assign({}, s.tillegg);
   s.loggListe = s.loggListe.slice(); s.favoritter = s.favoritter.slice();
@@ -151,7 +162,17 @@ const UI_FELT = ['skjerm', 'paramInfo', 'tilleggInfo', 'melInfo', 'meltallInfo',
 function dataAvtrykk(s) {
   const kopi = {};
   Object.keys(s).forEach(k => { if (k !== 'oppdatert' && UI_FELT.indexOf(k) < 0) kopi[k] = s[k]; });
-  try { return JSON.stringify(kopi); } catch (e) { return null; }
+  /* Bildenes `data` holdes UTENFOR avtrykket: at basen64-en hentes ned fra
+     bøtta (eller rehydreres etter en fletting) er ikke en endring av dataene —
+     talte den, ville hver nedlasting stemplet `oppdatert` og vunnet dueller
+     den ikke skulle vinne. Å LEGGE TIL eller fjerne et bilde synes fortsatt:
+     id-en (og sti-en) er med. */
+  try {
+    return JSON.stringify(kopi, function (k, v) {
+      if (k === 'data' && this && typeof this.id === 'string' && typeof v === 'string' && v.slice(0, 5) === 'data:') return undefined;
+      return v;
+    });
+  } catch (e) { return null; }
 }
 /* Grunnlinja settes fra tilstanden slik den ble LASTET, ikke fra null. Med null
    ville aller første lagring alltid talt som en endring — og det er nettopp den
@@ -194,7 +215,11 @@ function lagre() {
     // omstart var dagens arbeid borte. Flagget rendres som banner i toppen.
     if (String(e && e.name) === 'QuotaExceededError') _lagringFull = true;
   }
-  if (endret && kanSynke()) Sky.lagreOpp(S);
+  if (endret && kanSynke()) {
+    // Skyraden får den STRIPPEDE kopien; filene tar synkBilder() seg av.
+    Sky.lagreOpp(tilSky(S));
+    setTimeout(synkBilder, 50);
+  }
 }
 let _lagringFull = false;
 
@@ -226,6 +251,59 @@ const byId = id => document.getElementById(id);
 function voksFelt(el) {
   el.style.height = 'auto';
   el.style.height = (el.scrollHeight + 2) + 'px';
+}
+
+/* ---------- Bildemodellen ----------
+   Et bilde er {id, data?, sti?}:
+     id   — stabil identitet, utledet av innholdet (samme bilde → samme id på
+            alle enheter, også for gamle poster som bare hadde base64-strengen)
+     data — nedskalert JPEG som data-URL; det LOKALE eksemplaret, alt vises og
+            virker offline med bare denne
+     sti  — filstien i Storage-bøtta (bruker-id/bilde-id.jpg) når bildet er
+            lastet opp; det er DENNE som synkes, aldri basen64-en
+   Skyraden bærer altså referanser, ikke megabytes: se tilSky() og synkBilder(). */
+function idFraData(data) {
+  // djb2 over hvert 7. tegn: rask nok for en 60 kB-streng, stabil på tvers av
+  // enheter — og kollisjoner mellom to ULIKE brødbilder er i praksis utenkelig
+  // når lengden bakes inn i tillegg.
+  let hsh = 5381;
+  for (let i = 0; i < data.length; i += 7) hsh = ((hsh * 33) ^ data.charCodeAt(i)) >>> 0;
+  return 'i' + hsh.toString(36) + '-' + (data.length % 100000).toString(36);
+}
+function nyttBilde(data) { return { id: idFraData(data), data }; }
+function normBilde(x) {
+  if (typeof x === 'string') return x.slice(0, 5) === 'data:' ? nyttBilde(x) : null;
+  if (!x || typeof x !== 'object' || typeof x.id !== 'string') return null;
+  const ut = { id: x.id };
+  if (typeof x.data === 'string' && x.data.slice(0, 5) === 'data:') ut.data = x.data;
+  if (typeof x.sti === 'string' && x.sti) ut.sti = x.sti;
+  return (ut.data || ut.sti) ? ut : null;    // verken innhold eller referanse = ingenting å vise
+}
+function normBilder(liste) { return Array.isArray(liste) ? liste.map(normBilde).filter(Boolean) : []; }
+/* ALLE bildene i en tilstand, med posten de hører til (null = loggskjemaet).
+   Returnerer referansene selv, ikke kopier — opplasteren stempler sti rett på. */
+function alleBilder(s) {
+  const ut = [];
+  (s.lgBilder || []).forEach(b => ut.push({ b, post: null }));
+  (s.lgBrod || []).forEach(r => (((r && r.bilder) || [])).forEach(b => ut.push({ b, post: null })));
+  (s.loggListe || []).forEach(p => {
+    if (!p) return;
+    (p.bilder || []).forEach(b => ut.push({ b, post: p }));
+    (p.brod || []).forEach(r => (((r && r.bilder) || [])).forEach(b => ut.push({ b, post: p })));
+  });
+  return ut;
+}
+/* Kopien som går til skyen: bilder som ER lastet opp (har sti) mister data-
+   feltet — raden skal bære referanser. Et bilde som ennå ikke er oppe beholder
+   basen64-en, ellers hadde en annen enhet aldri fått se det om opplastingen
+   aldri rakk å skje. */
+function tilSky(s) {
+  try {
+    return JSON.parse(JSON.stringify(s, function (k, v) {
+      if (k === 'data' && this && typeof this.sti === 'string' && typeof v === 'string' && v.slice(0, 5) === 'data:') return undefined;
+      return v;
+    }));
+  } catch (e) { return s; }
 }
 
 /* ---------- Favoritter ----------
@@ -311,6 +389,21 @@ function ikonSvg(name) {
     logg: () => { P('M12 7v13'); P('M3 17a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z'); },
     oppslag: () => { C(11, 11, 7); P('m21 21-4.3-4.3'); }
   }[name] || (() => {}))();
+  return svg;
+}
+
+/* Kamera i samme strektegnede stil som resten av ikonene. 📷-emojien rendres
+   som fargeglyf fra systemskriften og skar seg mot de flate ikonene (Bjørn
+   02.08: «stygt, lag det mer som flat ikon»). */
+function kameraIkon(px = 22) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  [['viewBox', '0 0 24 24'], ['width', px], ['height', px], ['fill', 'none'], ['stroke', 'currentColor'],
+   ['stroke-width', '2'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'], ['aria-hidden', 'true']].forEach(a => svg.setAttribute(a[0], a[1]));
+  const P = d => { const e = document.createElementNS(NS, 'path'); e.setAttribute('d', d); svg.appendChild(e); };
+  P('M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z');
+  const c = document.createElementNS(NS, 'circle');
+  c.setAttribute('cx', 12); c.setAttribute('cy', 13); c.setAttribute('r', 3); svg.appendChild(c);
   return svg;
 }
 
@@ -3485,18 +3578,18 @@ function brodBildeRad(nr, bilder, leggTil, fjern) {
      filvelgeren — ufarlig. */
   const inpKam = h('input', { type: 'file', accept: 'image/*', capture: 'environment', style: 'display:none',
     'aria-label': 'Ta bilde til brød ' + nr,
-    onchange: e => skalerBilde(e.target.files && e.target.files[0], leggTil) });
+    onchange: e => skalerBilde(e.target.files && e.target.files[0], d => leggTil(nyttBilde(d))) });
   const inpVelg = h('input', { type: 'file', accept: 'image/*', style: 'display:none',
     'aria-label': 'Velg bilde til brød ' + nr,
-    onchange: e => skalerBilde(e.target.files && e.target.files[0], leggTil) });
+    onchange: e => skalerBilde(e.target.files && e.target.files[0], d => leggTil(nyttBilde(d))) });
   const rad = h('div', { class: 'logg-bilder', style: 'margin-top:6px' });
-  bilder.forEach((src, k) => rad.appendChild(h('div', { style: 'position:relative' },
-    h('img', { src, alt: 'Bilde ' + (k + 1) + ' av brød ' + nr, class: 'brod-mini' }),
+  bilder.forEach((b, k) => rad.appendChild(h('div', { style: 'position:relative' },
+    h('img', { src: bildeSrc(b), alt: 'Bilde ' + (k + 1) + ' av brød ' + nr, class: 'brod-mini' }),
     h('button', { class: 'bilde-fjern', 'aria-label': 'Fjern bilde ' + (k + 1) + ' av brød ' + nr,
-      onClick: () => fjern(k) }, '×'))));
+      onClick: () => { slettSkyBilde(b); fjern(k); } }, '×'))));
   if (bilder.length < MAKS_BRODBILDER) {
     rad.appendChild(h('button', { class: 'brod-mini-ny',
-      'aria-label': 'Ta bilde av brød ' + nr, onClick: () => inpKam.click() }, '📷'));
+      'aria-label': 'Ta bilde av brød ' + nr, onClick: () => inpKam.click() }, kameraIkon(20)));
     rad.appendChild(h('button', { class: 'brod-mini-ny',
       'aria-label': 'Legg til bilde av brød ' + nr, onClick: () => inpVelg.click() }, '+'));
   }
@@ -3662,19 +3755,19 @@ function loggPost(b, i) {
       if (rad.bilder && rad.bilder.length) {
         const start = visIdx;
         bb.appendChild(h('div', { class: 'logg-bilder', style: 'margin-top:4px' },
-          ...rad.bilder.map((src, k) => h('button', { class: 'logg-bilde liten',
+          ...rad.bilder.map((bl, k) => h('button', { class: 'logg-bilde liten',
             'aria-label': 'Vis bilde ' + (k + 1) + ' av brød ' + (j + 1) + ' i stort format',
             onClick: () => { S.bildeVis = { id: b.id, i: start + k }; oppdater(); } },
-            h('img', { src, alt: 'Brød ' + (j + 1) + ', bilde ' + (k + 1) })))));
+            h('img', { src: bildeSrc(bl), alt: 'Brød ' + (j + 1) + ', bilde ' + (k + 1) })))));
       }
       visIdx += (rad.bilder || []).length;
     });
     kortEl.appendChild(bb);
   }
   if (b.bilder && b.bilder.length) kortEl.appendChild(h('div', { class: 'logg-bilder' },
-    ...b.bilder.map((src, j) => h('button', { class: 'logg-bilde', 'aria-label': 'Vis bilde ' + (j + 1) + ' i stort format',
+    ...b.bilder.map((bl, j) => h('button', { class: 'logg-bilde', 'aria-label': 'Vis bilde ' + (j + 1) + ' i stort format',
       onClick: () => { S.bildeVis = { id: b.id, i: j }; oppdater(); } },
-      h('img', { src, alt: 'Bilde ' + (j + 1) + ' av ' + (b.navn || 'baket') })))));
+      h('img', { src: bildeSrc(bl), alt: 'Bilde ' + (j + 1) + ' av ' + (b.navn || 'baket') })))));
   // «Bak dette på nytt» — hovedveien tilbake til et bak som funket. Erstatter
   // startblokka på Brød-skjermen, som pekte på et forvalg i stedet for på noe
   // Bjørn faktisk hadde bakt.
@@ -3712,6 +3805,9 @@ function loggSlettBekreft(b, i) {
           /* Filtrer på ID, ikke indeks. En synk fra en annen enhet kan bytte
              ut hele lista mens bekreftelsesdialogen står åpen, og da peker
              indeksen på en helt annen post enn den man ba om å slette. */
+          // Filene i bøtta følger posten ut — ellers fyller foreldreløse
+          // bilder opp Storage uten at noe i appen peker på dem lenger.
+          slettSkyBilde(postBilder(b).map(x => x.b));
           S.loggSlettet = (S.loggSlettet || []).concat([b.id]);
           S.loggListe = S.loggListe.filter(x => x.id !== b.id);
           S.lgSlett = null; oppdater();
@@ -3773,7 +3869,7 @@ function loggRediger(b, i) {
       h('div', { class: 'felt-label', style: 'margin:0;flex:1' }, 'Brød ' + (j + 1)),
       h('button', { class: 'btn-ghost', style: 'font-size:.74rem;padding:2px 0;color:var(--color-danger)',
         'aria-label': 'Fjern brød ' + (j + 1),
-        onClick: () => { settFelt('brod', brodNaa().filter((_, k) => k !== j)); oppdater(); } }, 'Fjern')));
+        onClick: () => { slettSkyBilde((rad.bilder || []).slice()); settFelt('brod', brodNaa().filter((_, k) => k !== j)); oppdater(); } }, 'Fjern')));
     boks.appendChild(h('select', { class: 'sok', 'aria-label': 'Stekemetode for brød ' + (j + 1),
       onchange: e => { settBrodRad(j, 'metode', e.target.value); oppdater(); } },
       ...(typeof BAKE_PROFILES !== 'undefined' ? BAKE_PROFILES : []).map(p =>
@@ -3801,12 +3897,12 @@ function loggRediger(b, i) {
     } }, '+ Legg til brød'));
   boks.appendChild(h('div', { class: 'felt-label' }, 'Bilder'));
   const rad = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:6px' });
-  (b.bilder || []).forEach((src, j) => rad.appendChild(h('div', { style: 'position:relative' },
-    h('img', { src, alt: 'Bilde ' + (j + 1), style: 'width:64px;height:64px;object-fit:cover;border-radius:12px;border:1px solid var(--color-neutral-300);display:block' }),
+  (b.bilder || []).forEach((bl, j) => rad.appendChild(h('div', { style: 'position:relative' },
+    h('img', { src: bildeSrc(bl), alt: 'Bilde ' + (j + 1), style: 'width:64px;height:64px;object-fit:cover;border-radius:12px;border:1px solid var(--color-neutral-300);display:block' }),
     h('button', { 'aria-label': 'Fjern bilde ' + (j + 1), class: 'bilde-fjern',
-      onClick: () => { settFelt('bilder', (b.bilder || []).filter((_, k) => k !== j)); oppdater(); } }, '×'))));
+      onClick: () => { slettSkyBilde(bl); settFelt('bilder', (b.bilder || []).filter((_, k) => k !== j)); oppdater(); } }, '×'))));
   if ((b.bilder || []).length < 3) {
-    rad.appendChild(h('button', { class: 'bilde-ny', 'aria-label': 'Ta bilde', onClick: () => inpKam.click() }, '📷'));
+    rad.appendChild(h('button', { class: 'bilde-ny', 'aria-label': 'Ta bilde', onClick: () => inpKam.click() }, kameraIkon(22)));
     rad.appendChild(h('button', { class: 'bilde-ny', 'aria-label': 'Legg til bilde', onClick: () => inpFil.click() }, '+'));
   }
   boks.appendChild(rad);
@@ -3870,9 +3966,9 @@ function tegnLoggRegnskap() {
    i radrekkefølge. Viseren, pilene og sletteadvarselen teller gjennom denne
    ene lista — miniatyrenes indekser i loggPost() må følge samme rekkefølge. */
 function postBilder(b) {
-  const liste = ((b && b.bilder) || []).map(src => ({ src, brod: null }));
+  const liste = ((b && b.bilder) || []).map(bl => ({ b: bl, brod: null }));
   ((b && b.brod) || []).forEach((rad, j) =>
-    ((rad && rad.bilder) || []).forEach(src => liste.push({ src, brod: j + 1 })));
+    ((rad && rad.bilder) || []).forEach(bl => liste.push({ b: bl, brod: j + 1 })));
   return liste;
 }
 function tegnBildeVis() {
@@ -3887,7 +3983,7 @@ function tegnBildeVis() {
   const merke = bilder[idx].brod ? ' · brød ' + bilder[idx].brod : '';
   const lag = h('div', { class: 'bildevis', id: 'bildevis', role: 'dialog', 'aria-label': 'Bilde i stort format',
     onClick: () => { S.bildeVis = null; oppdater(); } },
-    h('img', { src: bilder[idx].src, alt: (post.navn || 'Baket') + (merke ? ', brød ' + bilder[idx].brod : '') + ', bilde ' + (idx + 1), onClick: stopp }),
+    h('img', { src: bildeSrc(bilder[idx].b), alt: (post.navn || 'Baket') + (merke ? ', brød ' + bilder[idx].brod : '') + ', bilde ' + (idx + 1), onClick: stopp }),
     h('button', { class: 'bv-lukk', 'aria-label': 'Lukk' }, '✕'),
     h('div', { class: 'bv-tekst' }, (post.navn || 'Uten navn') + ' · ' + post.dato + merke +
       (bilder.length > 1 ? ' · ' + (idx + 1) + ' av ' + bilder.length : '')),
@@ -3909,19 +4005,86 @@ function tegnBildeVelger() {
   const inp = h('input', { type: 'file', accept: 'image/*', style: 'display:none',
     'aria-label': 'Velg bilde', onchange: e => leggTilBilde(e.target.files && e.target.files[0]) });
   const rad = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:6px' });
-  (S.lgBilder || []).forEach((src, i) => rad.appendChild(h('div', { style: 'position:relative' },
-    h('img', { src, alt: 'Bilde ' + (i + 1), style: 'width:64px;height:64px;object-fit:cover;border-radius:12px;border:1px solid var(--color-neutral-300);display:block' }),
+  (S.lgBilder || []).forEach((b, i) => rad.appendChild(h('div', { style: 'position:relative' },
+    h('img', { src: bildeSrc(b), alt: 'Bilde ' + (i + 1), style: 'width:64px;height:64px;object-fit:cover;border-radius:12px;border:1px solid var(--color-neutral-300);display:block' }),
     h('button', { 'aria-label': 'Fjern bilde ' + (i + 1),
       style: 'position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:999px;border:1px solid var(--color-neutral-300);background:#fff;color:var(--color-danger);font-weight:800;line-height:1;cursor:pointer;padding:0',
-      onClick: () => { S.lgBilder = (S.lgBilder || []).filter((_, j) => j !== i); oppdater(); } }, '×'))));
+      onClick: () => { slettSkyBilde(b); S.lgBilder = (S.lgBilder || []).filter((_, j) => j !== i); oppdater(); } }, '×'))));
   if ((S.lgBilder || []).length < 3) {
-    rad.appendChild(h('button', { class: 'bilde-ny', 'aria-label': 'Ta bilde', onClick: () => inpKam.click() }, '📷'));
+    rad.appendChild(h('button', { class: 'bilde-ny', 'aria-label': 'Ta bilde', onClick: () => inpKam.click() }, kameraIkon(22)));
     rad.appendChild(h('button', { class: 'bilde-ny', 'aria-label': 'Legg til bilde', onClick: () => inp.click() }, '+'));
   }
   boks.appendChild(rad);
   boks.appendChild(inpKam); boks.appendChild(inp);
   return boks;
 }
+/* ---------- Bildene mot skyen ----------
+   Visning: bildeSrc() svarer alltid synkront — lokal data først, deretter
+   øktens nedlastingsminne, ellers en nøytral plassholder mens fila hentes fra
+   bøtta i bakgrunnen. Nedlastet innhold holdes i MINNET, ikke i localStorage:
+   kvoten på 5 MB skal ikke spises av kopier som alltid kan hentes på nytt. */
+const _bildeMinne = {};        // sti → data-URL for denne økten
+const _bildeHenter = {};       // sti → true mens nedlastingen pågår
+const BILDE_VENTER = 'data:image/svg+xml,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" fill="#ede3d3"/><circle cx="12" cy="13" r="3.2" fill="none" stroke="#c9b99f" stroke-width="1.4"/><path d="M8 8.5l1.6-2h4.8l1.6 2" fill="none" stroke="#c9b99f" stroke-width="1.4" stroke-linecap="round"/></svg>');
+function bildeSrc(b) {
+  if (!b) return BILDE_VENTER;
+  if (b.data) return b.data;
+  if (b.sti) {
+    if (_bildeMinne[b.sti]) return _bildeMinne[b.sti];
+    hentBilde(b.sti);
+  }
+  return BILDE_VENTER;
+}
+function hentBilde(sti) {
+  if (_bildeHenter[sti] || typeof Sky === 'undefined' || !Sky.klar() || !Sky.bruker()) return;
+  _bildeHenter[sti] = true;
+  Sky.lastNedBilde(sti).then(blob => {
+    if (!blob) { delete _bildeHenter[sti]; return; }    // prøves igjen ved neste visning
+    const les = new FileReader();
+    les.onload = () => { _bildeMinne[sti] = les.result; render(); };
+    les.readAsDataURL(blob);
+  }).catch(() => { delete _bildeHenter[sti]; });
+}
+function dataTilBlob(dataUrl) {
+  const deler = dataUrl.split(','), bin = atob(deler[1]);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return new Blob([buf], { type: (deler[0].match(/data:([^;]+)/) || [])[1] || 'image/jpeg' });
+}
+/* Opplasteren: hvert bilde med data men uten sti går som FIL til bøtta, og
+   sti-en stemples på objektet. Sekvensielt og selvhelende — feiler et kall
+   (nett nede, bøtta mangler), stopper runden og neste lagre() prøver igjen.
+   `endret` stemples på posten så en annen enhet adopterer sti-versjonen. */
+let _lasterOppBilder = false;
+async function synkBilder() {
+  if (_lasterOppBilder || !kanSynke()) return;
+  const uid = naaKonto();
+  if (!uid) return;
+  const venter = alleBilder(S).filter(x => x.b.data && !x.b.sti);
+  if (!venter.length) return;
+  _lasterOppBilder = true;
+  try {
+    for (const { b, post } of venter) {
+      const sti = uid + '/' + b.id + '.jpg';
+      const res = await Sky.lastOppBilde(sti, dataTilBlob(b.data));
+      if (res && res.feil) return;
+      b.sti = sti;
+      if (post) post.endret = Date.now();
+    }
+  } finally {
+    _lasterOppBilder = false;
+  }
+  lagre();       // sti-ene lokalt + strippet skyrad
+}
+/* Beste-forsøks sletting i bøtta når et bilde (eller en post med bilder)
+   fjernes i appen. Uten konto/nett: ingenting å gjøre — da ligger det heller
+   ingenting oppe. */
+function slettSkyBilde(x) {
+  const stier = (Array.isArray(x) ? x : [x]).map(b => b && b.sti).filter(Boolean);
+  if (stier.length && typeof Sky !== 'undefined' && Sky.klar() && Sky.bruker()) Sky.slettBilder(stier);
+}
+
 /* Skaler ned og lever et data-URL. Felles for alle bildeveiene (baket, per
    brød, redigering) — grensa og kvotevernet skal ikke kunne drifte fra
    hverandre. `ferdig` kalles kun når bildet faktisk fikk plass. */
@@ -3960,13 +4123,13 @@ function skalerBilde(fil, ferdig) {
 function leggTilBilde(fil, loggIdx) {
   skalerBilde(fil, data => {
     if (loggIdx == null) {
-      S.lgBilder = (S.lgBilder || []).concat([data]);
+      S.lgBilder = (S.lgBilder || []).concat([nyttBilde(data)]);
     } else if (S.loggListe[loggIdx]) {
       // `endret` MÅ stemples: flettingen avgjør duellen på det feltet, og en
       // post med nytt bilde tapte mot en uendret kopi på en annen enhet.
       const maalId = S.loggListe[loggIdx].id;
       S.loggListe = S.loggListe.map(x => x.id === maalId
-        ? Object.assign({}, x, { bilder: (x.bilder || []).concat([data]), endret: Date.now() })
+        ? Object.assign({}, x, { bilder: (x.bilder || []).concat([nyttBilde(data)]), endret: Date.now() })
         : x);
     }
     oppdater();
@@ -4284,7 +4447,7 @@ function tegnKonto() {
     boks.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
       'Bakeloggen, bildene og valgene dine lagres i skyen og følger deg til andre enheter. Appen virker som før uten nett — endringene sendes opp når du er tilkoblet igjen.'));
     boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
-      h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: async () => { await Sky.skyvNaa(S); render(); } }, 'Synk nå'),
+      h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: async () => { await Sky.skyvNaa(tilSky(S)); synkBilder(); render(); } }, 'Synk nå'),
       h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: loggUtTrygt }, 'Logg ut')));
     if (skyForm.utFeil) boks.appendChild(h('div', { class: 'varsel fare' },
       h('b', null, 'Fikk ikke lagret loggen i skyen. '),
@@ -4462,7 +4625,7 @@ async function loggUtTrygt() {
   // 1 · Opp i skyen, og verifiser. Feiler det, skjer INGENTING annet: man blir
   //     stående innlogget med alt i behold og får beskjed.
   if (alle.length || (S.loggSlettet || []).length) {
-    await Sky.skyvNaa(S);
+    await Sky.skyvNaa(tilSky(S));
     const st = Sky.status();
     if (st.tilstand === 'feil') { skyForm.utFeil = st.tekst || ''; render(); return; }
   }
@@ -4493,6 +4656,12 @@ async function loggUtTrygt() {
 async function synkVedInnlogging() {
   if (_harHentetNed) return;
   _harHentetNed = true;
+  /* Bildedata før flettingen: skyens kopi av en post er STRIPPET (bare sti),
+     og vinner den duellen, ville den lokale basen64-en forsvunnet — og bildet
+     måtte lastes ned igjen fra bøtta rett etterpå. Id-en er innholdsutledet,
+     så det lokale eksemplaret kan legges trygt tilbake i vinneren. */
+  const lokalBildeData = {};
+  alleBilder(S).forEach(x => { if (x.b.data) lokalBildeData[x.b.id] = x.b.data; });
   const sky = await Sky.hentNed();
   // Leseferil er IKKE det samme som «ingenting der oppe». Uten dette skillet
   // kunne et nettverksglipp få appen til å laste opp lokal tilstand over en
@@ -4524,7 +4693,7 @@ async function synkVedInnlogging() {
   if (!sky || !sky.state) {
     if (kontoByttet) { S = nyStandard(); if (window.__FB) window.__FB.S = S; S.loggListe = arkiv.poster.slice(); S.loggSlettet = arkiv.slettet.slice(); }
     _synkOk = true;                                                // flettet mot (tom) sky — porten kan åpnes
-    lagre(); Sky.lagreOpp(S); render(); return;                    // ingenting oppe ennå — legg opp det lokale
+    lagre(); Sky.lagreOpp(tilSky(S)); synkBilder(); render(); return;                    // ingenting oppe ennå — legg opp det lokale
   }
   const skyMs = sky.oppdatert ? new Date(sky.oppdatert).getTime() : 0;
   const lokaltMs = kontoByttet ? -1 : (S.oppdatert || 0);          // byttet konto → skyen vinner alltid
@@ -4567,6 +4736,9 @@ async function synkVedInnlogging() {
   // Loggen settes ETTER at innstillingene er avgjort, uansett hvem som vant.
   S.loggListe = flettet;
   S.loggSlettet = gravsteiner;
+  // Rehydrer: strippede bilder får det lokale eksemplaret tilbake. Rører ikke
+  // avtrykket — dataAvtrykk ser bevisst bort fra bildenes `data`.
+  alleBilder(S).forEach(x => { if (!x.b.data && lokalBildeData[x.b.id]) x.b.data = lokalBildeData[x.b.id]; });
   /* PORTEN ÅPNES FØRST NÅ: vi har hentet ned og flettet mot skyen for denne
      kontoen — det er nøyaktig betingelsen `_synkOk` beskriver. Uten denne
      tilordningen var den løpende synken DØD: `kanSynke()` ble aldri sann, og
@@ -4582,10 +4754,11 @@ async function synkVedInnlogging() {
   const skyLogg = skyState.loggListe || [];
   const skyGrav = skyState.loggSlettet || [];
   if (lokaltMs > skyMs || flettet.length !== skyLogg.length || gravsteiner.length !== skyGrav.length) {
-    Sky.skyvNaa(S);
+    Sky.skyvNaa(tilSky(S));
   }
   render();
   hentDelteKalibreringer();
+  synkBilder();      // legg opp bilder som bare finnes lokalt (også gamle bak)
 }
 
 /* Delte maskinmålinger.
@@ -4848,5 +5021,5 @@ try { history.replaceState({ skjerm: S.skjerm }, ''); } catch (e) {}
 /* Testkroken. `flettLogg` er eksponert fordi den er ren og fordi den er den
    viktigste funksjonen i appen å ha dekket: det er den som gjør at bakeloggen
    ikke kan forsvinne i en synk. */
-window.__FB = { S, render, oppdater, flettLogg, oppskriftAvtrykk, startTimer, justerTimer, avbrytTimer };
+window.__FB = { S, render, oppdater, flettLogg, oppskriftAvtrykk, tilSky, startTimer, justerTimer, avbrytTimer };
 })();
