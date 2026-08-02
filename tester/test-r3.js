@@ -108,10 +108,14 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await page.screenshot({ path: SHOT('r3-profiler') });
 
   console.log('— Logg: bilder og sikkerhetskopi —');
+  /* Loggskjemaet (navn, bilder, «Lagre baket») er SISTE STEG I PROSESS;
+     Logg-skjermen er historikken og sikkerhetskopien. */
   await page.click('#bunnmeny button:has-text("Logg")');
-  await page.waitForTimeout(200);
-  ok('bilde-velger finnes', await page.locator('button[aria-label="Legg til bilde"]').count() === 1);
+  await page.waitForTimeout(250);
   ok('backup-kort finnes', await page.locator('.kort:has-text("Sikkerhetskopi")').count() === 1);
+  await page.click('#bunnmeny button:has-text("Prosess")');
+  await page.waitForTimeout(350);
+  ok('bilde-velger finnes', await page.locator('button[aria-label="Legg til bilde"]').count() === 1);
   // lag et testbilde (64x64 rød PNG) og last det opp
   const fs = require('fs');
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAG0lEQVR42u3BAQ0AAADCoPdPbQ8HFAAAAAAA8G4wQAABY8mtogAAAABJRU5ErkJggg==', 'base64');
@@ -123,10 +127,10 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await velger.setFiles(SHOT('testbilde'));
   await page.waitForTimeout(500);
   ok('bilde lagt til som miniatyr', await page.locator('img[alt="Bilde 1"]').count() === 1);
-  // lagre baket og se bildet på loggposten
+  // lagre baket — lagring fra Prosess lander på Logg, der posten vises
   await page.fill('input[placeholder*="Halvgrovt"]', 'Testbak med bilde');
   await page.click('button:has-text("Lagre baket")');
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(400);
   ok('loggpost viser bildet', await page.locator('.kort:has-text("Testbak med bilde") img').count() === 1);
   ok('bildevelgeren er tømt etter lagring', await page.evaluate(() => window.__FB.S.lgBilder.length) === 0);
   // nedlasting av kopi
