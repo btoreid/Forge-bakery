@@ -123,8 +123,17 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   ok('én rad per brød i oppskriften (4)', await skjema.locator('select[aria-label^="Stekemetode for brød"]').count() === 4);
   await skjema.locator('select[aria-label="Stekemetode for brød 2"]').selectOption('brod_glass_stal');
   await page.waitForTimeout(250);
-  await skjema.locator('input[aria-label="Kommentar til brød 1"]').fill('Glasset av etter 18 min');
+  await skjema.locator('textarea[aria-label="Kommentar til brød 1"]').fill('Glasset av etter 18 min');
   await page.waitForTimeout(250);
+  // Feltet skal VOKSE med lang tekst — bryte til nye linjer, ikke scrolle
+  // sidelengs (Bjørn 02.08). Måles på klientboksen: høyere enn én linje, og
+  // ingen vannrett overflyt.
+  const kfelt = skjema.locator('textarea[aria-label="Kommentar til brød 2"]');
+  const kfoer = await kfelt.evaluate(e => e.clientHeight);
+  await kfelt.fill('Glasset av etter 18 min, så fem minutter ekstra med damp. Bunnen ble litt mørk — neste gang lavere hylle, kortere etterstek og en skvett vann i brettet under.');
+  await page.waitForTimeout(250);
+  ok('kommentarfeltet vokser med teksten', await kfelt.evaluate((e, foer) =>
+    e.clientHeight > foer && e.scrollWidth <= e.clientWidth + 1, kfoer));
   await skjema.locator('input[placeholder*="Halvgrovt"]').fill('Bak brød for brød');
   await page.click('button:has-text("Lagre baket")');
   await page.waitForTimeout(300);
@@ -144,10 +153,13 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   await bkort.locator('button:has-text("Rediger")').click();
   await page.waitForTimeout(300);
   const red = page.locator('.kort:has-text("Redigerer")');
-  await red.locator('input[aria-label="Kommentar til brød 3"]').fill('Stekt tre timer senere, åpen på stålet');
+  await red.locator('textarea[aria-label="Kommentar til brød 3"]').fill('Stekt tre timer senere, åpen på stålet');
   await page.waitForTimeout(250);
   ok('kommentar kan legges til i ettertid', await page.evaluate(() =>
     window.__FB.S.loggListe.find(b => b.navn === 'Bak brød for brød').brod[2].kommentar.includes('tre timer')));
+  // Lagret kommentar skal stå i feltet når redigeringen tegnes om — `value`-
+  // attributtet virker ikke på textarea, så innholdet må stå som tekstbarn.
+  ok('kommentaren står i feltet etter re-render', await red.locator('textarea[aria-label="Kommentar til brød 1"]').evaluate(e => e.value.includes('18 min')));
   await red.locator('select[aria-label="Stekemetode for brød 3"]').selectOption('brod_apen');
   await page.waitForTimeout(250);
   ok('metode kan endres i ettertid', await page.evaluate(() =>
@@ -241,6 +253,12 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   const arkTekst = (await page.locator('#loggArk').innerText()).toUpperCase();
   ok('viser postens navn', arkTekst.includes('BAK MED BRØDBILDE'));
   ok('regnskapet er med', arkTekst.includes('MEL TOTALT') && arkTekst.includes('GJÆR'));
+  // Radstilene var scopet til .bunnlinje og traff ikke arket i #telefon —
+  // «Mel totalt1 770 g» uten luft mellom etikett og verdi. Sjekk KOMPILERT
+  // stil, ikke bare klassenavnet, så en ny omscoping ikke sniker seg forbi.
+  ok('radene har arkets stil (etikett–verdi med luft)', await page.locator('#loggArk .regnskap .rad').first().evaluate(e => {
+    const s = getComputedStyle(e); return s.display === 'flex' && s.justifyContent === 'space-between';
+  }));
   ok('hevekurven er med', arkTekst.includes('GJÆRINGEN OVER TID') && await page.locator('#loggArk svg').count() >= 1);
   ok('ligger over bunnmenyen', await page.locator('#loggArk').evaluate(e => +getComputedStyle(e).zIndex) > 30);
   // Visningen skal ikke røre den EKTE tilstanden: S byttes bare synkront under
