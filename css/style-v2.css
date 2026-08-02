@@ -223,12 +223,18 @@ input[type=range] { accent-color: var(--color-accent); }
   padding-bottom: env(safe-area-inset-bottom, 0px);
   box-sizing: content-box;
 }
+/* Åtte punkter på 390 px: LIK LUFT rundt etikettene, ikke like brede kolonner.
+   Med `flex: 1` fikk hver knapp 49 px uansett ord — «Tid» svømte i 18 px luft
+   på hver side mens «Forferment» hadde 0,7 og nesten rørte naboen (Bjørn
+   02.08: «ser ikke balansert ut»). `flex: 1 1 auto` gir hver knapp
+   tekstbredden pluss en lik andel av det som er til overs, så gapet mellom
+   ordene blir det samme hele veien. */
 .bunnmeny button {
-  flex: 1; border: none; background: none; cursor: pointer;
-  padding: 8px 0 10px; min-height: 56px; min-width: 0;
+  flex: 1 1 auto; border: none; background: none; cursor: pointer;
+  padding: 8px 3px 10px; min-height: 56px; min-width: 0;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
-  /* .58rem, ikke .64: med Forferment og Autolyse er menyen åtte punkter, og
-     «Forferment» skal få plass på 390 px uten å klippes. */
+  /* .58rem, ikke .64: menyen er åtte punkter, og «Forferment» skal få plass
+     på 390 px uten å klippes. */
   font-size: .58rem; font-weight: 700; color: var(--color-neutral-600);
   letter-spacing: -.01em; white-space: nowrap;
 }

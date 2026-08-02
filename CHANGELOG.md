@@ -7,6 +7,57 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 02.08.2026 — Vekta: 0,01 g ut, og presisjon etter mengde
+
+Bjørn: «min vekt er 0,1 g, ikke 0,01 — ta bort 0,01, det er det ingen som
+bruker. Gir f.eks. ikke mening å måle komma-x over 50 gram.»
+
+Vektvalget er nå **hele gram** eller **0,1 g**. Finvekt-trinnet er ute
+(`VEKT_TRINN` i js/app-v2.js), og lagret 0,01 migreres til 0,1 i `last()` —
+ellers ville valget stått usynlig og gitt oppskrifter med desimaler ingen
+pille lenger tilbyr.
+
+I tillegg styrer **mengden** presisjonen: over 50 g vises hele gram uansett
+hva vekta kan (`veiG()`: taket var 100 g/1 desimal, nå 50 g/0). Under det er
+tidelen ekte informasjon — gjær og malt lever der, og 4,3 g er noe annet enn
+4 g. Åtte steder som hardkodet én eller to desimaler på gram (bunnstripa,
+regnskapets gjær- og saltrader, forferment-tabellen, «lagres automatisk med
+baket») bruker nå `veiG()`, så tallene ikke kan drifte fra hverandre:
+gjæren viser «6 g» / «6,1 g» der den før sto som «6,09 g».
+
+Tester i `tester/test-v2.js`: to vektvalg, ingen desimaler på hele gram,
+én desimal under 50 g, ingen over — og at lagret 0,01 migreres.
+
+---
+
+## 02.08.2026 — «Start på nytt» på Brød-skjermen
+
+Bjørn: «etter mye baking og endringer er det litt kaos». Nederst på Brød —
+bak en bekreftelse som sier hva som skjer — nullstiller knappen oppskriften,
+tidsplanen, avhukingene i Prosess og det ulagrede loggskjemaet. Har du et
+standardbrød, landes det der, akkurat som ved en fersk oppstart.
+
+`BEHOLD_VED_NYSTART` er en HVITELISTE over det som består: bakeloggen,
+favorittene, standardbrødet, utstyret, maskinmålingene og kjøkkenets
+temperaturer. Skrevet slik med vilje — et nytt oppskriftsfelt som legges til
+senere nullstilles da av seg selv, mens en svarteliste stille ville latt det
+overleve. Bilder i det forkastede skjemaet ryddes også ut av Storage-bøtta.
+Ti tester i `tester/test-r3.js`.
+
+---
+
+## 02.08.2026 — Bunnmenyen: lik luft rundt punktene
+
+Med like brede kolonner (`flex: 1`) fikk «Tid» 18 px luft på hver side mens
+«Forferment» hadde 0,7 og nesten rørte naboen — det Bjørn så som «ikke
+balansert». `flex: 1 1 auto` gir hver knapp tekstbredden pluss en lik andel av
+det som er til overs, så gapet mellom ordene er det samme hele veien (målt:
+8,9–14,4 px mot 0,7–17,8 før). Verifisert på 320, 360, 390 og 430 px — ingen
+klipping. Regresjonstest i `tester/test-flytt.js` måler luften på 320 og
+390 px og krever at spennet holder seg lite.
+
+---
+
 ## 02.08.2026 — Forferment og autolyse som egne steg (3 og 4 av 5)
 
 Bjørn: «for mye scrolling nå». Forferment og autolyse lå som seksjon 8–9

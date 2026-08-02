@@ -9,6 +9,10 @@
 
 /* ---------- Tilstand ---------- */
 const LAGER = 'forgebakery.v2';
+/* Vektoppløsningene appen tilbyr. MÅ stå her og ikke ved veiG() lenger nede:
+   last() bruker den til å migrere lagret tilstand, og last() kjøres under
+   oppstart — en `const` deklarert etterpå ville vært i dødsonen og kastet. */
+const VEKT_TRINN = [1, 0.1];
 const STANDARD = {
   skjerm: 'brodet',
   /* Førstegangsverdier: et enkelt brød uten tillegg.
@@ -28,6 +32,7 @@ const STANDARD = {
   heveplan: null,                 // null = planens standard; array = redigert
   paramInfo: null, tilleggInfo: null, melInfo: null, meltallInfo: null,
   aktivSteg: 0, aktivStegId: null, regnskapAapen: false, byttBekreft: null,
+  nyStartBekreft: false,      // «Start på nytt» venter på bekreftelse (visning)
   loggListe: [], lgNavn: '', lgKar: 8, lgBilder: [], lgBrod: [], oppdatert: 0,
   lgLaas: null,               // låst oppskriftsavtrykk til NESTE loggpost: {nar, grov, hyd, loft, dose, oppskrift}
   lgRediger: null, lgSlett: null, bildeVis: null,
@@ -112,6 +117,10 @@ function last() {
   // Tidsplanen «kort» (Ettermiddag) er slått sammen med «dag» (Samme dag).
   // Uten denne linja ville lagret tilstand falt tilbake på første plan i lista.
   if (s.tid === 'kort') s.tid = 'dag';
+  // Finvekt-trinnet 0,01 g er tatt ut. Har man det lagret, er 0,1 g nærmeste
+  // ekte alternativ — uten denne linja ville valget blitt stående usynlig og
+  // gitt oppskrifter med desimaler ingen pille lenger viser.
+  if (VEKT_TRINN.indexOf(+s.vektTrinn) < 0) s.vektTrinn = (+s.vektTrinn > 0 && +s.vektTrinn < 1) ? 0.1 : 1;
   /* Standardbrødet legges på når oppskriften ennå er fabrikkinnstillingen —
      altså «dersom det ikke ligger noe annet der fra før av». Har man begynt på
      noe, skal appen ikke overkjøre det. */
@@ -155,7 +164,7 @@ function last() {
    noen appen sist». */
 const UI_FELT = ['skjerm', 'paramInfo', 'tilleggInfo', 'melInfo', 'meltallInfo', 'aktivSteg',
   'regnskapAapen', 'byttBekreft', 'lgRediger', 'lgSlett', 'bildeVis', 'lgRegnskap', 'oppslag', 'oppslagSok',
-  'brodInfo', 'kompVist', 'melEndring', 'kompSporsmal', 'handlelisteOk', 'melVelger',
+  'brodInfo', 'kompVist', 'melEndring', 'kompSporsmal', 'handlelisteOk', 'melVelger', 'nyStartBekreft',
   'visMaskiner', 'aktivSteg', 'aktivStegId', 'krukkeStart', 'timere', 'stegNotatRediger',
   /* Delte maskinmålinger er HENTET, ikke skrevet. De hører hjemme i den delte
      tabellen, ikke i din rad — teller de som data, ville hver nedlasting sett ut
@@ -333,16 +342,24 @@ const g0 = v => gram(v, 0);
    «Kjøleskapet 4 °C»-knappen 3,5 opp til 4 mens miljø-feltet viste 3,5 — samme
    verdi, to ulike tall. Denne holder alle temp-etikettene på samme presisjon. */
 const gradTxt = v => fmt(v, (isFinite(v) && v % 1) ? 1 : 0);
-/* Vektoppløsning: rund til det vekta faktisk kan vise (hele gram / 0,1 / 0,01),
-   med færre desimaler når mengden vokser — det andre sifferet er støy over 100 g. */
-function vektDesimaler() { const t = S.vektTrinn || 0.01; return t >= 1 ? 0 : t >= 0.1 ? 1 : 2; }
+/* Vektoppløsning: rund til det vekta faktisk kan vise (hele gram eller 0,1 g).
+   Finvekt-trinnet 0,01 g er tatt ut — ingen står med analysevekt på kjøkkenet,
+   og det ga oppskriftene desimaler ingen kan veie etter.
+
+   MENGDEN styrer i tillegg presisjonen: over 50 gram er en tidel ren støy («du
+   skal ikke måle komma-x over 50 gram», Bjørn 02.08). Under det er tidelen
+   reell — gjær og malt lever i det området, og der er 4,3 g noe helt annet enn
+   4 g. Rekkefølgen er: rund til vektas trinn FØRST, vis så med det laveste av
+   vektas og mengdens presisjon. */
+function vektTrinnNaa() { const t = +S.vektTrinn; return VEKT_TRINN.indexOf(t) >= 0 ? t : 1; }
+function vektDesimaler() { return vektTrinnNaa() >= 1 ? 0 : 1; }
 function veiG(v) {
-  const t = S.vektTrinn || 0.01;
-  const tak = v >= 100 ? 0 : v >= 10 ? 1 : 2;
+  const t = vektTrinnNaa();
+  const tak = v >= 50 ? 0 : 1;
   return gram(Math.round(v / t) * t, Math.min(vektDesimaler(), tak));
 }
 /* Er mengden så liten at vekta ikke treffer den pålitelig (under 20× minste trinn)? */
-function underVekt(v) { return v > 0 && v < 20 * (S.vektTrinn || 0.01); }
+function underVekt(v) { return v > 0 && v < 20 * vektTrinnNaa(); }
 
 /* ============================================================
    RENDER
@@ -690,6 +707,7 @@ window.addEventListener('popstate', e => {
   // Innerste lag først: overlegg lukkes før man forlater skjermen.
   if (S.bildeVis) { S.bildeVis = null; oppdater(); nyHistorikk(); return; }
   if (S.lgRegnskap) { S.lgRegnskap = null; oppdater(); nyHistorikk(); return; }
+  if (S.nyStartBekreft) { S.nyStartBekreft = false; oppdater(); nyHistorikk(); return; }
   if (S.kompSporsmal) { S.kompSporsmal = false; oppdater(); nyHistorikk(); return; }
   if (S.melEndring) { S.melEndring = null; oppdater(); nyHistorikk(); return; }
   if (S.regnskapAapen) { S.regnskapAapen = false; oppdater(); nyHistorikk(); return; }
@@ -784,7 +802,7 @@ function tegnBunnlinje(r, K) {
   // klippet på smal skjerm. Resten står i regnskapsarket som dras opp.
   stripe.replaceChildren(
     h('b', null, g0(r.totalVekt)), ' deig', sep(),
-    h('b', null, fmt(r.gjaerTotal, 2) + ' g'), ' gjær', sep(),
+    h('b', null, veiG(r.gjaerTotal)), ' gjær', sep(),
     h('b', null, String(r.loft.loft)), ' løft', sep(),
     h('b', null, fmt(K.totalT, 1) + ' t'), ' total',
     // Pila peker OPP når arket er lukket: det er retningen arket kommer fra, og
@@ -831,8 +849,8 @@ function regnskapInnmat(r, K) {
       ['Vann', g0(r.forferment.vann), g0(r.vannHoved)],
       /* Gjærtallene per bolle: det som skal på vekta i HVER av dem. Totalen står
          i listen under — å vise bare totalen ga 35 % overdose i hoveddeigen. */
-      ['Gjær (tørr)', fmt(r.forferment.gjaer, 2) + ' g', fmt(r.gjaerHoved, 2) + ' g'],
-      ['Salt', ffSaltG > 0.05 ? fmt(ffSaltG, 1) + ' g' : '–', fmt(r.salt - ffSaltG, 1) + ' g']
+      ['Gjær (tørr)', veiG(r.forferment.gjaer), veiG(r.gjaerHoved)],
+      ['Salt', ffSaltG > 0.05 ? veiG(ffSaltG) : '–', veiG(r.salt - ffSaltG)]
     ].flatMap(([lab, fv, hv]) => [
       h('span', { class: 'rp-lab' }, lab), h('b', null, fv), h('b', null, hv)])) : null;
   const rader = [
@@ -844,10 +862,10 @@ function regnskapInnmat(r, K) {
     r.ffPaa ? null : ['Vann i hoveddeigen', g0(r.vannHoved)],
     r.froAbsorbert > 0.5 ? ['Vann til frøene (bløtlegg)', g0(r.froAbsorbert)] : null,
     r.ffPaa ? ['Forferment totalt', g0(r.forferment.total)] : null,
-    r.ffPaa ? null : ['Salt', fmt(r.salt, 1) + ' g'],
+    r.ffPaa ? null : ['Salt', veiG(r.salt)],
     r.ffPaa
-      ? ['Gjær totalt', fmt(r.gjaerTotal, 2) + ' g']
-      : ['Gjær (tørr)', fmt(r.gjaerTotal, 2) + ' g'],
+      ? ['Gjær totalt', veiG(r.gjaerTotal)]
+      : ['Gjær (tørr)', veiG(r.gjaerTotal)],
     /* Tilleggene med GRAM, ikke bare som effekt-avvik: frø ved navn, og
        smakstilleggene (honning, olje, sukker, smør, malt). Alle går i
        hoveddeigen, så de står i totallisten — regnskapet skal kunne leses som
@@ -959,7 +977,9 @@ function tegnBrodet(r, K) {
       (r.prof && (r.prof.id === 'brod_glass_stal' || r.prof.id === 'brod_kloke')) ? ' · Pyrex-gryta er 21,5 cm innvendig' : ''),
     h('div', { style: 'margin-top:12px' },
       h('div', { class: 'felt-label' }, 'Kjøkkenvekta di viser'),
-      h('div', { class: 'piller' }, ...[[1, 'hele gram'], [0.1, '0,1 g'], [0.01, '0,01 g']].map(([v, navn]) =>
+      // 0,01 g er tatt ut: ingen bruker finvekt på kjøkkenet, og alternativet
+      // ga oppskriftene et presisjonsnivå ingen kan veie etter (Bjørn 02.08).
+      h('div', { class: 'piller' }, ...[[1, 'hele gram'], [0.1, '0,1 g']].map(([v, navn]) =>
         h('button', { class: (S.vektTrinn || 1) === v ? 'paa' : '', onClick: () => { S.vektTrinn = v; oppdater(); } }, navn))))));
 
   // Form og kurv (styrer stekeutstyret, ikke bare utseendet)
@@ -967,6 +987,9 @@ function tegnBrodet(r, K) {
 
   // Utstyr
   wrap.appendChild(tegnUtstyrValg(r));
+  // Blanke ark — nederst, der man ser den når man leter etter den, og ikke
+  // treffer den på vei gjennom oppskriften.
+  wrap.appendChild(tegnStartPaaNytt());
   return wrap;
 }
 /* ⓘ-innholdet per brødtype. For den VALGTE typen følger stegkjeden med, generert
@@ -1148,6 +1171,75 @@ function nyBakst(id) {
     if (pr && pr.steking && BAKE_PROFILES.find(p => p.id === pr.steking)) S.stekeProfil = pr.steking;
   }
   oppdater();
+}
+
+/* ---------- Start på nytt ----------
+   Etter mange bak og mye justering er tilstanden et lappeteppe av valg man
+   ikke husker å ha tatt (Bjørn 02.08: «litt kaos»). Dette er blanke ark for
+   OPPSKRIFTEN — ikke for appen.
+
+   Hvitelisten sier hva som BESTÅR, ikke hva som skal bort: det du eier
+   (loggen, favorittene), utstyret ditt, maskinmålingene og kjøkkenets
+   temperaturer. Alt annet faller tilbake til standard. Skrevet slik med vilje
+   — et nytt oppskriftsfelt som legges til senere blir da nullstilt av seg
+   selv, mens en svarteliste stille ville latt det overleve. */
+const BEHOLD_VED_NYSTART = [
+  // Ditt, ikke bakstens
+  'loggListe', 'loggSlettet', 'favoritter', 'standardBrod', 'oppdatert',
+  // Utstyret på kjøkkenet og målingene av det
+  'utstyr', 'maskin', 'vektTrinn', 'egenFriksjon', 'pyrexIOvn', 'kurvMaal',
+  'kalib', 'kalibFor', 'kalibVekt', 'friksjonKalibrert', 'delteKalib', 'kalibDelt',
+  // Kjøkkenet selv: rommet, kranvannet, skapet, boden
+  'romTemp', 'melTemp', 'kjolTemp', 'kjolskapTemp', 'svalTemp'
+];
+function startPaaNytt() {
+  // Bilder i det ULAGREDE loggskjemaet forsvinner med nullstillingen — rydd
+  // filene i bøtta også, ellers blir de foreldreløse der oppe.
+  const forkastes = (S.lgBilder || []).concat(...(S.lgBrod || []).map(r => (r && r.bilder) || []));
+  if (forkastes.length) slettSkyBilde(forkastes);
+  const beholdt = {};
+  BEHOLD_VED_NYSTART.forEach(k => { if (S[k] !== undefined) beholdt[k] = S[k]; });
+  const ny = Object.assign(nyStandard(), beholdt);
+  /* Har du et standardbrød, ER det utgangspunktet ditt — «start på nytt» skal
+     lande der appen lander ved en fersk oppstart, ikke på fabrikkoppsettet. */
+  if (ny.standardBrod && typeof ny.standardBrod === 'object') {
+    Object.keys(ny.standardBrod).forEach(k => { ny[k] = ny.standardBrod[k]; });
+  }
+  ny.skjerm = 'brodet';
+  S = ny;
+  if (window.__FB) window.__FB.S = S;
+  _nullstillScroll = true;
+  lagre(); render();
+}
+/* Knappen nederst på Brød — bevisst nedtonet og bak en bekreftelse: den
+   kaster arbeid, og skal ikke kunne treffes på vei til noe annet. */
+function tegnStartPaaNytt() {
+  const boks = h('div', { style: 'margin-top:18px' });
+  if (S.nyStartBekreft) {
+    const uferdig = [
+      (S.lgNavn || '').trim() ? 'navnet' : null,
+      (S.lgBilder || []).length ? 'bildene' : null,
+      (S.lgBrod || []).some(r => r && (r.kommentar || (r.bilder || []).length)) ? 'brødkommentarene' : null
+    ].filter(Boolean);
+    boks.appendChild(h('div', { class: 'varsel' },
+      h('div', { style: 'font-weight:800;margin-bottom:4px' }, 'Starte på nytt?'),
+      h('div', { style: 'font-size:.8rem;line-height:1.45' },
+        'Oppskriften, tidsplanen og avhukingene i Prosess nullstilles' +
+        (S.standardBrod ? ' til standardbrødet ditt' : '') + '. ' +
+        (uferdig.length ? 'Loggskjemaet du ikke har lagret ennå (' + uferdig.join(', ') + ') tømmes også. ' : '') +
+        'Bakeloggen, favorittene, utstyret, maskinmålingene og temperaturene på kjøkkenet ditt beholdes.'),
+      h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
+        h('button', { class: 'btn btn-primary', style: 'flex:1.4;font-size:.82rem',
+          onClick: () => { S.nyStartBekreft = false; startPaaNytt(); } }, 'Ja, start på nytt'),
+        h('button', { class: 'btn', style: 'flex:1;font-size:.82rem',
+          onClick: () => { S.nyStartBekreft = false; oppdater(); } }, 'Avbryt'))));
+  } else {
+    boks.appendChild(h('button', { class: 'btn btn-full', style: 'font-size:.82rem',
+      onClick: () => { S.nyStartBekreft = true; oppdater(); } }, '↺ Start på nytt'));
+    boks.appendChild(h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:6px;line-height:1.45' },
+      'Blanke ark for oppskriften. Loggen, favorittene og utstyret ditt beholdes.'));
+  }
+  return boks;
 }
 
 /* ---------- Redigerbart gramtall ----------
@@ -1804,7 +1896,7 @@ function tegnForferment(r) {
       f.kultur ? tallrad('Moden starter', veiG(f.starter)) : tallrad('Gjær (tørr)', veiG(f.gjaer)),
       tallrad('Modning', fmtTimer(f.timer) + ' ved ' + grader(f.temp, 0)), f.salt > 0.05 ? tallrad('Salt', veiG(f.salt)) : null));
     if (!f.kultur && underVekt(f.gjaer)) boks.appendChild(h('div', { class: 'varsel' },
-      'Gjærmengden (' + veiG(f.gjaer) + ') er for liten til å veies pålitelig på kjøkkenvekta di. Løs opp en større mengde i vann og bruk en andel — eller sett vekta til 0,01 g under Størrelse.'));
+      'Gjærmengden (' + veiG(f.gjaer) + ') er for liten til å veies pålitelig på kjøkkenvekta di. Løs opp en større mengde i vann og bruk en andel — eller sett vekta til 0,1 g under Størrelse.'));
   } else if (ff.id === 'ingen') {
     boks.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' }, ff.hvorfor));
   }
@@ -2400,7 +2492,7 @@ function tegnTid(r, K) {
     // Etiketten leses fra EFFEKTIV tilstand (samme kilde som tallene), ikke fra
     // planens statiske forferment-spec (teknisk #5).
     const sub = (prov.ffPaa ? prov.ffT.navn.toLowerCase() + ' ' + prov.ffInn.pctMel + ' %' : 'ingen forferment') +
-      ' · gjær ' + fmt(prov.gjaerTorr, 3) + ' % = ' + fmt(prov.gjaerTotal, 2) + ' g';
+      ' · gjær ' + fmt(prov.gjaerTorr, 3) + ' % = ' + veiG(prov.gjaerTotal);
     wrap.appendChild(h('button', { class: 'valgkort plan-valg' + (paa && S.tidModus !== 'vindu' ? ' paa' : ''), onClick: () => { S.tid = tp.id; S.heveplan = null; if (S.tidModus === 'vindu') S.tidModus = 'ferdig'; oppdater(); } },
       h('div', { class: 'plankort' },
         h('div', { style: 'flex:1;min-width:0' },
@@ -2450,7 +2542,7 @@ function tegnTid(r, K) {
       } else if (flex) {
         det.appendChild(h('div', { class: 'konsekvens', style: 'margin-top:10px' },
           'Appen fyller vinduet med ', h('b', null, fmtTimer(flex.timer) + ' ' + (flex.miljo <= 12 ? 'kaldheving' : 'heving')),
-          ' og løser gjæren til ', h('b', null, fmt(r.gjaerTotal, 2) + ' g'), '. Endrer du start eller ferdig, regnes resten om.'));
+          ' og løser gjæren til ', h('b', null, veiG(r.gjaerTotal)), '. Endrer du start eller ferdig, regnes resten om.'));
         // Klemte fittingen kaldhevingen ned til minutter, er den i praksis borte
         // — si det her, der vinduet ble satt, ikke bare nede i heveplanen.
         if (flex.miljo <= 12 && flex.timer < 1) det.appendChild(h('div', { class: 'varsel', style: 'margin-top:8px' },
@@ -3253,7 +3345,7 @@ function tegnHandleliste(r) {
   if (r.malt > 0.01) smakRader.push(['Malt', veiG(r.malt)]);
   seksjon('Smak', smakRader);
   const u = (typeof UTSTYR !== 'undefined') && UTSTYR.find(x => x.id === S.utstyr);
-  const vektNavn = (S.vektTrinn || 1) >= 1 ? 'hele gram' : (S.vektTrinn === 0.1 ? '0,1 g' : '0,01 g');
+  const vektNavn = vektTrinnNaa() >= 1 ? 'hele gram' : '0,1 g';
   const utstyrRader = [['Stekeutstyr', u ? u.navn : '—']];
   // Hevekurv er bare relevant når brukeren faktisk velger form (bygg-ruta),
   // ikke for presets som skjuler form/kurv (teknisk #6).
@@ -3561,7 +3653,7 @@ function tegnLogg(r) {
   [['Gjæringsdose', fmt(r.doseProfil.dose, 2)],
    ['Hydrering (effektiv)', fmt(r.hyd * 100, 0) + ' % (' + fmt(r.effektivHydrering * 100, 1) + ' %)'],
    ['Grovhet', fmt(r.brodskala.pct, 0) + ' % · ' + r.brodskala.kort.toLowerCase()],
-   ['Tørrgjær', fmt(r.gjaerTorr, 3) + ' % = ' + fmt(r.gjaerTotal, 2) + ' g'],
+   ['Tørrgjær', fmt(r.gjaerTorr, 3) + ' % = ' + veiG(r.gjaerTotal)],
    ['Deigtemp ut av maskin', grader(S.startTemp || 24, 1)],
    ['Løftindeks', r.loft.loft + ' / 100']
   ].forEach(([k, v]) => auto.appendChild(h('div', { class: 'tallrad' }, h('span', null, k), h('b', null, v))));

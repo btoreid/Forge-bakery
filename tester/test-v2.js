@@ -199,6 +199,45 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await page.waitForTimeout(300);
   ok('trykk på selve arket lukker det', await page.locator('.regnskap-ark').count() === 0);
 
+  /* Vektoppløsning: 0,01 g er tatt ut (ingen har finvekt på kjøkkenet), og
+     mengden styrer presisjonen — «gir ikke mening å måle komma-x over 50 gram»
+     (Bjørn 02.08). Grensa testes fra begge sider, på begge trinn. */
+  console.log('— Vektoppløsning —');
+  await page.click('#bunnmeny button:has-text("Brød")');
+  await page.waitForTimeout(300);
+  const piller = await page.locator('.piller:near(:text("Kjøkkenvekta di viser"))').first().innerText();
+  ok('bare to vektvalg — 0,01 g er borte', !/0,01/.test(piller) && /hele gram/.test(piller) && /0,1 g/.test(piller), piller.replace(/\n/g, ' '));
+  const vekt = await page.evaluate(() => {
+    const FB = window.__FB, S = FB.S;
+    // Lagret finvekt skal migreres bort ved neste oppstart, ikke bli stående.
+    S.vektTrinn = 0.01; localStorage.setItem('forgebakery.v2', JSON.stringify(S));
+    const les = () => { S.regnskapAapen = true; FB.oppdater();
+      const t = document.getElementById('regnskapArk').innerText;
+      const m = t.match(/Salt\s*\n?\s*([\d\s,]+?)\s*g/);
+      return m ? m[1].trim() : null; };
+    const ut = {};
+    // Liten deig: saltet ligger under 50 g — der er tidelen ekte informasjon.
+    S.antall = 4; S.vekt = 800;
+    S.vektTrinn = 1;   ut.heleSmaa = les();
+    S.vektTrinn = 0.1; ut.tidelSmaa = les();
+    ut.saltSmaa = +regn(S).salt.toFixed(2);
+    // Stor deig: saltet over 50 g — tidelen er støy uansett hva vekta viser.
+    S.antall = 8; S.vekt = 1000;
+    ut.saltStor = +regn(S).salt.toFixed(2);
+    ut.tidelStor = les();
+    S.regnskapAapen = false; S.antall = 4; S.vekt = 800; FB.oppdater();
+    return ut;
+  });
+  ok('hele gram gir aldri desimaler', vekt.heleSmaa && !/,/.test(vekt.heleSmaa), 'salt ' + vekt.heleSmaa);
+  ok('0,1 g gir én desimal under 50 g', vekt.saltSmaa < 50 && /^\d+,\d$/.test(vekt.tidelSmaa || ''),
+    vekt.saltSmaa + ' g → «' + vekt.tidelSmaa + '»');
+  ok('over 50 g vises uten desimaler', vekt.saltStor > 50 && !/,/.test(vekt.tidelStor || 'x'),
+    vekt.saltStor + ' g → «' + vekt.tidelStor + '»');
+  await page.reload();
+  await page.waitForTimeout(500);
+  ok('lagret 0,01 g migreres til 0,1 g', await page.evaluate(() => window.__FB.S.vektTrinn === 0.1),
+    String(await page.evaluate(() => window.__FB.S.vektTrinn)));
+
   ok('ingen JS-feil på siden', pageErrors.length === 0, pageErrors.join(' | '));
   await browser.close();
   console.log(feil === 0 ? '\nALLE TESTER GRØNNE' : '\n' + feil + ' TESTER RØDE');

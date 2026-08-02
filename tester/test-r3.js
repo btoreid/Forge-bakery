@@ -18,6 +18,42 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   await page.goto(URL);
   await page.waitForTimeout(300);
 
+  console.log('— Start på nytt —');
+  await page.evaluate(() => {
+    const FB = window.__FB, S = FB.S;
+    // Et «kaotisk» utgangspunkt: rørt oppskrift, avhukinger og halvferdig
+    // loggskjema — pluss ting som er DITT og skal overleve.
+    S.skjerm = 'brodet'; S.hyd = 88; S.grov = 55; S.autolyseMin = 60; S.ff = true;
+    S.stegKvitt = { 'trinn-0': { ok: Date.now(), notat: 'rot' } };
+    S.lgNavn = 'halvferdig'; S.lgBrod = [{ metode: '', kommentar: 'noe', bilder: [] }];
+    S.favoritter = ['mel:hvete']; S.utstyr = 'stal15'; S.romTemp = 26;
+    S.loggListe = [{ id: 'beholdes', navn: 'Gammelt bak', kar: 7, dato: '01.08.2026' }];
+    FB.oppdater();
+  });
+  await page.waitForTimeout(300);
+  await page.click('button:has-text("Start på nytt")');
+  await page.waitForTimeout(250);
+  ok('bekreftelse først', (await page.locator('.varsel:has-text("Starte på nytt?")').count()) === 1);
+  ok('sier hva som tømmes', (await page.locator('.varsel:has-text("Starte på nytt?")').innerText()).includes('navnet'));
+  await page.click('button:has-text("Ja, start på nytt")');
+  await page.waitForTimeout(400);
+  const nystart = await page.evaluate(() => {
+    const S = window.__FB.S;
+    return { hyd: S.hyd, grov: S.grov, auto: S.autolyseMin, ff: S.ff,
+      kvitt: Object.keys(S.stegKvitt || {}).length, lgNavn: S.lgNavn, lgBrod: (S.lgBrod || []).length,
+      logg: (S.loggListe || []).length, fav: (S.favoritter || []).length,
+      utstyr: S.utstyr, rom: S.romTemp, skjerm: S.skjerm };
+  });
+  ok('oppskriften er nullstilt', nystart.hyd === 75 && nystart.grov === 0 && nystart.auto === 0 && nystart.ff === false,
+    JSON.stringify(nystart));
+  ok('avhukingene i Prosess er borte', nystart.kvitt === 0);
+  ok('det ulagrede loggskjemaet er tømt', nystart.lgNavn === '' && nystart.lgBrod === 0);
+  ok('bakeloggen beholdes', nystart.logg === 1);
+  ok('favorittene beholdes', nystart.fav === 1);
+  ok('utstyret beholdes', nystart.utstyr === 'stal15');
+  ok('kjøkkentemperaturen beholdes', nystart.rom === 26);
+  ok('lander på Brød', nystart.skjerm === 'brodet');
+
   console.log('— Brødtype-bytte —');
   // legg på et særpreg som IKKE skal følge med til ciabatta
   await page.evaluate(() => { const FB = window.__FB; FB.S.hyd = 80; FB.S.tillegg = { solsikke: 10 }; FB.render(); });

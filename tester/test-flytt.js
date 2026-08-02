@@ -21,7 +21,30 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   ok('V2-rammen finnes', await page.locator('#telefon #bunnmeny').count() === 1);
   ok('åtte skjermer i bunnmenyen', await page.locator('#bunnmeny button').count() === 8);
   const meny = await page.locator('#bunnmeny').innerText();
-  ok('riktig rekkefølge', /Brød[\s\S]*Deig[\s\S]*Tid[\s\S]*Prosess[\s\S]*Logg[\s\S]*Oppslag/.test(meny), meny.replace(/\n/g, ' '));
+  ok('riktig rekkefølge', /Brød[\s\S]*Deig[\s\S]*Forferment[\s\S]*Autolyse[\s\S]*Tid[\s\S]*Prosess[\s\S]*Logg[\s\S]*Oppslag/.test(meny), meny.replace(/\n/g, ' '));
+  /* Balansen i bunnmenyen: med like brede kolonner fikk «Tid» 18 px luft på
+     hver side mens «Forferment» hadde 0,7 og nesten rørte naboen. Måler luften
+     rundt hver etikett på de smaleste skjermene appen møter — ingen skal
+     klemmes, og spennet mellom mest og minst luft skal være lite. */
+  for (const bredde of [320, 390]) {
+    await page.setViewportSize({ width: bredde, height: 800 });
+    await page.waitForTimeout(200);
+    const b = await page.evaluate(() => {
+      const meny = document.getElementById('bunnmeny');
+      const luft = [...meny.querySelectorAll('button')].map(k => {
+        const rg = document.createRange();
+        const tn = [...k.childNodes].find(n => n.nodeType === 3 && n.textContent.trim());
+        rg.selectNodeContents(tn);
+        return (k.getBoundingClientRect().width - rg.getBoundingClientRect().width) / 2;
+      });
+      return { min: +Math.min(...luft).toFixed(1), maks: +Math.max(...luft).toFixed(1),
+        klippet: meny.scrollWidth > meny.clientWidth + 1 };
+    });
+    ok(bredde + ' px: ingen etikett klemmes', b.min >= 4 && !b.klippet, 'minst ' + b.min + ' px luft');
+    ok(bredde + ' px: jevn luft mellom punktene', b.maks - b.min <= 8, b.min + '–' + b.maks + ' px');
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(200);
   ok('supabase-js lastet', await page.evaluate(() => typeof window.supabase !== 'undefined'));
   ok('sky-laget lastet', await page.evaluate(() => typeof window.Sky !== 'undefined'));
   await page.click('#bunnmeny button:has-text("Logg")');

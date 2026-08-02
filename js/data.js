@@ -1342,7 +1342,7 @@ const PARAM_INFO = {
   },
   vektTrinn: {
     navn:'Vektas oppløsning',
-    opt:'0,01 g hvis du har finvekt. Det er den som avgjør om du kan veie gjæren direkte.',
+    opt:'0,1 g om vekta di viser tideler. Det er den som avgjør om du kan veie gjæren direkte.',
     opp:'Grovere vekt betyr at små mengder må lages som oppslemming i stedet for å veies.',
     ned:'Finere vekt lar deg veie gjær og malt direkte, uten mellomregning.',
     hvorfor:'Tommelfingerregelen er at avlesningen bør være minst 20 ganger minste trinn. Under det spiser vektas egen usikkerhet på ±1–2 siffer en merkbar andel av mengden.'
