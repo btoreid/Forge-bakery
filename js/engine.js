@@ -1925,6 +1925,9 @@ function kjede(state, r, ferdigMs) {
   // 3 · Elting
   steg.push({
     id: 'elt', navn: 'Elt deigen', tid: eltStart, varighet: eltSteg, tone: 'accent',
+    // Nedtellingen gjelder SELVE eltingen (maskinen går), ikke steget med
+    // veiing og opprydding rundt.
+    timerMin: r.eltMin || 13, timerNavn: 'Eltetiden er ute — ta vindusprøven',
     /* `vannTempMulig`, ikke rå teori: teorien kan ligge under det kaldeste
        vannet du får (og under null — som er is, ikke vann; Bjørn 01.08).
        Rekker ikke vannet alene, står det som egen NB-rad med hva deigen
@@ -2045,6 +2048,10 @@ function kjede(state, r, ferdigMs) {
   if (formTid) {
     steg.push({
       id: 'form', navn: presetId === 'ciabatta' ? 'Del emnene' : 'Form emnene', tid: formTid.start, varighet: KJEDE.FORM, tone: 'accent',
+      /* Timeren teller den KONKRETE ventingen i steget — benkehvilen på 15 min —
+         ikke stegets totale 40 (som også rommer forforming og forming, der man
+         står med hendene i deigen og ikke trenger nedtelling). Bjørn 02.08. */
+      timerMin: 15, timerNavn: 'Benkehvilen er over — form emnene ferdig',
       hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Benkehvile', sideV: '15–20 min',
       tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)],
              ['Forforming', presetId === 'ciabatta' ? 'ingen — deles direkte' : 'rund opp, hvil 15–20 min'],
@@ -2194,6 +2201,7 @@ function fmtTimer(t) {
   if (!isFinite(t)) return '–';
   const h = Math.floor(t), m = Math.round((t - h) * 60);
   if (m === 60) return `${h + 1} t`;
+  if (h === 0) return `${m} min`;         // «15 min», ikke «0 t 15 min»
   return m === 0 ? `${h} t` : `${h} t ${m} min`;
 }
 /* Ukedagen i STORE bokstaver, uten punktum: «FRE 19:57».

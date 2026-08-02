@@ -3262,15 +3262,22 @@ function stegKort(steg, status, ctx) {
   // overlapper), og ikke der en timer alt er satt for steget.
   if (status && steg.varighet >= 1 && steg.id !== 'ovn') {
     const alt = (S.timere || []).some(t => t.stegId === steg.id);
-    const navn = steg.id === 'stek' ? 'Brødet er ferdig — sjekk kjernetemperaturen'
+    /* Timeren teller den KONKRETE ventingen i steget (steg.timerMin — f.eks.
+       benkehvilen på 15 min i formingen), ikke stegets totale varighet med
+       veiing og håndarbeid rundt (Bjørn 02.08). Uten eget timer-mål er hele
+       varigheten ventingen (heving, autolyse, steking), og da brukes den. */
+    const tMin = steg.timerMin != null ? steg.timerMin : Math.round(steg.varighet);
+    const navn = steg.timerNavn ? steg.timerNavn
+               : steg.id === 'stek' ? 'Brødet er ferdig — sjekk kjernetemperaturen'
                : steg.id === 'kjol' ? 'Brødet er avkjølt — nå kan du skjære'
                : (steg.krukke ? 'Sjekk deigen: ' : '') + steg.navn;
     kropp.appendChild(h('div', { style: 'margin-top:12px' },
       alt
         ? h('div', { class: 'timer-satt' }, '⏰ Timer i gang — se øverst på skjermen')
         : h('button', { class: 'btn timer-start', style: 'width:100%',
-            onClick: () => startTimer(navn, Math.round(steg.varighet), steg.id) },
-            '⏰ Sett timer på ' + fmtTimer(steg.varighet / 60))));
+            onClick: () => startTimer(navn, tMin, steg.id) },
+            '⏰ Sett timer på ' + fmtTimer(tMin / 60) +
+            (steg.timerMin != null && Math.round(steg.varighet) !== steg.timerMin ? ' — ' + navn.split(' — ')[0].toLowerCase() : ''))));
   }
   /* Kvittering: fullfør (grønn hake) eller hopp over. Fullføring før/etter
      planlagt slutt utløser tilbudet om å FLYTTE resten av planen tilsvarende —
