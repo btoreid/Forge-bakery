@@ -173,6 +173,55 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   ok('bildet også', await page.locator('.logg-bilde').count() === 1);
   ok('brød for brød også', (await page.locator('.kort:has-text("Bak brød for brød")').innerText()).includes('tre timer'));
 
+  console.log('— Bilder per brød —');
+  // Bildet legges på brød 1 i skjemaet UTEN å røre metode eller kommentar —
+  // bildet alene skal være nok til at radene er verdt å lagre på posten.
+  const [vb] = await Promise.all([page.waitForEvent('filechooser'), page.click('button[aria-label="Legg til bilde av brød 1"]')]);
+  await vb.setFiles(D + 'bilde-a.png');
+  await page.waitForTimeout(500);
+  ok('bildet ligger i skjemaraden', await page.evaluate(() => (window.__FB.S.lgBrod[0].bilder || []).length === 1));
+  await page.fill('input[placeholder*="Halvgrovt"]', 'Bak med brødbilde');
+  await page.click('button:has-text("Lagre baket")');
+  await page.waitForTimeout(300);
+  const fp = await page.evaluate(() => {
+    const b = window.__FB.S.loggListe.find(x => x.navn === 'Bak med brødbilde');
+    return { harBrod: !!b.brod, b1: b.brod ? (b.brod[0].bilder || []).length : 0, b2har: !!(b.brod && ('bilder' in b.brod[1])) };
+  });
+  ok('bildet alene gjør radene verdt å lagre', fp.harBrod);
+  ok('bildet ligger på brød 1', fp.b1 === 1);
+  ok('brød uten bilde får ikke bilder-felt', !fp.b2har);
+  ok('skjemaet er nullstilt etter lagring', await page.evaluate(() => window.__FB.S.lgBrod.length === 0));
+  const fkort = page.locator('.kort:has-text("Bak med brødbilde")');
+  ok('miniatyren står i brødraden på kortet', await fkort.locator('.logg-bilde.liten').count() === 1);
+  await fkort.locator('.logg-bilde.liten').first().click();
+  await page.waitForTimeout(300);
+  ok('fullskjerm åpnet fra brødraden', await page.locator('#bildevis').count() === 1);
+  ok('teksten sier hvilket brød', (await page.locator('.bv-tekst').innerText()).includes('brød 1'), await page.locator('.bv-tekst').innerText());
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(250);
+  // I ettertid: krummen fotograferes gjerne først når brødet skjæres dagen
+  // etter — bilder må kunne legges til og fjernes på en lagret post.
+  await fkort.locator('button:has-text("Rediger")').click();
+  await page.waitForTimeout(300);
+  const fred = page.locator('.kort:has-text("Redigerer")');
+  const [vb2] = await Promise.all([page.waitForEvent('filechooser'), fred.locator('button[aria-label="Legg til bilde av brød 2"]').click()]);
+  await vb2.setFiles(D + 'bilde-b.png');
+  await page.waitForTimeout(500);
+  ok('bilde kan legges til i ettertid', await page.evaluate(() =>
+    (window.__FB.S.loggListe.find(x => x.navn === 'Bak med brødbilde').brod[1].bilder || []).length === 1));
+  await fred.locator('button[aria-label="Fjern bilde 1 av brød 1"]').click();
+  await page.waitForTimeout(250);
+  ok('bilde kan fjernes i ettertid', await page.evaluate(() =>
+    (window.__FB.S.loggListe.find(x => x.navn === 'Bak med brødbilde').brod[0].bilder || []).length === 0));
+  await fred.locator('button:has-text("Ferdig")').click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: D + 'logg-brodbilder.png' });
+  await page.reload();
+  await page.waitForTimeout(500);
+  await page.click('#bunnmeny button:has-text("Logg")');
+  await page.waitForTimeout(300);
+  ok('brødbildet overlever omlasting', await page.locator('.kort:has-text("Bak med brødbilde") .logg-bilde.liten').count() === 1);
+
   ok('ingen JS-feil', errs.length === 0, errs.join(' | '));
   await browser.close();
   console.log(feil === 0 ? '\nALLE TESTER GRØNNE' : '\n' + feil + ' TESTER RØDE');

@@ -7,6 +7,39 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 02.08.2026 — Loggen: bilder per brød
+
+Oppfølgeren til «Brød for brød»-radene: hvert brød kan nå få sine egne bilder
+(maks 2 — skorpe og krumme), i tillegg til bakstbildene som allerede fantes
+(maks 3 per bak). Det er koblingen bilde↔brød som er poenget — «brød 2 i
+glassgryta ble slik» er noe helt annet enn tre løse bilder nederst på posten.
+
+**Skjemaet og redigeringen.** Hver brød-rad har en miniatyrrad
+(`brodBildeRad()` i `js/app-v2.js`) med fjern-kryss og +-knapp — samme
+komponent begge steder, så UI-et ikke må læres to ganger. Bilder kan legges
+til og fjernes i ettertid med vilje: krummen fotograferes gjerne først når
+brødet skjæres dagen etter. Skjemabildene bor i `S.lgBrod[i].bilder`, lagres
+umiddelbart (`lagre()` i skaleringens callback) og sanitiseres i `last()`.
+
+**Lagring.** Skaleringen (480 px JPEG) og localStorage-kvotevernet er trukket
+ut i `skalerBilde(fil, ferdig)` og deles av alle bildeveiene — grensene kan
+ikke drifte. På posten lagres bildene i `brod[j].bilder`, men feltet utelates
+når det er tomt, og et bilde alene gjør radene «verdt» å lagre (`brodVerdt`).
+
+**Visning.** Miniatyrene står under sitt brøds rad i «Brød for brød»-boksen
+(56 px, mindre enn bakstbildenes 86 — de skal ikke dominere kortet).
+Fullskjermviseren blar nå gjennom ÉN samlet liste (`postBilder()`:
+bakstbildene først, så brødenes i radrekkefølge) og skriver «· brød N» i
+teksten. Sletteadvarselen teller alle bildene gjennom samme liste — «1 bilde»
+når det ryker tre hadde vært en løgn.
+
+**Tester.** Ny seksjon «Bilder per brød» i `tester/test-logg.js` (11 tester):
+bilde i skjemarad, bilde alene utløser lagring av radene, tomt felt utelates,
+miniatyr på kortet, fullskjerm med brødnummer, legg til/fjern i ettertid,
+overlever omlasting. Alle 9 suitene grønne.
+
+---
+
 ## 02.08.2026 — Loggen: stekemetode og kommentar per brød
 
 Bjørns bestilling fra testbakingen: fire brød fra samme deig stekes gjerne på
