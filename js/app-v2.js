@@ -218,6 +218,15 @@ function h(tag, attrs, ...kids) {
   return e;
 }
 const byId = id => document.getElementById(id);
+/* Kommentarfelt vokser med innholdet i stedet for å scrolle inni seg selv —
+   en lang kommentar skal LESES, ikke dras fram bit for bit (Bjørn 02.08).
+   Kalles fra oninput på feltet og fra render() for alle .autovoks (høyden kan
+   først måles når feltet står i DOM-en). +2 er rammen: scrollHeight måler
+   innsiden, mens height med border-box teller kantene med. */
+function voksFelt(el) {
+  el.style.height = 'auto';
+  el.style.height = (el.scrollHeight + 2) + 'px';
+}
 
 /* ---------- Favoritter ----------
    Brukerens egne merker, ikke appens. Tre navnerom deler én liste: `mel:`,
@@ -541,6 +550,9 @@ function renderInner() {
   tegnBunnlinje(r, K);
   tegnBildeVis();
   tegnLoggRegnskap();
+  // Kommentarfeltene bygges med rows=1/2 og må måles ETTER at de står i
+  // DOM-en — et felt som gjenskapes med lagret tekst skal åpne i full høyde.
+  document.querySelectorAll('textarea.autovoks').forEach(voksFelt);
   // Kompensasjonen er ikke lenger en modal — den rendres inline i tillegg-
   // seksjonen. Rydd bort en eventuell gammel modal fra en tidligere versjon.
   { const gml = byId('kompmodal'); if (gml) gml.remove(); }
@@ -3352,9 +3364,10 @@ function stegKort(steg, status, ctx) {
       kvitt.appendChild(h('button', { class: 'btn-ghost', style: 'font-size:.78rem;margin-top:2px',
         onClick: () => { S.stegNotatRediger = steg.id; oppdater(); } }, 'Rediger kommentar'));
     } else {
-      const felt = h('textarea', { class: 'steg-notat', rows: 2,
+      const felt = h('textarea', { class: 'steg-notat autovoks', rows: 2,
         placeholder: 'Kommentar til steget — hva skjedde? (lagres i loggen)',
-        'aria-label': 'Kommentar til steget ' + steg.navn
+        'aria-label': 'Kommentar til steget ' + steg.navn,
+        oninput: e => voksFelt(e.target)
       }, (kv && kv.notat) || '');
       kvitt.appendChild(felt);
       kvitt.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:6px' },
@@ -3493,12 +3506,17 @@ function tegnLoggBrod() {
         'Som oppsettet — ' + stekeMetodeNavn(S.stekeProfil)),
       ...(typeof BAKE_PROFILES !== 'undefined' ? BAKE_PROFILES : []).map(p =>
         h('option', { value: p.id, selected: rad.metode === p.id ? 'selected' : null }, p.navn))));
-    boks.appendChild(h('input', { class: 'sok', style: 'margin-top:6px',
+    /* Textarea, ikke input: en kommentar på tre setninger skal bryte til nye
+       linjer og vokse, ikke scrolles fram sidelengs. Innholdet står som
+       tekstBARN — `value` som attributt gjør ingenting på en textarea, og
+       feltet ville stått tomt etter neste render. */
+    boks.appendChild(h('textarea', { class: 'sok autovoks', rows: 1, style: 'margin-top:6px',
       placeholder: 'Kommentar — f.eks. glasset av etter 18 min',
-      'aria-label': 'Kommentar til brød ' + (i + 1), value: rad.kommentar || '',
+      'aria-label': 'Kommentar til brød ' + (i + 1),
       // onblur lagrer, av samme grunn som navnefeltet: drepes fanen midt i
       // et mange-timers bak, skal ikke notatet være borte.
-      oninput: e => { settLgBrod(i, 'kommentar', e.target.value); }, onblur: () => lagre() }));
+      oninput: e => { settLgBrod(i, 'kommentar', e.target.value); voksFelt(e.target); },
+      onblur: () => lagre() }, rad.kommentar || ''));
     /* Bildene leses fra S i det bildet er ferdig skalert, ikke fra closure-
        `rad`: skaleringen er asynkron, og i mellomtiden kan andre felt på raden
        ha endret seg. `lagre()` med én gang — bildet tas gjerne timer før baket
@@ -3713,9 +3731,13 @@ function loggRediger(b, i) {
           onblur: e => { const v = parseInt(e.target.value); if (!isNaN(v)) settFelt('kar', Math.min(10, Math.max(1, v))); oppdater(); } }),
         h('button', { 'aria-label': 'Høyere karakter', onClick: () => { settFelt('kar', Math.min(10, (b.kar || 0) + 1)); oppdater(); } }, '+'))),
     h('div', { class: 'felt-label', style: 'margin-top:10px' }, 'Notat — hva lærte du?'),
-    h('textarea', { class: 'sok', rows: 2, style: 'border-radius:14px;resize:vertical', 'data-fokus': 'lgnotat',
-      placeholder: 'F.eks. for tett krumme, prøv 3 pp mer vann', value: b.notat || '',
-      oninput: e => settFelt('notat', e.target.value) }));
+    /* Innholdet som tekstBARN, ikke `value`-attributt: på en textarea gjør
+       attributtet ingenting, og notatet VISTES tomt etter neste render selv
+       om det lå trygt i tilstanden (latent til 02.08 — voksefeltene avslørte
+       den). Vokser med teksten som de andre kommentarfeltene. */
+    h('textarea', { class: 'sok autovoks', rows: 2, 'data-fokus': 'lgnotat',
+      placeholder: 'F.eks. for tett krumme, prøv 3 pp mer vann',
+      oninput: e => { settFelt('notat', e.target.value); voksFelt(e.target); } }, b.notat || ''));
   /* Brød for brød redigeres i ettertid med vilje: brødene stekes til ulik tid,
      så «glasset av etter 18 min» på brød 3 finnes ofte ikke før timer etter at
      posten ble lagret. Radene leses fra S.loggListe og ikke fra closure-`b` —
@@ -3742,10 +3764,10 @@ function loggRediger(b, i) {
       onchange: e => { settBrodRad(j, 'metode', e.target.value); oppdater(); } },
       ...(typeof BAKE_PROFILES !== 'undefined' ? BAKE_PROFILES : []).map(p =>
         h('option', { value: p.id, selected: rad.metode === p.id ? 'selected' : null }, p.navn))));
-    boks.appendChild(h('input', { class: 'sok', style: 'margin-top:6px',
+    boks.appendChild(h('textarea', { class: 'sok autovoks', rows: 1, style: 'margin-top:6px',
       placeholder: 'Kommentar — f.eks. glasset av etter 18 min',
-      'aria-label': 'Kommentar til brød ' + (j + 1), value: rad.kommentar || '',
-      oninput: e => settBrodRad(j, 'kommentar', e.target.value) }));
+      'aria-label': 'Kommentar til brød ' + (j + 1),
+      oninput: e => { settBrodRad(j, 'kommentar', e.target.value); voksFelt(e.target); } }, rad.kommentar || ''));
     /* Bilde per brød også i ettertid — krummen ser man først når brødet
        skjæres, gjerne dagen etter at posten ble lagret. Leses via brodNaa()
        når skaleringen er ferdig, av samme grunn som tekstfeltene. */

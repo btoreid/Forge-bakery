@@ -7,6 +7,35 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 02.08.2026 — Kommentarfeltene vokser med teksten
+
+Bjørn: lange kommentarer i loggen måtte scrolles fram sidelengs. Feltene var
+énlinjes `<input>`; nå er alle kommentarfelt voksende textareas — per-brød-
+kommentarene (skjema og redigering), postens notat og stegkommentaren på
+Prosess. `voksFelt()` (js/app-v2.js) setter høyden lik innholdet på hver
+tastetrykk, og render() måler alle `.autovoks` etter oppbygging, så et felt
+med lagret tekst åpner i full høyde. CSS: `textarea.autovoks` uten indre
+scroll og dra-hank; `.sok`-pilleformen rettes til 14 px hjørner på flerlinjer.
+
+**Latent feil avslørt underveis:** `h()` setter `value` som ATTRIBUTT, og på
+en textarea gjør det ingenting — postens notatfelt viste tomt etter neste
+render selv om notatet lå trygt i tilstanden. Innholdet står nå som tekstbarn
+i alle textareas. Test på vekst + at teksten står etter re-render i
+`tester/test-logg.js`.
+
+---
+
+## 02.08.2026 — Historisk deigregnskap: radstilene traff ikke
+
+Skjermbilde fra Bjørn: «Mel totalt1 770 g» — etikett og verdi klistret sammen
+i arket fra loggen. Alle radstilene (`.regnskap`, `.regnskap-par`, `.rad`) var
+scopet under `.bunnlinje`, og det historiske arket ligger i `#telefon` (Logg
+har ingen bunnlinje). Selektorene er omscopet til `.regnskap-ark`, som begge
+arkene har — samme stil, én kilde. Testen sjekker KOMPILERT stil (flex +
+space-between) på raden i `#loggArk`, så en ny omscoping ikke sniker seg forbi.
+
+---
+
 ## 02.08.2026 — Bilder per brød: grensa opp fra 2 til 4
 
 To per brød («skorpe og krumme») holdt ikke i praksis: skorpe, bunn, krumme og
