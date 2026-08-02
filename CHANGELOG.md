@@ -7,6 +7,16 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 02.08.2026 — Bilder per brød: grensa opp fra 2 til 4
+
+To per brød («skorpe og krumme») holdt ikke i praksis: skorpe, bunn, krumme og
+smøreprøven er et helt vanlig bak (Bjørn 02.08). `MAKS_BRODBILDER` i
+`js/app-v2.js` er nå 4 — det er localStorage-kvotevernet i `skalerBilde()` som
+er den egentlige grensa, ikke tallet. Test på at +-knappen står igjen etter
+bilde nummer to i `tester/test-logg.js`. Alle 9 suitene grønne.
+
+---
+
 ## 02.08.2026 — Loggen: deigregnskap og hevekurve per post
 
 Bjørns bestilling: en knapp i loggen som drar opp HELE deigregnskapet og
