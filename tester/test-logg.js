@@ -207,6 +207,20 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   ok('bildet alene gjør radene verdt å lagre', fp.harBrod);
   ok('bildet ligger på brød 1', fp.b1 === 1);
   ok('brød uten bilde får ikke bilder-felt', !fp.b2har);
+  // Bildemodellen {id, data, sti}: id er innholdsutledet (stabil på tvers av
+  // enheter), data er den lokale JPEG-en. sti kommer først ved opplasting.
+  ok('bildet er objekt med id og lokal data', await page.evaluate(() => {
+    const bl = window.__FB.S.loggListe.find(x => x.navn === 'Bak med brødbilde').brod[0].bilder[0];
+    return !!bl && typeof bl === 'object' && !!bl.id && (bl.data || '').slice(0, 5) === 'data:';
+  }));
+  // Skyraden skal bære referanser, ikke megabytes: tilSky() stripper data fra
+  // bilder som HAR sti, og beholder den for bilder som ennå ikke er lastet opp.
+  ok('skykopien stripper opplastede bilder', await page.evaluate(() => {
+    const k = window.__FB.tilSky({ loggListe: [{ id: 'x', bilder: [
+      { id: 'a', data: 'data:image/jpeg;base64,AAA', sti: 'u/a.jpg' },
+      { id: 'b', data: 'data:image/jpeg;base64,BBB' }] }] });
+    return !('data' in k.loggListe[0].bilder[0]) && k.loggListe[0].bilder[1].data === 'data:image/jpeg;base64,BBB';
+  }));
   ok('skjemaet er nullstilt etter lagring', await page.evaluate(() => window.__FB.S.lgBrod.length === 0));
   const fkort = page.locator('.kort:has-text("Bak med brødbilde")');
   ok('miniatyren står i brødraden på kortet', await fkort.locator('.logg-bilde.liten').count() === 1);

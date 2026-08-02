@@ -91,6 +91,9 @@ function norsk(feil) {
   // mens PostgREST svarer «Could not find the table 'public.bakerstate' in the
   // schema cache» (PGRST205). Bare den første var dekket, så den vanligste
   // varianten slapp gjennom som rå engelsk tekst uten å si hva man skal gjøre.
+  if (m.includes('bucket not found')) {
+    return 'Bildebøtta «bakebilder» finnes ikke ennå. Kjør Storage-SQL-en fra SUPABASE.md i Supabase → SQL Editor, så lastes bildene opp. Alt vises fortsatt lokalt i mellomtiden.';
+  }
   if ((m.includes('relation') && m.includes('does not exist')) ||
       m.includes('could not find the table') || m.includes('schema cache')) {
     return 'Databasetabellen «bakerstate» finnes ikke ennå. Kjør SQL-en fra SUPABASE.md i Supabase → SQL Editor, så virker synken. Alt du gjør lagres lokalt i mellomtiden.';
@@ -153,6 +156,34 @@ async function lagreKalibrering(maskinId, friksjon, deigvekt) {
             { onConflict: 'maskin_id' });
   if (error) return { feil: norsk(error) };
   return { melding: 'Kalibreringen er delt.' };
+}
+
+/* ---------- Bilder i Storage ----------
+   Bildene er FILER, ikke rader: base64 i bakerstate-JSON-en blåste opp raden
+   som lastes opp ved hver endring, og localStorage var eneste ekte lager
+   (Bjørn 02.08: «det gir ikke mening å bare ha dem i cache»). Bøtta
+   `bakebilder` (privat, RLS per bruker-mappe — se SUPABASE.md) holder
+   originalene; tilstanden bærer bare stien. */
+const BOTTE = 'bakebilder';
+async function lastOppBilde(sti, blob) {
+  if (!klient || !bruker) return { feil: 'Ikke innlogget.' };
+  const { error } = await klient.storage.from(BOTTE).upload(sti, blob, { contentType: 'image/jpeg', upsert: true });
+  if (error) return { feil: norsk(error) };
+  return {};
+}
+async function lastNedBilde(sti) {
+  if (!klient || !bruker) return null;
+  try {
+    const { data, error } = await klient.storage.from(BOTTE).download(sti);
+    return (error || !data) ? null : data;          // Blob
+  } catch (e) { return null; }
+}
+/* Fjerning er beste-forsøk: feiler den (offline), ligger fila igjen som
+   foreldreløs i bøtta — kjedelig, men ufarlig, og bedre enn å blokkere
+   slettingen i appen på et nettverkskall. */
+async function slettBilder(stier) {
+  if (!klient || !bruker || !Array.isArray(stier) || !stier.length) return;
+  try { await klient.storage.from(BOTTE).remove(stier); } catch (e) {}
 }
 
 /* ---------- Data opp og ned ---------- */
@@ -221,6 +252,7 @@ window.Sky = {
   status, paaEndring: cb => lyttere.push(cb),
   registrer, loggInn, loggUt, glemtPassord,
   kanPublisere, hentKalibreringer, lagreKalibrering,
-  hentNed, lagreOpp, skyvNaa
+  hentNed, lagreOpp, skyvNaa,
+  lastOppBilde, lastNedBilde, slettBilder
 };
 })();

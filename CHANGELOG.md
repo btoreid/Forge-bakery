@@ -7,6 +7,43 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 02.08.2026 — Bildene lagres i databasen (Supabase Storage)
+
+Bjørn: «Vi må lagre bildene i databasen. Det gir ikke mening å bare ha dem i
+cache.» Før lå bildene som base64 i `bakerstate`-JSON-en: hele raden ble
+lastet opp på nytt ved hver endring, og localStorage var det egentlige taket.
+
+**Modellen.** Et bilde er nå `{id, data, sti}` (normalisert i `last()`, også
+for gamle poster med rene strenger): `id` er innholdsutledet (samme bilde →
+samme id på alle enheter), `data` er den lokale JPEG-en (alt virker offline og
+uten konto, som før), `sti` er filstien i den private bøtta `bakebilder`
+(`bruker-id/bilde-id.jpg`) når fila er lastet opp.
+
+**Flyten.** `synkBilder()` laster opp hvert bilde som FIL og stempler sti;
+`tilSky()` stripper `data` fra opplastede bilder før raden pushes — skyraden
+bærer referanser, ikke megabytes. `bildeSrc()` viser lokal data, øktens
+nedlastingsminne, eller en plassholder mens fila hentes fra bøtta (annen
+enhet). `dataAvtrykk()` ser bevisst bort fra bildenes `data`: en nedlasting
+eller rehydrering er ikke en dataendring og skal ikke stemple `oppdatert`.
+Ved innlogging rehydreres flettede poster fra lokal data (id-oppslag), så en
+strippet skyversjon som vinner duellen ikke koster en ny nedlasting. Sletting
+av bilde/rad/post fjerner filene i bøtta (beste forsøk).
+
+**Krever én SQL-kjøring:** bøtta og RLS-policyene står i `SUPABASE.md`
+(«Bilder i Storage»). Uten den sier synken fra på norsk og alt virker lokalt.
+Tester: objektform + tilSky-stripping i `tester/test-logg.js`.
+
+---
+
+## 02.08.2026 — Kameraknappen: flatt strekikon i stedet for emoji
+
+📷-emojien rendres som fargeglyf fra systemskriften og skar seg mot appens
+flate Lucide-ikoner (Bjørn: «stygt»). Ny `kameraIkon()` i samme strektegnede
+stil som resten (stroke 2, runde ender) i alle tre velgerne; knappene
+flex-sentrerer SVG-en.
+
+---
+
 ## 02.08.2026 — Ta bilde direkte: 📷-knapp ved siden av +
 
 Bjørn: «hva skjedde med ta bilde direkte?» Svaret var at det aldri fantes —
