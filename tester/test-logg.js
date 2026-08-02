@@ -294,6 +294,55 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   await page.waitForTimeout(300);
   ok('trykk på bakteppet lukker', await page.locator('#loggArk').count() === 0);
 
+  console.log('— Fullført-klokkeslett på steg —');
+  await page.click('#bunnmeny button:has-text("Prosess")');
+  await page.waitForTimeout(400);
+  await page.locator('button:has-text("fullfør steget")').first().click();
+  await page.waitForTimeout(300);
+  const tidInp = page.locator('input.steg-tid').first();
+  ok('fullført steg viser klokkeslett-felt', await tidInp.count() === 1);
+  // Man krysser gjerne av lenge etter at steget var ferdig — klokkeslettet må
+  // kunne korrigeres, ellers lyver både avviket og loggen.
+  await tidInp.fill('03:04');
+  await tidInp.evaluate(e => e.dispatchEvent(new Event('change')));
+  await page.waitForTimeout(300);
+  ok('klokkeslettet kan korrigeres', await page.evaluate(() => {
+    const kv = Object.values(window.__FB.S.stegKvitt).find(k => k && k.ok);
+    const d = new Date(kv.ok); return d.getHours() === 3 && d.getMinutes() === 4;
+  }));
+
+  console.log('— Lås oppskriften til baket —');
+  await page.click('#bunnmeny button:has-text("Logg")');
+  await page.waitForTimeout(300);
+  await page.click('button:has-text("Lås oppskriften til dette baket")');
+  await page.waitForTimeout(250);
+  ok('låsen vises i skjemaet', (await page.locator('.kort:has-text("Loggfør dette baket")').innerText()).includes('låst til dette baket'));
+  // Endre oppskriften i appen MENS låsen står — det er hele poenget med den.
+  await page.evaluate(() => { window.__FB.S.hyd = 85; window.__FB.oppdater(); });
+  await page.waitForTimeout(250);
+  await page.fill('input[placeholder*="Halvgrovt"]', 'Låst bak');
+  await page.click('button:has-text("Lagre baket")');
+  await page.waitForTimeout(300);
+  ok('posten fikk den LÅSTE oppskriften', await page.evaluate(() =>
+    window.__FB.S.loggListe.find(b => b.navn === 'Låst bak').oppskrift.hyd === 75));
+  ok('appen står fortsatt på endringen', await page.evaluate(() => window.__FB.S.hyd === 85));
+  ok('låsen nullstilles etter lagring', await page.evaluate(() => window.__FB.S.lgLaas === null));
+  ok('stegnotatet bærer klokkeslettet', await page.evaluate(() => {
+    const b = window.__FB.S.loggListe.find(x => x.navn === 'Låst bak');
+    return !!(b.stegNotater && b.stegNotater.some(n => n.ferdig));
+  }));
+
+  console.log('— Merk baket som fullført —');
+  const lkort = page.locator('.kort:has-text("Låst bak")');
+  await lkort.locator('button:has-text("Merk baket som fullført")').click();
+  await page.waitForTimeout(300);
+  ok('fullført-merket vises', (await lkort.innerText()).includes('FULLFØRT'));
+  ok('Rediger er borte', await lkort.locator('button:has-text("Rediger")').count() === 0);
+  ok('Slett er borte', await lkort.locator('button:has-text("Slett")').count() === 0);
+  await lkort.locator('button:has-text("Lås opp for å endre")').click();
+  await page.waitForTimeout(300);
+  ok('opplåsing gir Rediger tilbake', await lkort.locator('button:has-text("Rediger")').count() === 1);
+
   ok('ingen JS-feil', errs.length === 0, errs.join(' | '));
   await browser.close();
   console.log(feil === 0 ? '\nALLE TESTER GRØNNE' : '\n' + feil + ' TESTER RØDE');

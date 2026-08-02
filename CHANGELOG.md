@@ -7,6 +7,34 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 02.08.2026 — Ærlig logg: redigerbar fullført-tid, lås oppskriften, fullført-merke
+
+Tre vern mot at loggen lyver (Bjørns bestilling):
+
+**Klokkeslettet per steg kan korrigeres.** Man krysser gjerne av lenge etter
+at steget faktisk var ferdig, og da lyver både avviket og loggen. Fullførte
+steg har nå et redigerbart tidsfelt (`input type=time`, `.steg-tid`) ved
+FULLFØRT-pillen; endring nullstiller `avvikOk` så flytt-planen-tilbudet kan
+komme opp igjen med riktig avvik. Datoen står — det er klokkeslettet man
+retter. Stegnotatene i loggposten bærer nå også selve klokkeslettet
+(`ferdig`-feltet, vises som «ferdig kl. 14:32»).
+
+**Lås oppskriften til baket.** Deigen hever i timevis, og appen brukes i
+mellomtiden til å prøve og planlegge. Uten lås lagret posten oppskriften slik
+appen TILFELDIGVIS sto ved lagring. Knappen «Lås oppskriften til dette baket»
+fryser avtrykket og måletallene i `S.lgLaas`; `lagreBak()` bruker de låste
+verdiene (også antall/stekeprofil for brød-radene) og nullstiller låsen.
+Reversibel («Lås opp — følg appen igjen»), synkes som data.
+
+**Merk baket som fullført.** Når alt er inne (også brød-kommentarene som
+kommer timer senere), settes `fullfort` på posten: Rediger og Slett forsvinner
+bak en bevisst «Lås opp for å endre», så en ferdig logg ikke køddes til ved et
+uhell når appen brukes videre. Reversibel med ett tydelig trykk.
+
+Ny testseksjon ×3 i `tester/test-logg.js`; alle 9 suitene grønne.
+
+---
+
 ## 02.08.2026 — Bildene lagres i databasen (Supabase Storage)
 
 Bjørn: «Vi må lagre bildene i databasen. Det gir ikke mening å bare ha dem i
