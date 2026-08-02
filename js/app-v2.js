@@ -28,7 +28,7 @@ const STANDARD = {
   heveplan: null,                 // null = planens standard; array = redigert
   paramInfo: null, tilleggInfo: null, melInfo: null, meltallInfo: null,
   aktivSteg: 0, aktivStegId: null, regnskapAapen: false, byttBekreft: null,
-  loggListe: [], lgNavn: '', lgKar: 8, lgBilder: [], oppdatert: 0,
+  loggListe: [], lgNavn: '', lgKar: 8, lgBilder: [], lgBrod: [], oppdatert: 0,
   lgRediger: null, lgSlett: null, bildeVis: null,
   // Gravsteiner: id-ene til slettede loggposter. Uten dem ville sammenfletningen
   // ved synk gjenopplivet hver post man har slettet på en annen enhet.
@@ -77,7 +77,7 @@ let S = last();
 function nyStandard() {
   const s = Object.assign({}, STANDARD);
   s.tillegg = Object.assign({}, STANDARD.tillegg);   // bryt delt referanse med STANDARD
-  s.loggListe = []; s.favoritter = []; s.lgBilder = []; s.loggSlettet = [];
+  s.loggListe = []; s.favoritter = []; s.lgBilder = []; s.lgBrod = []; s.loggSlettet = [];
   return s;
 }
 function last() {
@@ -91,6 +91,9 @@ function last() {
   if (!Array.isArray(s.loggListe)) s.loggListe = [];
   if (!Array.isArray(s.favoritter)) s.favoritter = [];
   if (!Array.isArray(s.lgBilder)) s.lgBilder = [];
+  if (!Array.isArray(s.lgBrod)) s.lgBrod = [];
+  s.lgBrod = s.lgBrod.filter(x => x && typeof x === 'object')
+    .map(x => ({ metode: typeof x.metode === 'string' ? x.metode : '', kommentar: typeof x.kommentar === 'string' ? x.kommentar : '' }));
   if (!Array.isArray(s.loggSlettet)) s.loggSlettet = [];
   // Favorittene het før bare meltype-id-en. Nå kan også stekeutstyr og
   // stekeprofiler merkes, så id-ene er navnerom-prefikset for å unngå at to
@@ -3379,6 +3382,7 @@ function tegnLogg(r) {
         h('button', { onClick: () => { S.lgKar = Math.max(1, S.lgKar - 1); oppdater(); } }, '−'),
         h('input', { type: 'text', inputmode: 'numeric', value: String(S.lgKar), onblur: e => { const v = parseInt(e.target.value); if (!isNaN(v)) S.lgKar = Math.min(10, Math.max(1, v)); oppdater(); } }),
         h('button', { onClick: () => { S.lgKar = Math.min(10, S.lgKar + 1); oppdater(); } }, '+'))));
+  form.appendChild(tegnLoggBrod());
   form.appendChild(tegnBildeVelger());
   // Lagres automatisk med baket
   const auto = h('div', { class: 'info-boks', style: 'margin-top:12px' },
@@ -3422,6 +3426,47 @@ function tegnLogg(r) {
   wrap.appendChild(tegnBackup());
   return wrap;
 }
+/* ---------- Per brød: stekemetode og kommentar ----------
+   Ett bak er ofte FLERE brød stekt ulikt — fire emner der ett får klokka, ett
+   står i glasset og to steker åpent — og da er «én metode per bak» ikke en
+   ærlig logg (Bjørn 02.08). Radene følger antallet i oppskriften. Metode ''
+   betyr «som oppsettet» og løses til gjeldende stekeprofil idet baket lagres,
+   så loggposten sier hva som faktisk ble gjort, ikke en peker som kan drifte. */
+function stekeMetodeNavn(id) {
+  const p = (typeof BAKE_PROFILES !== 'undefined') && BAKE_PROFILES.find(x => x.id === id);
+  return p ? p.navn : (id || '—');
+}
+function settLgBrod(i, felt, verdi) {
+  const rader = (S.lgBrod || []).slice();
+  while (rader.length <= i) rader.push({ metode: '', kommentar: '' });
+  rader[i] = Object.assign({}, rader[i], { [felt]: verdi });
+  S.lgBrod = rader;
+}
+function tegnLoggBrod() {
+  const antall = Math.max(1, S.antall || 1);
+  const boks = h('div', { style: 'margin-top:10px' },
+    h('div', { class: 'felt-label' }, 'Brød for brød'),
+    h('div', { class: 'hjelpetekst', style: 'margin-top:2px' },
+      'Stekes brødene ulikt, velg metode og noter hva du gjorde per brød. Radene følger antallet i oppskriften (' + antall + ').'));
+  for (let i = 0; i < antall; i++) {
+    const rad = (S.lgBrod || [])[i] || { metode: '', kommentar: '' };
+    boks.appendChild(h('div', { class: 'felt-label', style: 'margin-top:8px' }, 'Brød ' + (i + 1)));
+    boks.appendChild(h('select', { class: 'sok', 'aria-label': 'Stekemetode for brød ' + (i + 1),
+      onchange: e => { settLgBrod(i, 'metode', e.target.value); oppdater(); } },
+      h('option', { value: '', selected: !rad.metode ? 'selected' : null },
+        'Som oppsettet — ' + stekeMetodeNavn(S.stekeProfil)),
+      ...(typeof BAKE_PROFILES !== 'undefined' ? BAKE_PROFILES : []).map(p =>
+        h('option', { value: p.id, selected: rad.metode === p.id ? 'selected' : null }, p.navn))));
+    boks.appendChild(h('input', { class: 'sok', style: 'margin-top:6px',
+      placeholder: 'Kommentar — f.eks. glasset av etter 18 min',
+      'aria-label': 'Kommentar til brød ' + (i + 1), value: rad.kommentar || '',
+      // onblur lagrer, av samme grunn som navnefeltet: drepes fanen midt i
+      // et mange-timers bak, skal ikke notatet være borte.
+      oninput: e => { settLgBrod(i, 'kommentar', e.target.value); }, onblur: () => lagre() }));
+  }
+  return boks;
+}
+
 /* Feltene som SKAL til for å bake det samme igjen. Bevisst en hviteliste og
    ikke «hele S minus litt»: visningstilstand, logg, favoritter og kontoting har
    ingenting i en oppskrift å gjøre, og en svarteliste ville sluppet gjennom
@@ -3452,6 +3497,15 @@ function lagreBak(r) {
       avvikMin: kv.ok ? stegAvvikMin(s) : null
     };
   }).filter(Boolean);
+  /* Brød-radene: '' løses til gjeldende stekeprofil NÅ, så posten står på egne
+     bein. Lagres bare når radene faktisk sier noe — en kommentar eller en
+     metode som avviker fra oppsettet — ellers er de bare støy i loggen. */
+  const brodRader = [];
+  for (let i = 0; i < Math.max(1, S.antall || 1); i++) {
+    const rad = (S.lgBrod || [])[i] || {};
+    brodRader.push({ metode: rad.metode || S.stekeProfil, kommentar: (rad.kommentar || '').trim() });
+  }
+  const brodVerdt = brodRader.some(x => x.kommentar || x.metode !== S.stekeProfil);
   S.loggListe = S.loggListe.concat([{
     id: 'b' + naa,
     laget: naa, endret: naa,
@@ -3463,12 +3517,13 @@ function lagreBak(r) {
     grov: fmt(r.brodskala.pct, 0), hyd: fmt(r.hyd * 100, 0), loft: r.loft.loft, dose: fmt(r.doseProfil.dose, 2),
     bilder: (S.lgBilder || []).slice(),
     ...(stegNotater.length ? { stegNotater } : {}),
+    ...(brodVerdt ? { brod: brodRader } : {}),
     // Selve oppskriften, ikke bare måletallene — det er dette «Bak dette på
     // nytt» henter tilbake. Poster fra før dette feltet fantes kan ikke
     // gjenskapes, og da vises knappen med vilje ikke.
     oppskrift: oppskriftAvtrykk()
   }]);
-  S.lgNavn = ''; S.lgBilder = [];
+  S.lgNavn = ''; S.lgBilder = []; S.lgBrod = [];
   S.stegKvitt = {};             // kvitteringene er levert — neste bak starter blankt
   oppdater();
 }
@@ -3514,6 +3569,16 @@ function loggPost(b, i) {
        (n.avvikMin != null && Math.abs(n.avvikMin) > 20) ? 'ferdig ' + fmtTimer(Math.abs(n.avvikMin) / 60) + (n.avvikMin < 0 ? ' før planen' : ' etter planen') : null,
        n.notat || null].filter(Boolean).join(' — '))));
     kortEl.appendChild(sn);
+  }
+  /* Brød for brød: fire brød fra samme deig kan være stekt på fire måter, og
+     det er nettopp de sammenligningene loggen skal kunne svare på senere. */
+  if (b.brod && b.brod.length) {
+    const bb = h('div', { class: 'info-boks', style: 'margin-top:8px' },
+      h('div', { style: 'font-size:.66rem;font-weight:800;letter-spacing:.06em;color:var(--color-neutral-600);text-transform:uppercase;margin-bottom:4px' }, 'Brød for brød'));
+    b.brod.forEach((rad, j) => bb.appendChild(h('div', { style: 'font-size:.78rem;line-height:1.45;margin-top:4px' },
+      h('b', null, 'Brød ' + (j + 1) + ': '),
+      [stekeMetodeNavn(rad.metode), rad.kommentar || null].filter(Boolean).join(' — '))));
+    kortEl.appendChild(bb);
   }
   if (b.bilder && b.bilder.length) kortEl.appendChild(h('div', { class: 'logg-bilder' },
     ...b.bilder.map((src, j) => h('button', { class: 'logg-bilde', 'aria-label': 'Vis bilde ' + (j + 1) + ' i stort format',
@@ -3580,8 +3645,45 @@ function loggRediger(b, i) {
     h('div', { class: 'felt-label', style: 'margin-top:10px' }, 'Notat — hva lærte du?'),
     h('textarea', { class: 'sok', rows: 2, style: 'border-radius:14px;resize:vertical', 'data-fokus': 'lgnotat',
       placeholder: 'F.eks. for tett krumme, prøv 3 pp mer vann', value: b.notat || '',
-      oninput: e => settFelt('notat', e.target.value) }),
-    h('div', { class: 'felt-label' }, 'Bilder'));
+      oninput: e => settFelt('notat', e.target.value) }));
+  /* Brød for brød redigeres i ettertid med vilje: brødene stekes til ulik tid,
+     så «glasset av etter 18 min» på brød 3 finnes ofte ikke før timer etter at
+     posten ble lagret. Radene leses fra S.loggListe og ikke fra closure-`b` —
+     to tastetrykk i hver sin rad ville ellers overskrevet hverandre, siden
+     visningen ikke tegnes om for hvert tegn. */
+  const brodNaa = () => {
+    const post = S.loggListe.find(x => x.id === b.id);
+    return ((post && post.brod) || []).map(x => Object.assign({}, x));
+  };
+  const settBrodRad = (j, felt, verdi) => {
+    const rader = brodNaa();
+    if (!rader[j]) return;
+    rader[j][felt] = verdi;
+    settFelt('brod', rader);
+  };
+  boks.appendChild(h('div', { class: 'felt-label' }, 'Brød for brød — metode og kommentar'));
+  (b.brod || []).forEach((rad, j) => {
+    boks.appendChild(h('div', { style: 'display:flex;align-items:baseline;gap:8px;margin-top:8px' },
+      h('div', { class: 'felt-label', style: 'margin:0;flex:1' }, 'Brød ' + (j + 1)),
+      h('button', { class: 'btn-ghost', style: 'font-size:.74rem;padding:2px 0;color:var(--color-danger)',
+        'aria-label': 'Fjern brød ' + (j + 1),
+        onClick: () => { settFelt('brod', brodNaa().filter((_, k) => k !== j)); oppdater(); } }, 'Fjern')));
+    boks.appendChild(h('select', { class: 'sok', 'aria-label': 'Stekemetode for brød ' + (j + 1),
+      onchange: e => { settBrodRad(j, 'metode', e.target.value); oppdater(); } },
+      ...(typeof BAKE_PROFILES !== 'undefined' ? BAKE_PROFILES : []).map(p =>
+        h('option', { value: p.id, selected: rad.metode === p.id ? 'selected' : null }, p.navn))));
+    boks.appendChild(h('input', { class: 'sok', style: 'margin-top:6px',
+      placeholder: 'Kommentar — f.eks. glasset av etter 18 min',
+      'aria-label': 'Kommentar til brød ' + (j + 1), value: rad.kommentar || '',
+      oninput: e => settBrodRad(j, 'kommentar', e.target.value) }));
+  });
+  boks.appendChild(h('button', { class: 'btn btn-full', style: 'margin-top:8px;font-size:.8rem',
+    onClick: () => {
+      const rader = brodNaa();
+      rader.push({ metode: (b.oppskrift && b.oppskrift.stekeProfil) || S.stekeProfil, kommentar: '' });
+      settFelt('brod', rader); oppdater();
+    } }, '+ Legg til brød'));
+  boks.appendChild(h('div', { class: 'felt-label' }, 'Bilder'));
   const rad = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:6px' });
   (b.bilder || []).forEach((src, j) => rad.appendChild(h('div', { style: 'position:relative' },
     h('img', { src, alt: 'Bilde ' + (j + 1), style: 'width:64px;height:64px;object-fit:cover;border-radius:12px;border:1px solid var(--color-neutral-300);display:block' }),

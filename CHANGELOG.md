@@ -7,6 +7,31 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 02.08.2026 — Loggen: stekemetode og kommentar per brød
+
+Bjørns bestilling fra testbakingen: fire brød fra samme deig stekes gjerne på
+fire måter (klokke, glassgryte, åpent på stålet …), og da er «én metode per
+bak» ikke en ærlig logg. Loggskjemaet har nå en «Brød for brød»-seksjon med én
+rad per brød i oppskriften (`S.antall`): stekemetode (nedtrekk fra
+`BAKE_PROFILES`, standard «Som oppsettet» = gjeldende stekeprofil) og fritt
+kommentarfelt. Kommentarfeltene lagrer på blur, av samme grunn som navnefeltet.
+
+**Lagring.** Radene løses ved lagring — '' blir gjeldende `stekeProfil` — og
+legges på posten som `brod: [{metode, kommentar}]`, men BARE når de sier noe
+(en kommentar eller en avvikende metode); ellers er de støy. Skjemafeltet bor i
+`S.lgBrod` (nullstilles av `lagreBak`, sanitiseres i `last()`).
+
+**Visning og redigering.** Posten viser en «Brød for brød»-boks (samme form
+som «Fra prosessen»). I redigeringen kan metode og kommentar endres, rader
+legges til og fjernes — i ettertid med vilje: brødene stekes til ulik tid, så
+kommentaren på brød 3 finnes ofte ikke før timer etter at posten ble lagret.
+Radoppdateringene leses fra `S.loggListe`, ikke fra closure — to tastetrykk i
+hver sin rad ville ellers overskrevet hverandre.
+
+Kode: `js/app-v2.js` (`tegnLoggBrod`, `settLgBrod`, `stekeMetodeNavn`,
+`lagreBak`, `loggPost`, `loggRediger`). Tester: ny seksjon i
+`tester/test-logg.js` (14 nye sjekker, alle 9 suiter grønne).
+
 ## 02.08.2026 (natt) — Prosesstegene redesignet: kvittering, sjekkliste, plan-korrigering og stegnotater
 
 Bjørns natt-bestilling. Fire nye byggeklosser, alle verifisert i nettleser og
