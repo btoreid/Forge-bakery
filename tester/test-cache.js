@@ -61,7 +61,7 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
     await ctx.setOffline(true);
     await page.reload();
     await page.waitForTimeout(1000);
-    ok('appen laster uten nett', await page.locator('#bunnmeny button').count() === 6);
+    ok('appen laster uten nett', await page.locator('#bunnmeny button').count() === 8);
     await ctx.setOffline(false);
 
     console.log('— Versjonsvisning i Oppslag —');

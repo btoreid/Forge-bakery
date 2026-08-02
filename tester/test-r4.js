@@ -244,7 +244,7 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
       // Overskriften ligger i TOPPFELTET nå, ikke som en seksjonstittel i
       // innholdet — stegtallet og tittelen deler én linje for å spare plass.
       overskrift: /hva skal du bake\?/i.test(document.getElementById('topp').textContent),
-      stegTall: /1 av 4/i.test(document.getElementById('topp').textContent),
+      stegTall: /1 av 5/i.test(document.getElementById('topp').textContent),
       ingenStart: !/Start fra forvalget/.test(t),
       tegninger: document.querySelectorAll('svg.brodsvg').length,
       infoknapper: document.querySelectorAll('.brodvalg .info-ring').length,
@@ -252,7 +252,7 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     };
   });
   ok('overskriften spør hva du skal bake', brod.overskrift);
-  ok('stegtallet står i overskriftslinja (1 av 4)', brod.stegTall);
+  ok('stegtallet står i overskriftslinja (1 av 5)', brod.stegTall);
   ok('startblokka er borte', brod.ingenStart);
   ok('alle fire brødtypene har tegning', brod.tegninger === 4, String(brod.tegninger));
   ok('alle fire har ⓘ', brod.infoknapper === 4, String(brod.infoknapper));
@@ -448,7 +448,8 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   console.log('— Forferment: temperatur og kjøleskap —');
   const ffT = await page.evaluate(async () => {
     const FB = window.__FB, S = FB.S;
-    S.melEndring = null; S.ff = true; S.ffType = 'poolish'; S.ffTemp = null; FB.oppdater();
+    // Forferment-UI-et bor på egen skjerm (steg 3) — teksten testes der.
+    S.melEndring = null; S.ff = true; S.ffType = 'poolish'; S.ffTemp = null; S.skjerm = 'forferment'; FB.oppdater();
     await new Promise(r => setTimeout(r, 120));
     const varm = regn(S);
     S.ffTemp = 4; FB.oppdater();
@@ -493,19 +494,19 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     S.ff = false; S.ffTemp = null; S.autolyseMin = 0; FB.oppdater();
     await new Promise(r => setTimeout(r, 100));
     const r0 = regn(S), k0 = kjede(S, r0, Date.now() + 20 * 3600000);
-    S.autolyseMin = 60; FB.oppdater();
+    S.autolyseMin = 60; S.skjerm = 'autolyse'; FB.oppdater();
     await new Promise(r => setTimeout(r, 120));
     const r1 = regn(S), k1 = kjede(S, r1, Date.now() + 20 * 3600000);
     return { uten: k0.length, med: k1.length,
       harSteg: k1.some(x => x.id === 'autolyse'),
       totalUten: +k0.totalT.toFixed(2), totalMed: +k1.totalT.toFixed(2),
-      egenBoks: /9 · Autolyse/i.test(document.body.innerText) };
+      egenBoks: /Hvile før elting/i.test(document.getElementById('topp').textContent) };
   });
   ok('autolyse er av som standard og legger til ett steg', auto.med === auto.uten + 1, auto.uten + ' → ' + auto.med);
   ok('steget heter autolyse', auto.harSteg);
   ok('autolysen forlenger totaltiden med 1 t', Math.abs((auto.totalMed - auto.totalUten) - 1) < 0.02,
     auto.totalUten + ' → ' + auto.totalMed + ' t');
-  ok('autolyse har egen boks i Deig', auto.egenBoks);
+  ok('autolysen har egen skjerm (steg 4)', auto.egenBoks);
 
   /* ---------------------------------------------------------------
      15 · Form og kurv: uten form, og kurvmål som innstilling

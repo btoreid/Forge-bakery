@@ -7,6 +7,32 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 02.08.2026 — Forferment og autolyse som egne steg (3 og 4 av 5)
+
+Bjørn: «for mye scrolling nå». Forferment og autolyse lå som seksjon 8–9
+nederst på Deig-skjermen — begge er egne beslutninger med egne konsekvenser
+for tidsplanen, og de druknet under mel, vann, frø og salt.
+
+Forberedelsen er nå FEM punkter: **Brød → Deig → Forferment → Autolyse →
+Tid**. `SKJERMER` i js/app-v2.js har fått to nye oppføringer med egne titler
+(«Poolish, biga eller rett på?», «Hvile før elting?»); `tegnForferment()` og
+`tegnAutolyse()` er koblet rett på rendereren og fjernet fra `tegnDeigen()` —
+selve boksene er uendret, bare flyttet, så all logikk og alt fagstoff følger
+med. Videre-knappen kjeder de fem sammen. Prosess har fortsatt ikke stegtall:
+den er gjennomføringen, ikke et forberedelsessteg.
+
+**Ikoner** i samme Lucide-stil som de andre: gjæringskrukke med bobler
+(forferment — poolishen som står og arbeider) og timeglass (autolyse — mel og
+vann som hviler). Bunnmenyen er nå åtte punkter; skriftstørrelsen er justert
+til .58rem så «Forferment» får plass på 390 px uten klipping (målt, ikke
+antatt).
+
+Testene som talte seks menyknapper eller «1 av 4» er oppdatert, og de to
+UI-testene som leste forferment-/autolyseteksten fra Deig navigerer nå til
+riktig skjerm. Alle 9 suitene grønne.
+
+---
+
 ## 02.08.2026 — Ærlig logg: redigerbar fullført-tid, lås oppskriften, fullført-merke
 
 Tre vern mot at loggen lyver (Bjørns bestilling):
