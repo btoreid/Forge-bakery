@@ -2081,6 +2081,9 @@ function kjede(state, r, ferdigMs) {
   if (sisteUtbakt && sisteKaldt) {
     steg.push({
       id: 'snitt', navn: 'Snitt kaldt og sett inn', tid: postStart, varighet: POSTPROOF, tone: 'noytral',
+      // Ingen timer: dette er en HANDLING (snitt, inn i ovnen), ikke en venting
+      // — varigheten er bare tiden jobben tar (Bjørn 02.08).
+      ingenTimer: true,
       hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Rett fra kjøl', sideV: POSTPROOF + ' min',
       tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)], ['Rett fra kjøl', 'ikke temperer — snitt kaldt'], ['Benkestå', 'bare det snittingen tar'], ['Kald deig', '+2–4 min steketid']],
       /* Formbrød VENDES IKKE: formen er valgt fordi deigen trenger bæring, og
@@ -2095,6 +2098,7 @@ function kjede(state, r, ferdigMs) {
     // Utbakt, men varmt: emnet står ferdig hevet på benken, ikke i skapet.
     steg.push({
       id: 'snitt', navn: 'Snitt og sett inn', tid: postStart, varighet: POSTPROOF, tone: 'noytral',
+      ingenTimer: true,        // handling, ikke venting — se kald-varianten
       hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Fra benken', sideV: POSTPROOF + ' min',
       tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)], ['Fra benken', 'romtemperert, ferdig hevet'], ['Benkestå', 'ingen ny heving']],
       gjor: presetId === 'ciabatta'
@@ -2109,6 +2113,8 @@ function kjede(state, r, ferdigMs) {
   } else {
     steg.push({
       id: 'utbak', navn: 'Bak ut og la hvile', tid: postStart, varighet: POSTPROOF, tone: 'noytral',
+      // Den konkrete ventingen her er benkehvilen mellom forforming og forming.
+      timerMin: 15, timerNavn: 'Benkehvilen er over — form og gjør klart til ovnen',
       hoved: gram(r.totalVekt / antall), hovedNote: 'per emne · ' + antall + ' emner', sideK: 'Benkehvile', sideV: POSTPROOF + ' min',
       tall: [['Antall emner', String(antall)], ['Vekt per emne', gram(r.totalVekt / antall)], ['Benkehvile', POSTPROOF + ' min'],
              ...(formV ? [['Hviler', hvileSted]] : [])],
