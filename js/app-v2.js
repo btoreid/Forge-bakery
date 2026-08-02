@@ -3260,7 +3260,9 @@ function stegKort(steg, status, ctx) {
   // Timer for det aktive steget: setter en nedtelling på stegets varighet, som
   // ringer på telefonen når det er tid å sjekke. Ikke på forvarmingen (den
   // overlapper), og ikke der en timer alt er satt for steget.
-  if (status && steg.varighet >= 1 && steg.id !== 'ovn') {
+  // `ingenTimer`: steg som er en HANDLING (snitt og sett inn) har ingenting å
+  // telle ned — en timer der er støy (Bjørn 02.08).
+  if (status && steg.varighet >= 1 && steg.id !== 'ovn' && !steg.ingenTimer) {
     const alt = (S.timere || []).some(t => t.stegId === steg.id);
     /* Timeren teller den KONKRETE ventingen i steget (steg.timerMin — f.eks.
        benkehvilen på 15 min i formingen), ikke stegets totale varighet med
