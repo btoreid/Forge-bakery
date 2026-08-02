@@ -29,6 +29,7 @@ const STANDARD = {
   paramInfo: null, tilleggInfo: null, melInfo: null, meltallInfo: null,
   aktivSteg: 0, aktivStegId: null, regnskapAapen: false, byttBekreft: null,
   loggListe: [], lgNavn: '', lgKar: 8, lgBilder: [], lgBrod: [], oppdatert: 0,
+  lgLaas: null,               // låst oppskriftsavtrykk til NESTE loggpost: {nar, grov, hyd, loft, dose, oppskrift}
   lgRediger: null, lgSlett: null, bildeVis: null,
   lgRegnskap: null,           // loggpost-id med historisk deigregnskap/hevekurve åpen
   // Gravsteiner: id-ene til slettede loggposter. Uten dem ville sammenfletningen
@@ -100,6 +101,7 @@ function last() {
       kommentar: typeof x.kommentar === 'string' ? x.kommentar : '',
       bilder: normBilder(x.bilder) }));
   if (!Array.isArray(s.loggSlettet)) s.loggSlettet = [];
+  if (s.lgLaas && (typeof s.lgLaas !== 'object' || !s.lgLaas.oppskrift)) s.lgLaas = null;
   // Favorittene het før bare meltype-id-en. Nå kan også stekeutstyr og
   // stekeprofiler merkes, så id-ene er navnerom-prefikset for å unngå at to
   // lister med samme id kolliderer. Gamle, uprefiksede id-er er meltyper.
@@ -2991,6 +2993,17 @@ function planForhaandsvis(tpId, ferdigMs) {
   return _planMemo.data[tpId];
 }
 function klHM(ms) { return new Date(ms).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' }); }
+/* <input type="time">-verdien for et tidsstempel, og veien tilbake: nytt
+   stempel med samme DATO som det gamle, bare klokkeslettet byttet. Datoen
+   beholdes med vilje — man korrigerer «krysset av 14:30, var ferdig 14:10»,
+   ikke hvilken dag baket skjedde. */
+function tilKlokkeVerdi(ms) { const d = new Date(ms), p = n => String(n).padStart(2, '0'); return p(d.getHours()) + ':' + p(d.getMinutes()); }
+function medKlokkeslett(ms, hhmm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || '');
+  if (!m) return null;
+  const d = new Date(ms); d.setHours(+m[1], +m[2], 0, 0);
+  return d.getTime();
+}
 /* Lokal tid på formen datetime-local krever: YYYY-MM-DDTHH:MM (uten sekunder). */
 function tilDatoLokal(ms) {
   const d = new Date(ms), p = n => String(n).padStart(2, '0');
@@ -3425,9 +3438,17 @@ function stegKort(steg, status, ctx) {
         h('button', { class: 'btn', style: 'flex:1', onClick: () => settKv(steg.id, { hoppet: true }) }, 'Hopp over')));
     } else {
       const avvik = stegAvvikMin(steg);
+      /* Klokkeslettet er REDIGERBART: man krysser gjerne av lenge etter at
+         steget faktisk var ferdig («deigen kom i kjøleskapet 21:40, jeg tok
+         telefonen 23:15»), og da lyver både avviket og loggen. Datoen står —
+         det er klokkeslettet man korrigerer. `avvikOk` nullstilles så
+         flytt-planen-tilbudet kan komme opp igjen med det riktige avviket. */
       kvitt.appendChild(h('div', { style: 'display:flex;align-items:center;gap:8px' },
         h('span', { class: 'pille', style: 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)' },
-          kv && kv.hoppet && !kv.ok ? 'HOPPET OVER' : '✓ FULLFØRT' + (kv && kv.ok ? ' ' + klHM(kv.ok) : '')),
+          kv && kv.hoppet && !kv.ok ? 'HOPPET OVER' : '✓ FULLFØRT'),
+        kv && kv.ok ? h('input', { type: 'time', class: 'steg-tid', value: tilKlokkeVerdi(kv.ok),
+          'aria-label': 'Når ble ' + steg.navn + ' fullført',
+          onchange: e => { const ny = medKlokkeslett(kv.ok, e.target.value); if (ny != null) settKv(steg.id, { ok: ny, avvikOk: false }); } }) : null,
         h('button', { class: 'btn-ghost', style: 'margin-left:auto;font-size:.76rem',
           onClick: () => settKv(steg.id, { ok: null, hoppet: false, avvikOk: false }) }, 'Angre')));
       // Plan-korrigeringen: vis når avviket er reelt (>20 min), ikke avfeid, og
@@ -3503,6 +3524,27 @@ function tegnLogg(r) {
         h('button', { onClick: () => { S.lgKar = Math.max(1, S.lgKar - 1); oppdater(); } }, '−'),
         h('input', { type: 'text', inputmode: 'numeric', value: String(S.lgKar), onblur: e => { const v = parseInt(e.target.value); if (!isNaN(v)) S.lgKar = Math.min(10, Math.max(1, v)); oppdater(); } }),
         h('button', { onClick: () => { S.lgKar = Math.min(10, S.lgKar + 1); oppdater(); } }, '+'))));
+  /* Lås oppskriften til DETTE baket. Deigen står og hever i timevis, og appen
+     brukes gjerne i mellomtiden — til å prøve «hva om 80 % hydrering?» eller
+     planlegge neste bak. Uten låsen lagret loggposten oppskriften slik appen
+     TILFELDIGVIS sto ved lagring, ikke slik brødet ble bakt (Bjørn 02.08).
+     Låsen fryser avtrykket og måletallene nå; «Lagre baket» bruker dem. */
+  if (S.lgLaas) {
+    form.appendChild(h('div', { class: 'info-boks', style: 'margin-top:10px' },
+      h('div', { style: 'font-weight:800;font-size:.82rem' }, '✓ Oppskriften er låst til dette baket — kl. ' + klHM(S.lgLaas.nar)),
+      h('div', { class: 'hjelpetekst', style: 'margin-top:2px' },
+        'Endringer du gjør i appen nå påvirker ikke loggposten: den lagres med oppskriften slik den var da du låste.'),
+      h('button', { class: 'btn-ghost', style: 'font-size:.78rem;margin-top:4px',
+        onClick: () => { S.lgLaas = null; oppdater(); } }, 'Lås opp — følg appen igjen')));
+  } else {
+    form.appendChild(h('button', { class: 'btn btn-full', style: 'margin-top:10px;font-size:.82rem', onClick: () => {
+      S.lgLaas = { nar: Date.now(), grov: fmt(r.brodskala.pct, 0), hyd: fmt(r.hyd * 100, 0),
+        loft: r.loft.loft, dose: fmt(r.doseProfil.dose, 2), oppskrift: oppskriftAvtrykk() };
+      oppdater();
+    } }, 'Lås oppskriften til dette baket'));
+    form.appendChild(h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin-top:4px;line-height:1.45' },
+      'Skal du justere noe i appen mens baket pågår, lås oppskriften her først — da logges brødet slik det faktisk ble bakt, ikke slik appen står ved lagring.'));
+  }
   form.appendChild(tegnLoggBrod());
   form.appendChild(tegnBildeVelger());
   // Lagres automatisk med baket
@@ -3660,21 +3702,29 @@ function lagreBak(r) {
       steg: s.navn,
       notat: kv.notat || '',
       hoppet: !!kv.hoppet && !kv.ok,
-      avvikMin: kv.ok ? stegAvvikMin(s) : null
+      avvikMin: kv.ok ? stegAvvikMin(s) : null,
+      // Selve klokkeslettet, ikke bare avviket: «bulken var ferdig 14:32» er
+      // det man faktisk slår opp når neste bak skal planlegges.
+      ...(kv.ok ? { ferdig: kv.ok } : {})
     };
   }).filter(Boolean);
+  /* Låst oppskrift vinner over appens nå-tilstand: låsen ble satt fordi appen
+     skulle få lov til å endre seg uten at loggen ble med (Bjørn 02.08). */
+  const laas = (S.lgLaas && S.lgLaas.oppskrift) ? S.lgLaas : null;
+  const stdProfil = laas ? (laas.oppskrift.stekeProfil || S.stekeProfil) : S.stekeProfil;
   /* Brød-radene: '' løses til gjeldende stekeprofil NÅ, så posten står på egne
      bein. Lagres bare når radene faktisk sier noe — en kommentar, et bilde
      eller en metode som avviker fra oppsettet — ellers er de bare støy i
      loggen. Tomt bilder-felt utelates av samme grunn. */
   const brodRader = [];
-  for (let i = 0; i < Math.max(1, S.antall || 1); i++) {
+  const brodAntall = Math.max(1, (laas ? laas.oppskrift.antall : S.antall) || 1);
+  for (let i = 0; i < brodAntall; i++) {
     const rad = (S.lgBrod || [])[i] || {};
     const bilder = (rad.bilder || []).slice();
-    brodRader.push({ metode: rad.metode || S.stekeProfil, kommentar: (rad.kommentar || '').trim(),
+    brodRader.push({ metode: rad.metode || stdProfil, kommentar: (rad.kommentar || '').trim(),
       ...(bilder.length ? { bilder } : {}) });
   }
-  const brodVerdt = brodRader.some(x => x.kommentar || (x.bilder && x.bilder.length) || x.metode !== S.stekeProfil);
+  const brodVerdt = brodRader.some(x => x.kommentar || (x.bilder && x.bilder.length) || x.metode !== stdProfil);
   S.loggListe = S.loggListe.concat([{
     id: 'b' + naa,
     laget: naa, endret: naa,
@@ -3683,16 +3733,17 @@ function lagreBak(r) {
     konto: naaKonto(),
     navn: S.lgNavn || ('Bak #' + (S.loggListe.length + 1)),
     kar: S.lgKar, dato: new Date().toLocaleDateString('nb-NO'),
-    grov: fmt(r.brodskala.pct, 0), hyd: fmt(r.hyd * 100, 0), loft: r.loft.loft, dose: fmt(r.doseProfil.dose, 2),
+    grov: laas ? laas.grov : fmt(r.brodskala.pct, 0), hyd: laas ? laas.hyd : fmt(r.hyd * 100, 0),
+    loft: laas ? laas.loft : r.loft.loft, dose: laas ? laas.dose : fmt(r.doseProfil.dose, 2),
     bilder: (S.lgBilder || []).slice(),
     ...(stegNotater.length ? { stegNotater } : {}),
     ...(brodVerdt ? { brod: brodRader } : {}),
     // Selve oppskriften, ikke bare måletallene — det er dette «Bak dette på
     // nytt» henter tilbake. Poster fra før dette feltet fantes kan ikke
     // gjenskapes, og da vises knappen med vilje ikke.
-    oppskrift: oppskriftAvtrykk()
+    oppskrift: laas ? laas.oppskrift : oppskriftAvtrykk()
   }]);
-  S.lgNavn = ''; S.lgBilder = []; S.lgBrod = [];
+  S.lgNavn = ''; S.lgBilder = []; S.lgBrod = []; S.lgLaas = null;
   S.stegKvitt = {};             // kvitteringene er levert — neste bak starter blankt
   oppdater();
 }
@@ -3735,7 +3786,8 @@ function loggPost(b, i) {
     b.stegNotater.forEach(n => sn.appendChild(h('div', { style: 'font-size:.78rem;line-height:1.45;margin-top:4px' },
       h('b', null, n.steg + ': '),
       [n.hoppet ? 'hoppet over' : null,
-       (n.avvikMin != null && Math.abs(n.avvikMin) > 20) ? 'ferdig ' + fmtTimer(Math.abs(n.avvikMin) / 60) + (n.avvikMin < 0 ? ' før planen' : ' etter planen') : null,
+       n.ferdig ? 'ferdig kl. ' + klHM(n.ferdig) : null,
+       (n.avvikMin != null && Math.abs(n.avvikMin) > 20) ? fmtTimer(Math.abs(n.avvikMin) / 60) + (n.avvikMin < 0 ? ' før planen' : ' etter planen') : null,
        n.notat || null].filter(Boolean).join(' — '))));
     kortEl.appendChild(sn);
   }
@@ -3783,9 +3835,27 @@ function loggPost(b, i) {
     kortEl.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
       'Denne posten ble lagret før appen tok vare på selve oppskriften, så den kan ikke hentes tilbake. Nye bak kan.'));
   }
-  kortEl.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
-    h('button', { class: 'btn-ghost', style: 'font-size:.78rem;padding:4px 0', onClick: () => { S.lgRediger = b.id; S.lgSlett = null; oppdater(); } }, 'Rediger'),
-    h('button', { class: 'btn-ghost', style: 'font-size:.78rem;padding:4px 0;margin-left:auto;color:var(--color-danger)', onClick: () => { S.lgSlett = b.id; S.lgRediger = null; oppdater(); } }, 'Slett')));
+  /* Fullført-vernet: når baket ER ferdig, merkes posten — og da forsvinner
+     Rediger og Slett bak en bevisst opplåsing. Poenget er å ikke kunne kødde
+     til en ferdig logg ved et uhell når appen brukes videre til neste bak
+     (Bjørn 02.08). Låsen er reversibel, men krever et eget, tydelig trykk. */
+  const settFullfort = v => {
+    S.loggListe = S.loggListe.map(x => x.id === b.id ? Object.assign({}, x, { fullfort: v, endret: Date.now() }) : x);
+    S.lgRediger = null; S.lgSlett = null; oppdater();
+  };
+  if (b.fullfort) {
+    kortEl.appendChild(h('div', { style: 'display:flex;align-items:center;gap:8px;margin-top:10px' },
+      h('span', { class: 'pille', style: 'background:var(--color-accent-2-100);color:var(--color-accent-2-700)' },
+        '✓ FULLFØRT ' + new Date(b.fullfort).toLocaleDateString('nb-NO')),
+      h('button', { class: 'btn-ghost', style: 'margin-left:auto;font-size:.76rem',
+        onClick: () => settFullfort(null) }, 'Lås opp for å endre')));
+  } else {
+    kortEl.appendChild(h('button', { class: 'btn btn-full', style: 'margin-top:8px;font-size:.82rem',
+      onClick: () => settFullfort(Date.now()) }, '✓ Merk baket som fullført'));
+    kortEl.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:6px' },
+      h('button', { class: 'btn-ghost', style: 'font-size:.78rem;padding:4px 0', onClick: () => { S.lgRediger = b.id; S.lgSlett = null; oppdater(); } }, 'Rediger'),
+      h('button', { class: 'btn-ghost', style: 'font-size:.78rem;padding:4px 0;margin-left:auto;color:var(--color-danger)', onClick: () => { S.lgSlett = b.id; S.lgRediger = null; oppdater(); } }, 'Slett')));
+  }
   return kortEl;
 }
 function loggSlettBekreft(b, i) {
