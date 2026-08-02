@@ -48,6 +48,7 @@ const STANDARD = {
   handlelisteOk: false,       // «dette må være i huset» er kvittert bort
   krukkeStart: null,          // startnivået du merker av i målekrukka (valgfritt)
   stegKvitt: {},              // per steg-id: {ing:{navn:true}, ok:ts, hoppet, notat, avvikOk}
+  stegNotatRediger: null,     // steg-id med åpent kommentarfelt (visning, synkes ikke)
   timere: [],                 // aktive baketimere [{id, navn, slutt, stegId, ringt}]
   friksjonKalibrert: false,   // kalibreringsboksen er besvart eller avvist
   kalib: {},                  // {foer, etter, min} — målingene fra kalibreringen
@@ -136,7 +137,7 @@ function last() {
 const UI_FELT = ['skjerm', 'paramInfo', 'tilleggInfo', 'melInfo', 'meltallInfo', 'aktivSteg',
   'regnskapAapen', 'byttBekreft', 'lgRediger', 'lgSlett', 'bildeVis', 'oppslag', 'oppslagSok',
   'brodInfo', 'kompVist', 'melEndring', 'kompSporsmal', 'handlelisteOk', 'melVelger',
-  'visMaskiner', 'aktivSteg', 'aktivStegId', 'krukkeStart', 'timere',
+  'visMaskiner', 'aktivSteg', 'aktivStegId', 'krukkeStart', 'timere', 'stegNotatRediger',
   /* Delte maskinmålinger er HENTET, ikke skrevet. De hører hjemme i den delte
      tabellen, ikke i din rad — teller de som data, ville hver nedlasting sett ut
      som en endring og stemplet `oppdatert` på nytt. */
@@ -3322,12 +3323,30 @@ function stegKort(steg, status, ctx) {
             h('button', { class: 'btn', style: 'flex:1;font-size:.8rem', onClick: () => settKv(steg.id, { avvikOk: true }) }, 'Behold planen'))));
       }
     }
-    // Kommentar til steget — lagres i loggen sammen med baket.
-    kvitt.appendChild(h('textarea', { class: 'steg-notat', rows: 2,
-      placeholder: 'Kommentar til steget — hva skjedde? (lagres i loggen)',
-      'aria-label': 'Kommentar til steget ' + steg.navn,
-      onblur: e => { if (e.target.value !== ((kv && kv.notat) || '')) settKv(steg.id, { notat: e.target.value }); else lagre(); }
-    }, (kv && kv.notat) || ''));
+    /* Kommentar til steget — lagres i loggen sammen med baket. EKSPLISITT
+       Lagre-knapp, ikke blur: på mobil er blur usynlig og upålitelig, og man
+       skal SE at kommentaren kom inn (Bjørn 02.08). Lagret kommentar vises som
+       tekst med Rediger-knapp. */
+    const harNotat = !!(kv && kv.notat);
+    const redigerer = S.stegNotatRediger === steg.id;
+    if (harNotat && !redigerer) {
+      kvitt.appendChild(h('div', { class: 'steg-notat-vis' }, '💬 ' + kv.notat));
+      kvitt.appendChild(h('button', { class: 'btn-ghost', style: 'font-size:.78rem;margin-top:2px',
+        onClick: () => { S.stegNotatRediger = steg.id; oppdater(); } }, 'Rediger kommentar'));
+    } else {
+      const felt = h('textarea', { class: 'steg-notat', rows: 2,
+        placeholder: 'Kommentar til steget — hva skjedde? (lagres i loggen)',
+        'aria-label': 'Kommentar til steget ' + steg.navn
+      }, (kv && kv.notat) || '');
+      kvitt.appendChild(felt);
+      kvitt.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:6px' },
+        h('button', { class: 'btn', style: 'flex:1.4;font-size:.8rem', onClick: () => {
+          S.stegNotatRediger = null;
+          settKv(steg.id, { notat: felt.value.trim() });
+        } }, harNotat ? 'Lagre endringen' : 'Lagre kommentar'),
+        redigerer ? h('button', { class: 'btn-ghost', style: 'flex:1;font-size:.8rem',
+          onClick: () => { S.stegNotatRediger = null; oppdater(); } }, 'Avbryt') : null));
+    }
     kropp.appendChild(kvitt);
   }
   const gjortNaa = stegGjort(steg.id);
