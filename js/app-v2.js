@@ -28,7 +28,7 @@ const STANDARD = {
   heveplan: null,                 // null = planens standard; array = redigert
   paramInfo: null, tilleggInfo: null, melInfo: null, meltallInfo: null,
   aktivSteg: 0, aktivStegId: null, regnskapAapen: false, byttBekreft: null,
-  loggListe: [], lgNavn: '', lgKar: 8, lgBilder: [], oppdatert: 0,
+  loggListe: [], lgNavn: '', lgKar: 8, lgBilder: [], lgBrod: [], oppdatert: 0,
   lgRediger: null, lgSlett: null, bildeVis: null,
   // Gravsteiner: id-ene til slettede loggposter. Uten dem ville sammenfletningen
   // ved synk gjenopplivet hver post man har slettet på en annen enhet.
@@ -77,7 +77,7 @@ let S = last();
 function nyStandard() {
   const s = Object.assign({}, STANDARD);
   s.tillegg = Object.assign({}, STANDARD.tillegg);   // bryt delt referanse med STANDARD
-  s.loggListe = []; s.favoritter = []; s.lgBilder = []; s.loggSlettet = [];
+  s.loggListe = []; s.favoritter = []; s.lgBilder = []; s.lgBrod = []; s.loggSlettet = [];
   return s;
 }
 function last() {
@@ -91,6 +91,11 @@ function last() {
   if (!Array.isArray(s.loggListe)) s.loggListe = [];
   if (!Array.isArray(s.favoritter)) s.favoritter = [];
   if (!Array.isArray(s.lgBilder)) s.lgBilder = [];
+  if (!Array.isArray(s.lgBrod)) s.lgBrod = [];
+  s.lgBrod = s.lgBrod.filter(x => x && typeof x === 'object')
+    .map(x => ({ metode: typeof x.metode === 'string' ? x.metode : '',
+      kommentar: typeof x.kommentar === 'string' ? x.kommentar : '',
+      bilder: Array.isArray(x.bilder) ? x.bilder.filter(b => typeof b === 'string') : [] }));
   if (!Array.isArray(s.loggSlettet)) s.loggSlettet = [];
   // Favorittene het før bare meltype-id-en. Nå kan også stekeutstyr og
   // stekeprofiler merkes, så id-ene er navnerom-prefikset for å unngå at to
@@ -3379,6 +3384,7 @@ function tegnLogg(r) {
         h('button', { onClick: () => { S.lgKar = Math.max(1, S.lgKar - 1); oppdater(); } }, '−'),
         h('input', { type: 'text', inputmode: 'numeric', value: String(S.lgKar), onblur: e => { const v = parseInt(e.target.value); if (!isNaN(v)) S.lgKar = Math.min(10, Math.max(1, v)); oppdater(); } }),
         h('button', { onClick: () => { S.lgKar = Math.min(10, S.lgKar + 1); oppdater(); } }, '+'))));
+  form.appendChild(tegnLoggBrod());
   form.appendChild(tegnBildeVelger());
   // Lagres automatisk med baket
   const auto = h('div', { class: 'info-boks', style: 'margin-top:12px' },
@@ -3422,6 +3428,73 @@ function tegnLogg(r) {
   wrap.appendChild(tegnBackup());
   return wrap;
 }
+/* ---------- Per brød: stekemetode og kommentar ----------
+   Ett bak er ofte FLERE brød stekt ulikt — fire emner der ett får klokka, ett
+   står i glasset og to steker åpent — og da er «én metode per bak» ikke en
+   ærlig logg (Bjørn 02.08). Radene følger antallet i oppskriften. Metode ''
+   betyr «som oppsettet» og løses til gjeldende stekeprofil idet baket lagres,
+   så loggposten sier hva som faktisk ble gjort, ikke en peker som kan drifte. */
+function stekeMetodeNavn(id) {
+  const p = (typeof BAKE_PROFILES !== 'undefined') && BAKE_PROFILES.find(x => x.id === id);
+  return p ? p.navn : (id || '—');
+}
+function settLgBrod(i, felt, verdi) {
+  const rader = (S.lgBrod || []).slice();
+  while (rader.length <= i) rader.push({ metode: '', kommentar: '', bilder: [] });
+  rader[i] = Object.assign({}, rader[i], { [felt]: verdi });
+  S.lgBrod = rader;
+}
+/* Miniatyrrad for ETT brøds bilder: fjern-kryss på hver, + så lenge det er
+   plass. Gjenbrukes av skjemaet og redigeringen — de skal se og oppføre seg
+   likt, ellers lærer man UI-et to ganger. Maks 2 per brød (skorpe + krumme);
+   helhetsbildene av baket har sin egen velger med plass til 3. */
+const MAKS_BRODBILDER = 2;
+function brodBildeRad(nr, bilder, leggTil, fjern) {
+  const inp = h('input', { type: 'file', accept: 'image/*', style: 'display:none',
+    'aria-label': 'Velg bilde til brød ' + nr,
+    onchange: e => skalerBilde(e.target.files && e.target.files[0], leggTil) });
+  const rad = h('div', { class: 'logg-bilder', style: 'margin-top:6px' });
+  bilder.forEach((src, k) => rad.appendChild(h('div', { style: 'position:relative' },
+    h('img', { src, alt: 'Bilde ' + (k + 1) + ' av brød ' + nr, class: 'brod-mini' }),
+    h('button', { class: 'bilde-fjern', 'aria-label': 'Fjern bilde ' + (k + 1) + ' av brød ' + nr,
+      onClick: () => fjern(k) }, '×'))));
+  if (bilder.length < MAKS_BRODBILDER) rad.appendChild(h('button', { class: 'brod-mini-ny',
+    'aria-label': 'Legg til bilde av brød ' + nr, onClick: () => inp.click() }, '+'));
+  rad.appendChild(inp);
+  return rad;
+}
+function tegnLoggBrod() {
+  const antall = Math.max(1, S.antall || 1);
+  const boks = h('div', { style: 'margin-top:10px' },
+    h('div', { class: 'felt-label' }, 'Brød for brød'),
+    h('div', { class: 'hjelpetekst', style: 'margin-top:2px' },
+      'Stekes brødene ulikt, velg metode og noter hva du gjorde per brød. Legg gjerne ved bilde av hvert brød. Radene følger antallet i oppskriften (' + antall + ').'));
+  for (let i = 0; i < antall; i++) {
+    const rad = (S.lgBrod || [])[i] || { metode: '', kommentar: '', bilder: [] };
+    boks.appendChild(h('div', { class: 'felt-label', style: 'margin-top:8px' }, 'Brød ' + (i + 1)));
+    boks.appendChild(h('select', { class: 'sok', 'aria-label': 'Stekemetode for brød ' + (i + 1),
+      onchange: e => { settLgBrod(i, 'metode', e.target.value); oppdater(); } },
+      h('option', { value: '', selected: !rad.metode ? 'selected' : null },
+        'Som oppsettet — ' + stekeMetodeNavn(S.stekeProfil)),
+      ...(typeof BAKE_PROFILES !== 'undefined' ? BAKE_PROFILES : []).map(p =>
+        h('option', { value: p.id, selected: rad.metode === p.id ? 'selected' : null }, p.navn))));
+    boks.appendChild(h('input', { class: 'sok', style: 'margin-top:6px',
+      placeholder: 'Kommentar — f.eks. glasset av etter 18 min',
+      'aria-label': 'Kommentar til brød ' + (i + 1), value: rad.kommentar || '',
+      // onblur lagrer, av samme grunn som navnefeltet: drepes fanen midt i
+      // et mange-timers bak, skal ikke notatet være borte.
+      oninput: e => { settLgBrod(i, 'kommentar', e.target.value); }, onblur: () => lagre() }));
+    /* Bildene leses fra S i det bildet er ferdig skalert, ikke fra closure-
+       `rad`: skaleringen er asynkron, og i mellomtiden kan andre felt på raden
+       ha endret seg. `lagre()` med én gang — bildet tas gjerne timer før baket
+       lagres, og skal ikke være borte om fanen drepes. */
+    boks.appendChild(brodBildeRad(i + 1, rad.bilder || [],
+      data => { settLgBrod(i, 'bilder', (((S.lgBrod || [])[i] || {}).bilder || []).concat([data])); lagre(); oppdater(); },
+      k => { settLgBrod(i, 'bilder', ((((S.lgBrod || [])[i] || {}).bilder) || []).filter((_, m) => m !== k)); oppdater(); }));
+  }
+  return boks;
+}
+
 /* Feltene som SKAL til for å bake det samme igjen. Bevisst en hviteliste og
    ikke «hele S minus litt»: visningstilstand, logg, favoritter og kontoting har
    ingenting i en oppskrift å gjøre, og en svarteliste ville sluppet gjennom
@@ -3452,6 +3525,18 @@ function lagreBak(r) {
       avvikMin: kv.ok ? stegAvvikMin(s) : null
     };
   }).filter(Boolean);
+  /* Brød-radene: '' løses til gjeldende stekeprofil NÅ, så posten står på egne
+     bein. Lagres bare når radene faktisk sier noe — en kommentar, et bilde
+     eller en metode som avviker fra oppsettet — ellers er de bare støy i
+     loggen. Tomt bilder-felt utelates av samme grunn. */
+  const brodRader = [];
+  for (let i = 0; i < Math.max(1, S.antall || 1); i++) {
+    const rad = (S.lgBrod || [])[i] || {};
+    const bilder = (rad.bilder || []).slice();
+    brodRader.push({ metode: rad.metode || S.stekeProfil, kommentar: (rad.kommentar || '').trim(),
+      ...(bilder.length ? { bilder } : {}) });
+  }
+  const brodVerdt = brodRader.some(x => x.kommentar || (x.bilder && x.bilder.length) || x.metode !== S.stekeProfil);
   S.loggListe = S.loggListe.concat([{
     id: 'b' + naa,
     laget: naa, endret: naa,
@@ -3463,12 +3548,13 @@ function lagreBak(r) {
     grov: fmt(r.brodskala.pct, 0), hyd: fmt(r.hyd * 100, 0), loft: r.loft.loft, dose: fmt(r.doseProfil.dose, 2),
     bilder: (S.lgBilder || []).slice(),
     ...(stegNotater.length ? { stegNotater } : {}),
+    ...(brodVerdt ? { brod: brodRader } : {}),
     // Selve oppskriften, ikke bare måletallene — det er dette «Bak dette på
     // nytt» henter tilbake. Poster fra før dette feltet fantes kan ikke
     // gjenskapes, og da vises knappen med vilje ikke.
     oppskrift: oppskriftAvtrykk()
   }]);
-  S.lgNavn = ''; S.lgBilder = [];
+  S.lgNavn = ''; S.lgBilder = []; S.lgBrod = [];
   S.stegKvitt = {};             // kvitteringene er levert — neste bak starter blankt
   oppdater();
 }
@@ -3515,6 +3601,31 @@ function loggPost(b, i) {
        n.notat || null].filter(Boolean).join(' — '))));
     kortEl.appendChild(sn);
   }
+  /* Brød for brød: fire brød fra samme deig kan være stekt på fire måter, og
+     det er nettopp de sammenligningene loggen skal kunne svare på senere.
+     Brødets bilder står under sin egen rad, ikke i samlerekka nederst — det er
+     koblingen bilde↔brød som er poenget. Indeksen inn i fullskjermviseren
+     teller gjennom postBilder(), som legger bakstbildene først. */
+  if (b.brod && b.brod.length) {
+    const bb = h('div', { class: 'info-boks', style: 'margin-top:8px' },
+      h('div', { style: 'font-size:.66rem;font-weight:800;letter-spacing:.06em;color:var(--color-neutral-600);text-transform:uppercase;margin-bottom:4px' }, 'Brød for brød'));
+    let visIdx = (b.bilder || []).length;
+    b.brod.forEach((rad, j) => {
+      bb.appendChild(h('div', { style: 'font-size:.78rem;line-height:1.45;margin-top:4px' },
+        h('b', null, 'Brød ' + (j + 1) + ': '),
+        [stekeMetodeNavn(rad.metode), rad.kommentar || null].filter(Boolean).join(' — ')));
+      if (rad.bilder && rad.bilder.length) {
+        const start = visIdx;
+        bb.appendChild(h('div', { class: 'logg-bilder', style: 'margin-top:4px' },
+          ...rad.bilder.map((src, k) => h('button', { class: 'logg-bilde liten',
+            'aria-label': 'Vis bilde ' + (k + 1) + ' av brød ' + (j + 1) + ' i stort format',
+            onClick: () => { S.bildeVis = { id: b.id, i: start + k }; oppdater(); } },
+            h('img', { src, alt: 'Brød ' + (j + 1) + ', bilde ' + (k + 1) })))));
+      }
+      visIdx += (rad.bilder || []).length;
+    });
+    kortEl.appendChild(bb);
+  }
   if (b.bilder && b.bilder.length) kortEl.appendChild(h('div', { class: 'logg-bilder' },
     ...b.bilder.map((src, j) => h('button', { class: 'logg-bilde', 'aria-label': 'Vis bilde ' + (j + 1) + ' i stort format',
       onClick: () => { S.bildeVis = { id: b.id, i: j }; oppdater(); } },
@@ -3535,10 +3646,14 @@ function loggPost(b, i) {
   return kortEl;
 }
 function loggSlettBekreft(b, i) {
+  // Teller ALLE bildene — også dem som ligger på brød-radene, ikke bare
+  // samlerekka. «1 bilde» når det ryker tre hadde vært en løgn i en
+  // sletteadvarsel.
+  const antBilder = postBilder(b).length;
   return h('div', { class: 'kort' },
     h('div', { style: 'font-weight:800;font-size:.9rem' }, 'Slette «' + (b.navn || 'Uten navn') + '»?'),
     h('div', { class: 'hjelpetekst', style: 'margin-top:4px' },
-      'Posten og eventuelle bilder forsvinner for godt' + (b.bilder && b.bilder.length ? ' (' + b.bilder.length + (b.bilder.length === 1 ? ' bilde' : ' bilder') + ')' : '') + '. Dette kan ikke angres.'),
+      'Posten og eventuelle bilder forsvinner for godt' + (antBilder ? ' (' + antBilder + (antBilder === 1 ? ' bilde' : ' bilder') + ')' : '') + '. Dette kan ikke angres.'),
     h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
       h('button', { class: 'btn', style: 'flex:1;font-size:.82rem;background:var(--color-danger);color:#fff;border-color:transparent',
         onClick: () => {
@@ -3580,8 +3695,55 @@ function loggRediger(b, i) {
     h('div', { class: 'felt-label', style: 'margin-top:10px' }, 'Notat — hva lærte du?'),
     h('textarea', { class: 'sok', rows: 2, style: 'border-radius:14px;resize:vertical', 'data-fokus': 'lgnotat',
       placeholder: 'F.eks. for tett krumme, prøv 3 pp mer vann', value: b.notat || '',
-      oninput: e => settFelt('notat', e.target.value) }),
-    h('div', { class: 'felt-label' }, 'Bilder'));
+      oninput: e => settFelt('notat', e.target.value) }));
+  /* Brød for brød redigeres i ettertid med vilje: brødene stekes til ulik tid,
+     så «glasset av etter 18 min» på brød 3 finnes ofte ikke før timer etter at
+     posten ble lagret. Radene leses fra S.loggListe og ikke fra closure-`b` —
+     to tastetrykk i hver sin rad ville ellers overskrevet hverandre, siden
+     visningen ikke tegnes om for hvert tegn. */
+  const brodNaa = () => {
+    const post = S.loggListe.find(x => x.id === b.id);
+    return ((post && post.brod) || []).map(x => Object.assign({}, x));
+  };
+  const settBrodRad = (j, felt, verdi) => {
+    const rader = brodNaa();
+    if (!rader[j]) return;
+    rader[j][felt] = verdi;
+    settFelt('brod', rader);
+  };
+  boks.appendChild(h('div', { class: 'felt-label' }, 'Brød for brød — metode og kommentar'));
+  (b.brod || []).forEach((rad, j) => {
+    boks.appendChild(h('div', { style: 'display:flex;align-items:baseline;gap:8px;margin-top:8px' },
+      h('div', { class: 'felt-label', style: 'margin:0;flex:1' }, 'Brød ' + (j + 1)),
+      h('button', { class: 'btn-ghost', style: 'font-size:.74rem;padding:2px 0;color:var(--color-danger)',
+        'aria-label': 'Fjern brød ' + (j + 1),
+        onClick: () => { settFelt('brod', brodNaa().filter((_, k) => k !== j)); oppdater(); } }, 'Fjern')));
+    boks.appendChild(h('select', { class: 'sok', 'aria-label': 'Stekemetode for brød ' + (j + 1),
+      onchange: e => { settBrodRad(j, 'metode', e.target.value); oppdater(); } },
+      ...(typeof BAKE_PROFILES !== 'undefined' ? BAKE_PROFILES : []).map(p =>
+        h('option', { value: p.id, selected: rad.metode === p.id ? 'selected' : null }, p.navn))));
+    boks.appendChild(h('input', { class: 'sok', style: 'margin-top:6px',
+      placeholder: 'Kommentar — f.eks. glasset av etter 18 min',
+      'aria-label': 'Kommentar til brød ' + (j + 1), value: rad.kommentar || '',
+      oninput: e => settBrodRad(j, 'kommentar', e.target.value) }));
+    /* Bilde per brød også i ettertid — krummen ser man først når brødet
+       skjæres, gjerne dagen etter at posten ble lagret. Leses via brodNaa()
+       når skaleringen er ferdig, av samme grunn som tekstfeltene. */
+    boks.appendChild(brodBildeRad(j + 1, rad.bilder || [],
+      data => { const rader = brodNaa(); if (!rader[j]) return;
+        rader[j].bilder = (rader[j].bilder || []).concat([data]);
+        settFelt('brod', rader); oppdater(); },
+      k => { const rader = brodNaa(); if (!rader[j]) return;
+        rader[j].bilder = (rader[j].bilder || []).filter((_, m) => m !== k);
+        settFelt('brod', rader); oppdater(); }));
+  });
+  boks.appendChild(h('button', { class: 'btn btn-full', style: 'margin-top:8px;font-size:.8rem',
+    onClick: () => {
+      const rader = brodNaa();
+      rader.push({ metode: (b.oppskrift && b.oppskrift.stekeProfil) || S.stekeProfil, kommentar: '' });
+      settFelt('brod', rader); oppdater();
+    } }, '+ Legg til brød'));
+  boks.appendChild(h('div', { class: 'felt-label' }, 'Bilder'));
   const rad = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:6px' });
   (b.bilder || []).forEach((src, j) => rad.appendChild(h('div', { style: 'position:relative' },
     h('img', { src, alt: 'Bilde ' + (j + 1), style: 'width:64px;height:64px;object-fit:cover;border-radius:12px;border:1px solid var(--color-neutral-300);display:block' }),
@@ -3603,20 +3765,30 @@ function loggRediger(b, i) {
 /* ---------- Bildet i stort format ----------
    Ligger inne i #telefon (som klipper alt annet), over bunnmenyen. Trykk hvor
    som helst, Esc eller ✕ lukker; piler bytter bilde når posten har flere. */
+/* ALLE bildene på en post, i fast rekkefølge: bakstbildene først, så brødenes
+   i radrekkefølge. Viseren, pilene og sletteadvarselen teller gjennom denne
+   ene lista — miniatyrenes indekser i loggPost() må følge samme rekkefølge. */
+function postBilder(b) {
+  const liste = ((b && b.bilder) || []).map(src => ({ src, brod: null }));
+  ((b && b.brod) || []).forEach((rad, j) =>
+    ((rad && rad.bilder) || []).forEach(src => liste.push({ src, brod: j + 1 })));
+  return liste;
+}
 function tegnBildeVis() {
   const gml = byId('bildevis'); if (gml) gml.remove();
   if (!S.bildeVis) return;
   const post = S.loggListe.find(b => b.id === S.bildeVis.id);
-  const bilder = (post && post.bilder) || [];
+  const bilder = post ? postBilder(post) : [];
   if (!bilder.length) { S.bildeVis = null; return; }
   const idx = Math.max(0, Math.min(S.bildeVis.i, bilder.length - 1));
   const bytt = d => { S.bildeVis = { id: S.bildeVis.id, i: (idx + d + bilder.length) % bilder.length }; oppdater(); };
   const stopp = e => e.stopPropagation();
+  const merke = bilder[idx].brod ? ' · brød ' + bilder[idx].brod : '';
   const lag = h('div', { class: 'bildevis', id: 'bildevis', role: 'dialog', 'aria-label': 'Bilde i stort format',
     onClick: () => { S.bildeVis = null; oppdater(); } },
-    h('img', { src: bilder[idx], alt: (post.navn || 'Baket') + ', bilde ' + (idx + 1), onClick: stopp }),
+    h('img', { src: bilder[idx].src, alt: (post.navn || 'Baket') + (merke ? ', brød ' + bilder[idx].brod : '') + ', bilde ' + (idx + 1), onClick: stopp }),
     h('button', { class: 'bv-lukk', 'aria-label': 'Lukk' }, '✕'),
-    h('div', { class: 'bv-tekst' }, (post.navn || 'Uten navn') + ' · ' + post.dato +
+    h('div', { class: 'bv-tekst' }, (post.navn || 'Uten navn') + ' · ' + post.dato + merke +
       (bilder.length > 1 ? ' · ' + (idx + 1) + ' av ' + bilder.length : '')),
     bilder.length > 1 ? h('button', { class: 'bv-pil venstre', 'aria-label': 'Forrige bilde',
       onClick: e => { stopp(e); bytt(-1); } }, '‹') : null,
@@ -3645,9 +3817,10 @@ function tegnBildeVelger() {
   boks.appendChild(inp);
   return boks;
 }
-/* `loggIdx` utelatt = bildet hører til skjemaet for det neste baket. Er den satt,
-   legges bildet på en allerede lagret loggpost i stedet. */
-function leggTilBilde(fil, loggIdx) {
+/* Skaler ned og lever et data-URL. Felles for alle bildeveiene (baket, per
+   brød, redigering) — grensa og kvotevernet skal ikke kunne drifte fra
+   hverandre. `ferdig` kalles kun når bildet faktisk fikk plass. */
+function skalerBilde(fil, ferdig) {
   if (!fil) return;
   const les = new FileReader();
   les.onload = () => {
@@ -3671,21 +3844,28 @@ function leggTilBilde(fil, loggIdx) {
         alert('Lagringen i nettleseren er nesten full — last ned en sikkerhetskopi og slett gamle bilder først.');
         return;
       }
-      if (loggIdx == null) {
-        S.lgBilder = (S.lgBilder || []).concat([data]);
-      } else if (S.loggListe[loggIdx]) {
-        // `endret` MÅ stemples: flettingen avgjør duellen på det feltet, og en
-        // post med nytt bilde tapte mot en uendret kopi på en annen enhet.
-        const maalId = S.loggListe[loggIdx].id;
-        S.loggListe = S.loggListe.map(x => x.id === maalId
-          ? Object.assign({}, x, { bilder: (x.bilder || []).concat([data]), endret: Date.now() })
-          : x);
-      }
-      oppdater();
+      ferdig(data);
     };
     img.src = les.result;
   };
   les.readAsDataURL(fil);
+}
+/* `loggIdx` utelatt = bildet hører til skjemaet for det neste baket. Er den satt,
+   legges bildet på en allerede lagret loggpost i stedet. */
+function leggTilBilde(fil, loggIdx) {
+  skalerBilde(fil, data => {
+    if (loggIdx == null) {
+      S.lgBilder = (S.lgBilder || []).concat([data]);
+    } else if (S.loggListe[loggIdx]) {
+      // `endret` MÅ stemples: flettingen avgjør duellen på det feltet, og en
+      // post med nytt bilde tapte mot en uendret kopi på en annen enhet.
+      const maalId = S.loggListe[loggIdx].id;
+      S.loggListe = S.loggListe.map(x => x.id === maalId
+        ? Object.assign({}, x, { bilder: (x.bilder || []).concat([data]), endret: Date.now() })
+        : x);
+    }
+    oppdater();
+  });
 }
 /* Sikkerhetskopi — alt ligger kun i nettleserens localStorage. Til ekte
    innlogging/sky trengs en backend; inntil den beslutningen er tatt er dette
@@ -4324,7 +4504,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { S.bildeVis = null; oppdater(); }
   else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     const post = S.loggListe.find(b => b.id === S.bildeVis.id);
-    const n = (post && post.bilder && post.bilder.length) || 0;
+    const n = post ? postBilder(post).length : 0;
     if (n > 1) { S.bildeVis = { id: S.bildeVis.id, i: (S.bildeVis.i + (e.key === 'ArrowLeft' ? -1 : 1) + n) % n }; oppdater(); }
   }
 });

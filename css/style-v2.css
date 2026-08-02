@@ -808,6 +808,18 @@ svg.brodsvg .fyll { fill: var(--color-accent-200); }
   border-radius: 999px; border: 1px solid var(--color-neutral-300); background: #fff;
   color: var(--color-danger); font-weight: 800; line-height: 1; cursor: pointer; padding: 0;
 }
+/* Bilder per brød: mindre enn bakstbildene (86 px) — de står inne i en rad
+   per brød og skal ikke dominere kortet. Samme størrelse i skjema og visning. */
+.logg-bilde.liten img { width: 56px; height: 56px; }
+.brod-mini {
+  width: 56px; height: 56px; object-fit: cover; border-radius: 12px;
+  border: 1px solid var(--color-neutral-300); display: block;
+}
+.brod-mini-ny {
+  width: 56px; height: 56px; border-radius: 12px;
+  border: 1.5px dashed var(--color-neutral-400); background: none;
+  color: var(--color-neutral-600); font-size: 1.2rem; cursor: pointer; padding: 0;
+}
 
 /* Bildet i stort format — dekker hele telefonrammen, over bunnmenyen (z 30). */
 .bildevis {

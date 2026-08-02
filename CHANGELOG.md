@@ -7,6 +7,64 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 02.08.2026 — Loggen: bilder per brød
+
+Oppfølgeren til «Brød for brød»-radene: hvert brød kan nå få sine egne bilder
+(maks 2 — skorpe og krumme), i tillegg til bakstbildene som allerede fantes
+(maks 3 per bak). Det er koblingen bilde↔brød som er poenget — «brød 2 i
+glassgryta ble slik» er noe helt annet enn tre løse bilder nederst på posten.
+
+**Skjemaet og redigeringen.** Hver brød-rad har en miniatyrrad
+(`brodBildeRad()` i `js/app-v2.js`) med fjern-kryss og +-knapp — samme
+komponent begge steder, så UI-et ikke må læres to ganger. Bilder kan legges
+til og fjernes i ettertid med vilje: krummen fotograferes gjerne først når
+brødet skjæres dagen etter. Skjemabildene bor i `S.lgBrod[i].bilder`, lagres
+umiddelbart (`lagre()` i skaleringens callback) og sanitiseres i `last()`.
+
+**Lagring.** Skaleringen (480 px JPEG) og localStorage-kvotevernet er trukket
+ut i `skalerBilde(fil, ferdig)` og deles av alle bildeveiene — grensene kan
+ikke drifte. På posten lagres bildene i `brod[j].bilder`, men feltet utelates
+når det er tomt, og et bilde alene gjør radene «verdt» å lagre (`brodVerdt`).
+
+**Visning.** Miniatyrene står under sitt brøds rad i «Brød for brød»-boksen
+(56 px, mindre enn bakstbildenes 86 — de skal ikke dominere kortet).
+Fullskjermviseren blar nå gjennom ÉN samlet liste (`postBilder()`:
+bakstbildene først, så brødenes i radrekkefølge) og skriver «· brød N» i
+teksten. Sletteadvarselen teller alle bildene gjennom samme liste — «1 bilde»
+når det ryker tre hadde vært en løgn.
+
+**Tester.** Ny seksjon «Bilder per brød» i `tester/test-logg.js` (11 tester):
+bilde i skjemarad, bilde alene utløser lagring av radene, tomt felt utelates,
+miniatyr på kortet, fullskjerm med brødnummer, legg til/fjern i ettertid,
+overlever omlasting. Alle 9 suitene grønne.
+
+---
+
+## 02.08.2026 — Loggen: stekemetode og kommentar per brød
+
+Bjørns bestilling fra testbakingen: fire brød fra samme deig stekes gjerne på
+fire måter (klokke, glassgryte, åpent på stålet …), og da er «én metode per
+bak» ikke en ærlig logg. Loggskjemaet har nå en «Brød for brød»-seksjon med én
+rad per brød i oppskriften (`S.antall`): stekemetode (nedtrekk fra
+`BAKE_PROFILES`, standard «Som oppsettet» = gjeldende stekeprofil) og fritt
+kommentarfelt. Kommentarfeltene lagrer på blur, av samme grunn som navnefeltet.
+
+**Lagring.** Radene løses ved lagring — '' blir gjeldende `stekeProfil` — og
+legges på posten som `brod: [{metode, kommentar}]`, men BARE når de sier noe
+(en kommentar eller en avvikende metode); ellers er de støy. Skjemafeltet bor i
+`S.lgBrod` (nullstilles av `lagreBak`, sanitiseres i `last()`).
+
+**Visning og redigering.** Posten viser en «Brød for brød»-boks (samme form
+som «Fra prosessen»). I redigeringen kan metode og kommentar endres, rader
+legges til og fjernes — i ettertid med vilje: brødene stekes til ulik tid, så
+kommentaren på brød 3 finnes ofte ikke før timer etter at posten ble lagret.
+Radoppdateringene leses fra `S.loggListe`, ikke fra closure — to tastetrykk i
+hver sin rad ville ellers overskrevet hverandre.
+
+Kode: `js/app-v2.js` (`tegnLoggBrod`, `settLgBrod`, `stekeMetodeNavn`,
+`lagreBak`, `loggPost`, `loggRediger`). Tester: ny seksjon i
+`tester/test-logg.js` (14 nye sjekker, alle 9 suiter grønne).
+
 ## 02.08.2026 (natt) — Prosesstegene redesignet: kvittering, sjekkliste, plan-korrigering og stegnotater
 
 Bjørns natt-bestilling. Fire nye byggeklosser, alle verifisert i nettleser og
