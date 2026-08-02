@@ -19,7 +19,7 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   await page.goto(B);
   await page.waitForTimeout(500);
   ok('V2-rammen finnes', await page.locator('#telefon #bunnmeny').count() === 1);
-  ok('seks skjermer i bunnmenyen', await page.locator('#bunnmeny button').count() === 6);
+  ok('åtte skjermer i bunnmenyen', await page.locator('#bunnmeny button').count() === 8);
   const meny = await page.locator('#bunnmeny').innerText();
   ok('riktig rekkefølge', /Brød[\s\S]*Deig[\s\S]*Tid[\s\S]*Prosess[\s\S]*Logg[\s\S]*Oppslag/.test(meny), meny.replace(/\n/g, ' '));
   ok('supabase-js lastet', await page.evaluate(() => typeof window.supabase !== 'undefined'));
@@ -33,7 +33,7 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   await page.goto(B + 'index-v2.html');
   await page.waitForTimeout(600);
   ok('havnet på rota', page.url() === B, page.url());
-  ok('V2 lastet etter videresending', await page.locator('#bunnmeny button').count() === 6);
+  ok('V2 lastet etter videresending', await page.locator('#bunnmeny button').count() === 8);
   // Fragmentet MÅ overleve — der ligger innloggingsnøkkelen fra e-postlenker.
   await page.goto(B + 'index-v2.html#access_token=TESTNOKKEL&type=signup');
   await page.waitForTimeout(600);

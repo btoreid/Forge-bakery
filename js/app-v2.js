@@ -354,13 +354,19 @@ function underVekt(v) { return v > 0 && v < 20 * (S.vektTrinn || 0.01); }
 
    Prosess er det FJERDE steget, ikke en egen kategori — man går Brød → Deig →
    Tid → Prosess. Logg og Oppslag er oppslagsverk og har ingen plass i rekka. */
+/* Forberedelsen er FEM punkter: Brød, Deig, Forferment, Autolyse, Tid.
+   Forferment og autolyse lå som seksjon 8–9 nederst på Deig — en skjerm det
+   allerede var for mye scrolling på (Bjørn 02.08). Prosess har ikke stegtall:
+   den er gjennomføringen av forberedelsen, ikke et forberedelsessteg. */
 const SKJERMER = [
-  { id: 'brodet',  navn: 'Brød',    steg: 1, tittel: 'Hva skal du bake?' },
-  { id: 'deigen',  navn: 'Deig',    steg: 2, tittel: 'Mel, vann og frø' },
-  { id: 'tid',     navn: 'Tid',     steg: 3, tittel: 'Når vil du ha brød?' },
-  { id: 'prosess', navn: 'Prosess', steg: 4, tittel: 'Følg prosessen' },
-  { id: 'logg',    navn: 'Logg',    tittel: 'Bakeloggen' },
-  { id: 'oppslag', navn: 'Oppslag', tittel: 'Oppslag' }
+  { id: 'brodet',     navn: 'Brød',       steg: 1, tittel: 'Hva skal du bake?' },
+  { id: 'deigen',     navn: 'Deig',       steg: 2, tittel: 'Mel, vann og frø' },
+  { id: 'forferment', navn: 'Forferment', steg: 3, tittel: 'Poolish, biga eller rett på?' },
+  { id: 'autolyse',   navn: 'Autolyse',   steg: 4, tittel: 'Hvile før elting?' },
+  { id: 'tid',        navn: 'Tid',        steg: 5, tittel: 'Når vil du ha brød?' },
+  { id: 'prosess',    navn: 'Prosess',    tittel: 'Følg prosessen' },
+  { id: 'logg',       navn: 'Logg',       tittel: 'Bakeloggen' },
+  { id: 'oppslag',    navn: 'Oppslag',    tittel: 'Oppslag' }
 ];
 const ANTALL_STEG = SKJERMER.filter(s => s.steg).length;
 /* Brødtypene som designet viser dem — «Brød» er én type der grovheten settes i
@@ -386,6 +392,10 @@ function ikonSvg(name) {
   ({
     brodet: () => { P('M4 13c0-3.3 2.7-6 6-6h4c3.3 0 6 2.7 6 6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z'); P('M8.5 7.4 7.3 5.6'); P('M12 7V5'); P('M15.5 7.4 16.7 5.6'); },
     deigen: () => { P('M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z'); },
+    // Gjæringskrukke med bobler — poolishen som står på benken og arbeider.
+    forferment: () => { P('M8 2h8'); P('M9 2v3'); P('M15 2v3'); P('M7 5h10v13a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3z'); C(10.4, 12.2, 1.3); C(13.9, 15.4, 1.1); C(12.4, 8.9, 0.9); },
+    // Timeglass — autolysen er en hvile: mel og vann som får stå.
+    autolyse: () => { P('M5 22h14'); P('M5 2h14'); P('M17 22v-4.2a2 2 0 0 0-.6-1.4L12 12l-4.4 4.4a2 2 0 0 0-.6 1.4V22'); P('M7 2v4.2a2 2 0 0 0 .6 1.4L12 12l4.4-4.4A2 2 0 0 0 17 6.2V2'); },
     tid: () => { C(12, 12, 9); P('M12 7v5l3 2'); },
     prosess: () => { P('M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1.1-2.1-.2-4 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.2.4-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z'); },
     logg: () => { P('M12 7v13'); P('M3 17a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z'); },
@@ -616,12 +626,12 @@ function renderInner() {
   const fokusN = aktiv && aktiv.dataset ? aktiv.dataset.fokus : null;
   const caret = aktiv && aktiv.selectionStart != null ? aktiv.selectionStart : null;
 
-  const tegner = { brodet: tegnBrodet, deigen: tegnDeigen, tid: tegnTid, prosess: tegnProsess, logg: tegnLogg, oppslag: tegnOppslag }[S.skjerm];
+  const tegner = { brodet: tegnBrodet, deigen: tegnDeigen, forferment: tegnForferment, autolyse: tegnAutolyse, tid: tegnTid, prosess: tegnProsess, logg: tegnLogg, oppslag: tegnOppslag }[S.skjerm];
   innhold.replaceChildren(tegner(r, K));
-  /* Synlig vei VIDERE på steg 1–3: steg-pillen sier «1 av 4», men uten denne
+  /* Synlig vei VIDERE på steg 1–4: steg-pillen sier «1 av 5», men uten denne
      knappen var bunnmenyen eneste hint om at fanene er en sekvens — en
      førstegangsbruker ble stående (ux-review 01.08). */
-  const neste = { brodet: ['deigen', 'Deig'], deigen: ['tid', 'Tid'], tid: ['prosess', 'Prosess'] }[S.skjerm];
+  const neste = { brodet: ['deigen', 'Deig'], deigen: ['forferment', 'Forferment'], forferment: ['autolyse', 'Autolyse'], autolyse: ['tid', 'Tid'], tid: ['prosess', 'Prosess'] }[S.skjerm];
   if (neste) innhold.appendChild(h('button', {
     class: 'btn btn-primary btn-full', style: 'margin:14px 0 4px',
     onClick: () => bytt(neste[0]) }, 'Videre: ' + neste[1] + ' ›'));
@@ -1443,10 +1453,8 @@ function tegnDeigen(r) {
     wrap.appendChild(saltKort);
   }
 
-  // 8 · Forferment
-  wrap.appendChild(tegnForferment(r));
-  // 9 · Autolyse — egen boks, ikke en fotnote under «ingen forferment».
-  wrap.appendChild(tegnAutolyse(r));
+  // Forferment og autolyse har EGNE skjermer (steg 3 og 4) — de lå her som
+  // seksjon 8–9, og skjermen ble for lang å scrolle (Bjørn 02.08).
   return wrap;
 }
 
@@ -1767,7 +1775,7 @@ function settTillegg(t, v) {
 
 /* ---------- Forferment (2×2) ---------- */
 function tegnForferment(r) {
-  const boks = kort('8 · Forferment', null);
+  const boks = kort('Forferment', null);
   boks.appendChild(h('div', { class: 'rutenett', style: 'margin-top:6px' }, ...FF_TYPER.map(ff => {
     const valgt = (ff.id === 'ingen') ? !S.ff : (S.ff && S.ffType === ff.id);
     return h('button', { class: 'valgkort' + (valgt ? ' paa' : ''), style: 'min-height:78px;flex-direction:column;align-items:flex-start;gap:2px',
@@ -1816,7 +1824,7 @@ function tegnForferment(r) {
 function tegnAutolyse(r) {
   const min = S.autolyseMin || 0;
   const paa = min > 0;
-  const boks = kort('9 · Autolyse', null);
+  const boks = kort('Autolyse', null);
   boks.appendChild(h('div', { class: 'piller', style: 'margin-top:6px' },
     ...[[0, 'Av'], [30, '30 min'], [60, '1 time'], [120, '2 timer'], [180, '3 timer']].map(([v, navn]) =>
       h('button', { class: min === v ? 'paa' : '', onClick: () => { S.autolyseMin = v; oppdater(); } }, navn))));

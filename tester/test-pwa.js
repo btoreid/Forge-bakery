@@ -66,7 +66,7 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   await ctx.setOffline(true);
   await page.reload();
   await page.waitForTimeout(800);
-  ok('appen laster uten nett', await page.locator('#bunnmeny button').count() === 6);
+  ok('appen laster uten nett', await page.locator('#bunnmeny button').count() === 8);
   ok('CSS lastet fra cache', await page.locator('#telefon').evaluate(e => getComputedStyle(e).maxWidth) === '430px');
   ok('motoren regner offline', await page.evaluate(() => typeof regn === 'function' && regn(window.__FB.S).melTotal > 0));
   await page.screenshot({ path: D + 'pwa-offline.png' });
