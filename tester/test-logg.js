@@ -222,6 +222,33 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   await page.waitForTimeout(300);
   ok('brødbildet overlever omlasting', await page.locator('.kort:has-text("Bak med brødbilde") .logg-bilde.liten').count() === 1);
 
+  console.log('— Deigregnskap og hevekurve fra loggen —');
+  const rkort = page.locator('.kort:has-text("Bak med brødbilde")');
+  ok('knappen står på posten', await rkort.locator('button:has-text("Deigregnskap og hevekurve")').count() === 1);
+  await rkort.locator('button:has-text("Deigregnskap og hevekurve")').click();
+  await page.waitForTimeout(400);
+  ok('arket åpnet', await page.locator('#loggArk').count() === 1);
+  // innerText er CSS-bevisst: ark-titlene står med text-transform:uppercase,
+  // så det er den transformerte teksten som kommer tilbake.
+  const arkTekst = (await page.locator('#loggArk').innerText()).toUpperCase();
+  ok('viser postens navn', arkTekst.includes('BAK MED BRØDBILDE'));
+  ok('regnskapet er med', arkTekst.includes('MEL TOTALT') && arkTekst.includes('GJÆR'));
+  ok('hevekurven er med', arkTekst.includes('GJÆRINGEN OVER TID') && await page.locator('#loggArk svg').count() >= 1);
+  ok('ligger over bunnmenyen', await page.locator('#loggArk').evaluate(e => +getComputedStyle(e).zIndex) > 30);
+  // Visningen skal ikke røre den EKTE tilstanden: S byttes bare synkront under
+  // utregningen, og alt du holder på med nå skal stå urørt etterpå.
+  ok('gjeldende oppskrift urørt', await page.evaluate(() =>
+    window.__FB.S.brotype === 'grovbrod' && window.__FB.S.lgRegnskap !== null));
+  await page.screenshot({ path: D + 'logg-regnskap.png' });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  ok('Esc lukker arket', await page.locator('#loggArk').count() === 0);
+  await rkort.locator('button:has-text("Deigregnskap og hevekurve")').click();
+  await page.waitForTimeout(300);
+  await page.locator('#loggArkTeppe').click({ position: { x: 10, y: 10 } });
+  await page.waitForTimeout(300);
+  ok('trykk på bakteppet lukker', await page.locator('#loggArk').count() === 0);
+
   ok('ingen JS-feil', errs.length === 0, errs.join(' | '));
   await browser.close();
   console.log(feil === 0 ? '\nALLE TESTER GRØNNE' : '\n' + feil + ' TESTER RØDE');

@@ -170,6 +170,11 @@ input[type=range] { accent-color: var(--color-accent); }
 @keyframes arkOpp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .regnskap-ark .ark-hank { width: 40px; height: 4px; border-radius: 999px; background: var(--color-neutral-300); margin: 6px auto 10px; }
 .regnskap-ark .ark-tittel { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--color-neutral-600); font-weight: 800; margin-bottom: 6px; }
+/* Historisk deigregnskap åpnet fra en loggpost: samme ark, men forankret i
+   bunnen av telefonrammen (Logg har ingen bunnlinje å stå på) og lagt OVER
+   bunnmenyen (z 30) — det er et overlegg man lukker, ikke en del av skjermen. */
+.regnskap-bakteppe.logg-teppe { z-index: 40; }
+.regnskap-ark.logg-ark { bottom: 0; z-index: 45; max-height: 78vh; }
 .bunnlinje .stripe {
   width: 100%; border: none; background: none; cursor: pointer;
   display: flex; align-items: center; gap: 6px; padding: 11px 16px;

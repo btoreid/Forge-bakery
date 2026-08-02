@@ -30,6 +30,7 @@ const STANDARD = {
   aktivSteg: 0, aktivStegId: null, regnskapAapen: false, byttBekreft: null,
   loggListe: [], lgNavn: '', lgKar: 8, lgBilder: [], lgBrod: [], oppdatert: 0,
   lgRediger: null, lgSlett: null, bildeVis: null,
+  lgRegnskap: null,           // loggpost-id med historisk deigregnskap/hevekurve åpen
   // Gravsteiner: id-ene til slettede loggposter. Uten dem ville sammenfletningen
   // ved synk gjenopplivet hver post man har slettet på en annen enhet.
   loggSlettet: [],
@@ -140,7 +141,7 @@ function last() {
    skyen. Tidsstempelet må svare på «når endret dataene seg sist», ikke «når rørte
    noen appen sist». */
 const UI_FELT = ['skjerm', 'paramInfo', 'tilleggInfo', 'melInfo', 'meltallInfo', 'aktivSteg',
-  'regnskapAapen', 'byttBekreft', 'lgRediger', 'lgSlett', 'bildeVis', 'oppslag', 'oppslagSok',
+  'regnskapAapen', 'byttBekreft', 'lgRediger', 'lgSlett', 'bildeVis', 'lgRegnskap', 'oppslag', 'oppslagSok',
   'brodInfo', 'kompVist', 'melEndring', 'kompSporsmal', 'handlelisteOk', 'melVelger',
   'visMaskiner', 'aktivSteg', 'aktivStegId', 'krukkeStart', 'timere', 'stegNotatRediger',
   /* Delte maskinmålinger er HENTET, ikke skrevet. De hører hjemme i den delte
@@ -539,6 +540,7 @@ function renderInner() {
 
   tegnBunnlinje(r, K);
   tegnBildeVis();
+  tegnLoggRegnskap();
   // Kompensasjonen er ikke lenger en modal — den rendres inline i tillegg-
   // seksjonen. Rydd bort en eventuell gammel modal fra en tidligere versjon.
   { const gml = byId('kompmodal'); if (gml) gml.remove(); }
@@ -570,6 +572,7 @@ function bytt(id) {
 window.addEventListener('popstate', e => {
   // Innerste lag først: overlegg lukkes før man forlater skjermen.
   if (S.bildeVis) { S.bildeVis = null; oppdater(); nyHistorikk(); return; }
+  if (S.lgRegnskap) { S.lgRegnskap = null; oppdater(); nyHistorikk(); return; }
   if (S.kompSporsmal) { S.kompSporsmal = false; oppdater(); nyHistorikk(); return; }
   if (S.melEndring) { S.melEndring = null; oppdater(); nyHistorikk(); return; }
   if (S.regnskapAapen) { S.regnskapAapen = false; oppdater(); nyHistorikk(); return; }
@@ -674,6 +677,31 @@ function tegnBunnlinje(r, K) {
   const gammeltArk = byId('regnskapArk');
   if (!S.regnskapAapen) { if (gammeltArk) gammeltArk.remove(); return; }
 
+  const innmat = [
+    h('div', { class: 'ark-hank' }),
+    h('div', { class: 'ark-tittel' }, 'Deigregnskap'),
+    ...regnskapInnmat(r, K)
+  ];
+
+  if (gammeltArk) {
+    const sc = gammeltArk.scrollTop;
+    gammeltArk.replaceChildren(...innmat);
+    gammeltArk.scrollTop = sc;
+  } else {
+    bl.appendChild(h('div', { class: 'regnskap-ark', id: 'regnskapArk',
+      onClick: () => { S.regnskapAapen = false; oppdater(); } }, ...innmat));
+  }
+  // Bakteppe over innholdet — lukker ved trykk. Gjenbrukes hvis det allerede
+  // står der, ellers spilles fade-inn om igjen ved hver render.
+  if (!byId('bakteppe')) byId('telefon').appendChild(h('div', { class: 'regnskap-bakteppe', id: 'bakteppe',
+    onClick: () => { S.regnskapAapen = false; oppdater(); } }));
+}
+/* Innholdet i regnskapsarket — alt under tittelen. Trukket ut av tegnBunnlinje
+   fordi loggen viser NØYAKTIG det samme arket for et historisk bak: leses r og
+   K fra en gammel oppskrift, skal tabellen og kurven følge med gratis, uten en
+   kopi som kan drifte. Leser S (tillegg, antall, lokk …) — kalles den for en
+   loggpost, må S midlertidig stå på postens oppskrift (se tegnLoggRegnskap). */
+function regnskapInnmat(r, K) {
   /* Med forferment: PARET tabell — samme ingrediens på samme linje, forferment i
      venstre kolonne og hoveddeig i høyre, så øyet kan sammenligne uten å lete
      (Bjørn 01.08: «vann i forferment til venstre, vann i hoveddeig til høyre»).
@@ -723,9 +751,7 @@ function tegnBunnlinje(r, K) {
   // «Hva valgene koster» hører hjemme her: totalen over, avvikene mot
   // brødet uten tillegget som referanse — samme tall som dose–respons-panelet.
   const avvik = doseResponsRader();
-  const innmat = [
-    h('div', { class: 'ark-hank' }),
-    h('div', { class: 'ark-tittel' }, 'Deigregnskap'),
+  return [
     parTabell,
     h('div', { class: 'regnskap' }, ...rader.map(([k, v]) =>
       h('div', { class: 'rad' }, h('span', null, k), h('b', null, v)))),
@@ -739,19 +765,6 @@ function tegnBunnlinje(r, K) {
     // sier hvordan den kommer dit. Samme funksjon som på Tid, i mini-format.
     regnskapGraf(r, K)
   ].filter(Boolean);
-
-  if (gammeltArk) {
-    const sc = gammeltArk.scrollTop;
-    gammeltArk.replaceChildren(...innmat);
-    gammeltArk.scrollTop = sc;
-  } else {
-    bl.appendChild(h('div', { class: 'regnskap-ark', id: 'regnskapArk',
-      onClick: () => { S.regnskapAapen = false; oppdater(); } }, ...innmat));
-  }
-  // Bakteppe over innholdet — lukker ved trykk. Gjenbrukes hvis det allerede
-  // står der, ellers spilles fade-inn om igjen ved hver render.
-  if (!byId('bakteppe')) byId('telefon').appendChild(h('div', { class: 'regnskap-bakteppe', id: 'bakteppe',
-    onClick: () => { S.regnskapAapen = false; oppdater(); } }));
 }
 /* Mini-gjæringskurve til deigregnskapet. Bruker nøyaktig samme planProfil() og
    gjaeringsGraf() som Tid-skjermen. */
@@ -3636,6 +3649,11 @@ function loggPost(b, i) {
   if (b.oppskrift) {
     kortEl.appendChild(h('button', { class: 'btn btn-full', style: 'margin-top:10px;font-size:.82rem',
       onClick: () => bakPaaNytt(b) }, '↻ Bak dette på nytt'));
+    /* Historikken i tall og kurve: posten bærer hele oppskriften, så
+       deigregnskapet og gjæringskurven kan regnes ut på nytt — nøyaktig slik
+       de sto da baket ble planlagt. Samme ark som stripa nederst drar opp. */
+    kortEl.appendChild(h('button', { class: 'btn btn-full', style: 'margin-top:8px;font-size:.82rem',
+      onClick: () => { S.lgRegnskap = b.id; oppdater(); } }, '⌃ Deigregnskap og hevekurve'));
   } else {
     kortEl.appendChild(h('div', { class: 'hjelpetekst', style: 'margin-top:8px' },
       'Denne posten ble lagret før appen tok vare på selve oppskriften, så den kan ikke hentes tilbake. Nye bak kan.'));
@@ -3760,6 +3778,50 @@ function loggRediger(b, i) {
   boks.appendChild(h('div', { style: 'font-size:.7rem;color:var(--color-neutral-600);margin-top:8px' },
     'Endringene lagres mens du skriver. Måletallene (dose, hydrering, løft) kan ikke endres — de er hentet fra baket slik det faktisk var.'));
   return boks;
+}
+
+/* ---------- Historisk deigregnskap fra loggen ----------
+   «Hvordan så deigen og hevingen ut den gangen?» Posten bærer hele oppskriften
+   og motoren er deterministisk, så regnskapet og gjæringskurven regnes ut på
+   nytt fra den — samme ark og samme funksjoner som stripa nederst drar opp,
+   ingen kopi som kan drifte. regn/kjede/regnskapInnmat leser alle den globale
+   S, så S byttes midlertidig til postens oppskrift; byttet er synkront og
+   settes ALLTID tilbake i finally — et unntak underveis skal ikke kunne la
+   appen bli stående på en gammel oppskrift.
+   `vinduStart` og `ferdigMs` nulles: de peker på klokkeslett i fortiden, og å
+   strekke planen mot dem I DAG ville gitt en annen kurve enn den som ble bakt
+   etter. Kurven viser forløpet (timer og temperaturer), ikke datidens klokke. */
+function tegnLoggRegnskap() {
+  const gmlA = byId('loggArk'); if (gmlA) gmlA.remove();
+  const gmlT = byId('loggArkTeppe'); if (gmlT) gmlT.remove();
+  if (!S.lgRegnskap) return;
+  // Arket hører til Logg-skjermen: bytter man skjerm med det åpent, skal det
+  // ikke bli liggende over Deig eller Tid — der finnes det ekte regnskapet.
+  if (S.skjerm !== 'logg') { S.lgRegnskap = null; return; }
+  const b = S.loggListe.find(x => x.id === S.lgRegnskap);
+  if (!b || !b.oppskrift) { S.lgRegnskap = null; return; }
+  const lukk = () => { S.lgRegnskap = null; oppdater(); };
+  let innmat;
+  const ekteS = S;
+  try {
+    S = Object.assign({}, ekteS, b.oppskrift, { ferdigMs: null, tidModus: 'ferdig', vinduStart: null });
+    const r2 = regn(S);
+    const K2 = kjede(S, r2, standardFerdig());
+    innmat = regnskapInnmat(r2, K2);
+  } catch (e) {
+    innmat = [h('div', { class: 'hjelpetekst' },
+      'Fikk ikke regnet ut denne posten — oppskriften ser ut til å mangle noe fra en eldre versjon av appen.')];
+  } finally {
+    S = ekteS;
+  }
+  byId('telefon').appendChild(h('div', { class: 'regnskap-bakteppe logg-teppe', id: 'loggArkTeppe', onClick: lukk }));
+  byId('telefon').appendChild(h('div', { class: 'regnskap-ark logg-ark', id: 'loggArk', role: 'dialog',
+    'aria-label': 'Deigregnskap for ' + (b.navn || 'Uten navn'), onClick: lukk },
+    h('div', { class: 'ark-hank' }),
+    h('div', { class: 'ark-tittel' }, 'Deigregnskap — ' + (b.navn || 'Uten navn') + ' · ' + loggDato(b)),
+    h('div', { style: 'font-size:.72rem;color:var(--color-neutral-600);margin:-2px 0 8px;line-height:1.45' },
+      'Regnet ut på nytt fra oppskriften slik den ble lagret. Kurven viser forløpet, ikke klokkeslettene den gangen.'),
+    ...innmat));
 }
 
 /* ---------- Bildet i stort format ----------
@@ -4500,7 +4562,12 @@ async function hentDelteKalibreringer() {
 /* Tastatur i bildevisningen: Esc lukker, piler blar. Én lytter for hele appen —
    den sjekker selv om visningen er åpen, så den trenger aldri av- og påmelding. */
 document.addEventListener('keydown', e => {
-  if (!S.bildeVis) return;
+  if (!S.bildeVis) {
+    // Det historiske regnskapsarket fra loggen lukker også på Esc — men bare
+    // når bildevisningen ikke ligger over: innerste lag først.
+    if (e.key === 'Escape' && S.lgRegnskap) { S.lgRegnskap = null; oppdater(); }
+    return;
+  }
   if (e.key === 'Escape') { S.bildeVis = null; oppdater(); }
   else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     const post = S.loggListe.find(b => b.id === S.bildeVis.id);

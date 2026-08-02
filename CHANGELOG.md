@@ -7,6 +7,35 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 02.08.2026 — Loggen: deigregnskap og hevekurve per post
+
+Bjørns bestilling: en knapp i loggen som drar opp HELE deigregnskapet og
+gjæringskurven for et gammelt bak, så historikken kan leses i tall og kurve —
+ikke bare i måletallene på kortet.
+
+**Slik virker det.** Hver post med lagret oppskrift (samme felt som «Bak dette
+på nytt» bruker) har fått knappen «⌃ Deigregnskap og hevekurve». Den drar opp
+samme ark som stripa nederst på Brød/Deig/Tid/Prosess — men regnet ut fra
+POSTENS oppskrift: motoren er deterministisk, så `regn()` + `kjede()` på det
+lagrede oppskriftsavtrykket gjenskaper regnskapet og kurven nøyaktig slik de
+sto da baket ble planlagt. Ingen ny lagring, ingen kopi som kan drifte.
+
+**Implementasjon.** Arkinnholdet er trukket ut av `tegnBunnlinje()` til
+`regnskapInnmat(r, K)` (js/app-v2.js) og deles av begge visningene. Det
+historiske arket (`tegnLoggRegnskap()`) bytter S til postens oppskrift kun
+synkront under utregning/tegning, med tilbakestilling i `finally` — den ekte
+tilstanden røres aldri. `vinduStart`/`ferdigMs` nulles med vilje: de peker på
+klokkeslett i fortiden, og å strekke planen mot dem i dag ville gitt en annen
+kurve enn den som ble bakt etter (arket sier dette selv). Arket bor i
+`S.lgRegnskap` (UI-felt, synkes ikke), lukker på Esc, tilbakeknapp, bakteppe
+og trykk — og hører til Logg-skjermen: bytter man skjerm, lukkes det.
+
+**Tester.** Ny seksjon i `tester/test-logg.js` (10 tester): knapp, ark med
+navn/regnskap/kurve, z-orden over bunnmenyen, uendret gjeldende oppskrift,
+Esc- og bakteppelukking. Alle 9 suitene grønne.
+
+---
+
 ## 02.08.2026 — Loggen: bilder per brød
 
 Oppfølgeren til «Brød for brød»-radene: hvert brød kan nå få sine egne bilder
