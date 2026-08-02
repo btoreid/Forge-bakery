@@ -186,6 +186,11 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   ok('brød for brød også', (await page.locator('.kort:has-text("Bak brød for brød")').innerText()).includes('tre timer'));
 
   console.log('— Bilder per brød —');
+  // Kameraet skal være ETT trykk unna: egen 📷-knapp med capture-input som
+  // åpner kamera-appen direkte, ved siden av + som åpner galleriet.
+  ok('kameraknapp på baket og per brød', await page.locator('button[aria-label="Ta bilde"]').count() === 1
+    && await page.locator('button[aria-label="Ta bilde av brød 1"]').count() === 1);
+  ok('kameraet åpnes direkte (capture)', await page.locator('input[capture="environment"]').count() >= 2);
   // Bildet legges på brød 1 i skjemaet UTEN å røre metode eller kommentar —
   // bildet alene skal være nok til at radene er verdt å lagre på posten.
   const [vb] = await Promise.all([page.waitForEvent('filechooser'), page.click('button[aria-label="Legg til bilde av brød 1"]')]);

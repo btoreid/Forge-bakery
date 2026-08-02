@@ -3478,7 +3478,15 @@ function settLgBrod(i, felt, verdi) {
    helhetsbildene av baket har sin egen velger med plass til 3. */
 const MAKS_BRODBILDER = 4;
 function brodBildeRad(nr, bilder, leggTil, fjern) {
-  const inp = h('input', { type: 'file', accept: 'image/*', style: 'display:none',
+  /* To veier inn, ikke én: 📷 med `capture` går RETT i kameraet (brødet står
+     nystekt på benken — det er dét man vil), + åpner galleriet for bilder som
+     alt er tatt. Uten capture landet man i filvelgeren og måtte lete seg fram
+     til kameraet derfra (Bjørn 02.08). På PC ignoreres capture og begge åpner
+     filvelgeren — ufarlig. */
+  const inpKam = h('input', { type: 'file', accept: 'image/*', capture: 'environment', style: 'display:none',
+    'aria-label': 'Ta bilde til brød ' + nr,
+    onchange: e => skalerBilde(e.target.files && e.target.files[0], leggTil) });
+  const inpVelg = h('input', { type: 'file', accept: 'image/*', style: 'display:none',
     'aria-label': 'Velg bilde til brød ' + nr,
     onchange: e => skalerBilde(e.target.files && e.target.files[0], leggTil) });
   const rad = h('div', { class: 'logg-bilder', style: 'margin-top:6px' });
@@ -3486,9 +3494,13 @@ function brodBildeRad(nr, bilder, leggTil, fjern) {
     h('img', { src, alt: 'Bilde ' + (k + 1) + ' av brød ' + nr, class: 'brod-mini' }),
     h('button', { class: 'bilde-fjern', 'aria-label': 'Fjern bilde ' + (k + 1) + ' av brød ' + nr,
       onClick: () => fjern(k) }, '×'))));
-  if (bilder.length < MAKS_BRODBILDER) rad.appendChild(h('button', { class: 'brod-mini-ny',
-    'aria-label': 'Legg til bilde av brød ' + nr, onClick: () => inp.click() }, '+'));
-  rad.appendChild(inp);
+  if (bilder.length < MAKS_BRODBILDER) {
+    rad.appendChild(h('button', { class: 'brod-mini-ny',
+      'aria-label': 'Ta bilde av brød ' + nr, onClick: () => inpKam.click() }, '📷'));
+    rad.appendChild(h('button', { class: 'brod-mini-ny',
+      'aria-label': 'Legg til bilde av brød ' + nr, onClick: () => inpVelg.click() }, '+'));
+  }
+  rad.appendChild(inpKam); rad.appendChild(inpVelg);
   return rad;
 }
 function tegnLoggBrod() {
@@ -3717,6 +3729,8 @@ function loggRediger(b, i) {
     S.loggListe = S.loggListe.map(x =>
       x.id === b.id ? Object.assign({}, x, { [felt]: verdi, endret: Date.now() }) : x);
   };
+  const inpKam = h('input', { type: 'file', accept: 'image/*', capture: 'environment', style: 'display:none',
+    'aria-label': 'Ta bilde', onchange: e => leggTilBilde(e.target.files && e.target.files[0], i) });
   const inpFil = h('input', { type: 'file', accept: 'image/*', style: 'display:none',
     'aria-label': 'Velg bilde', onchange: e => leggTilBilde(e.target.files && e.target.files[0], i) });
   const boks = h('div', { class: 'kort', style: 'border-color:var(--color-accent-300);box-shadow:0 0 0 3px var(--color-accent-100)' },
@@ -3791,11 +3805,12 @@ function loggRediger(b, i) {
     h('img', { src, alt: 'Bilde ' + (j + 1), style: 'width:64px;height:64px;object-fit:cover;border-radius:12px;border:1px solid var(--color-neutral-300);display:block' }),
     h('button', { 'aria-label': 'Fjern bilde ' + (j + 1), class: 'bilde-fjern',
       onClick: () => { settFelt('bilder', (b.bilder || []).filter((_, k) => k !== j)); oppdater(); } }, '×'))));
-  if ((b.bilder || []).length < 3) rad.appendChild(h('button', {
-    style: 'width:64px;height:64px;border-radius:12px;border:1.5px dashed var(--color-neutral-400);background:none;color:var(--color-neutral-600);font-size:1.4rem;cursor:pointer',
-    'aria-label': 'Legg til bilde', onClick: () => inpFil.click() }, '+'));
+  if ((b.bilder || []).length < 3) {
+    rad.appendChild(h('button', { class: 'bilde-ny', 'aria-label': 'Ta bilde', onClick: () => inpKam.click() }, '📷'));
+    rad.appendChild(h('button', { class: 'bilde-ny', 'aria-label': 'Legg til bilde', onClick: () => inpFil.click() }, '+'));
+  }
   boks.appendChild(rad);
-  boks.appendChild(inpFil);
+  boks.appendChild(inpKam); boks.appendChild(inpFil);
   boks.appendChild(h('div', { style: 'display:flex;gap:8px;margin-top:12px' },
     h('button', { class: 'btn btn-primary', style: 'flex:1;font-size:.82rem', onClick: () => { S.lgRediger = null; oppdater(); } }, 'Ferdig'),
     h('button', { class: 'btn', style: 'flex:0 0 auto;font-size:.82rem;color:var(--color-danger)', onClick: () => { S.lgSlett = b.id; S.lgRediger = null; oppdater(); } }, 'Slett')));
@@ -3888,6 +3903,9 @@ function tegnBildeVis() {
 function tegnBildeVelger() {
   const boks = h('div', { style: 'margin-top:12px' });
   boks.appendChild(h('div', { class: 'felt-label' }, 'Bilder av baket'));
+  // 📷 rett i kameraet, + i galleriet — samme par som per-brød-radene.
+  const inpKam = h('input', { type: 'file', accept: 'image/*', capture: 'environment', style: 'display:none',
+    'aria-label': 'Ta bilde', onchange: e => leggTilBilde(e.target.files && e.target.files[0]) });
   const inp = h('input', { type: 'file', accept: 'image/*', style: 'display:none',
     'aria-label': 'Velg bilde', onchange: e => leggTilBilde(e.target.files && e.target.files[0]) });
   const rad = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:6px' });
@@ -3896,11 +3914,12 @@ function tegnBildeVelger() {
     h('button', { 'aria-label': 'Fjern bilde ' + (i + 1),
       style: 'position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:999px;border:1px solid var(--color-neutral-300);background:#fff;color:var(--color-danger);font-weight:800;line-height:1;cursor:pointer;padding:0',
       onClick: () => { S.lgBilder = (S.lgBilder || []).filter((_, j) => j !== i); oppdater(); } }, '×'))));
-  if ((S.lgBilder || []).length < 3) rad.appendChild(h('button', {
-    style: 'width:64px;height:64px;border-radius:12px;border:1.5px dashed var(--color-neutral-400);background:none;color:var(--color-neutral-600);font-size:1.4rem;cursor:pointer',
-    'aria-label': 'Legg til bilde', onClick: () => inp.click() }, '+'));
+  if ((S.lgBilder || []).length < 3) {
+    rad.appendChild(h('button', { class: 'bilde-ny', 'aria-label': 'Ta bilde', onClick: () => inpKam.click() }, '📷'));
+    rad.appendChild(h('button', { class: 'bilde-ny', 'aria-label': 'Legg til bilde', onClick: () => inp.click() }, '+'));
+  }
   boks.appendChild(rad);
-  boks.appendChild(inp);
+  boks.appendChild(inpKam); boks.appendChild(inp);
   return boks;
 }
 /* Skaler ned og lever et data-URL. Felles for alle bildeveiene (baket, per
