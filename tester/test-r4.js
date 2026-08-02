@@ -101,12 +101,14 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   const paaNytt = await page.evaluate(async () => {
     const FB = window.__FB, S = FB.S;
     S.brotype = 'grovbrod'; S.grov = 25; S.hyd = 71; S.tillegg = { linfro: 4 }; S.vekt = 800;
-    S.skjerm = 'logg'; S.loggSlettet = []; FB.render();
+    // Loggskjemaet er siste steg i Prosess nå, ikke på Logg-skjermen.
+    S.skjerm = 'prosess'; S.loggSlettet = []; FB.render();
     await new Promise(r => setTimeout(r, 60));
     const lagre = [...document.querySelectorAll('button')].find(b => /Lagre baket/.test(b.textContent));
     if (lagre) lagre.click();
     await new Promise(r => setTimeout(r, 150));
     const post = FB.S.loggListe[FB.S.loggListe.length - 1];
+    // lagring fra Prosess lander på Logg — der «Bak dette på nytt» står
     // endre alt etterpå
     S.grov = 80; S.hyd = 85; S.tillegg = {}; S.vekt = 1200; FB.render();
     await new Promise(r => setTimeout(r, 60));
@@ -340,7 +342,8 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
   const standard = await page.evaluate(async () => {
     const FB = window.__FB, S = FB.S;
     S.brotype = 'grovbrod'; S.grov = 60; S.hyd = 73; S.vekt = 750; S.tillegg = {};
-    S.skjerm = 'logg'; FB.render();
+    // Standardbrød-knappen står i loggskjemaet, som bor i Prosess.
+    S.skjerm = 'prosess'; FB.render();
     await new Promise(r => setTimeout(r, 80));
     const knapp = [...document.querySelectorAll('button')].find(b => /Lagre dette som standardbrød/.test(b.textContent));
     const fantKnapp = !!knapp;
@@ -358,7 +361,7 @@ const ok = (navn, sant, ekstra) => { console.log((sant ? '  ✓ ' : '  ✗ ') + 
     await new Promise(r => setTimeout(r, 120));
     return { lagret, fantKnapp, lagretIStore: !!localStorage.getItem('forgebakery.v2') };
   });
-  ok('«Lagre dette som standardbrød»-knappen finnes i Logg', standard.fantKnapp);
+  ok('«Lagre dette som standardbrød»-knappen finnes i loggskjemaet', standard.fantKnapp);
   ok('standardbrødet lagres', standard.lagret);
   ok('tilstanden er skrevet til localStorage', standard.lagretIStore);
   await page.reload(); await page.waitForTimeout(400);

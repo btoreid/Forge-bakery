@@ -3312,6 +3312,13 @@ function tegnProsess(r, K) {
       h('span', { style: 'font-size:.74rem;color:var(--color-neutral-600);font-variant-numeric:tabular-nums' }, klokke(s.tid))));
   });
 
+  /* SISTE STEG: loggfør baket. Prosessen ender der brødet gjør det — med at
+     du skriver ned hva som skjedde, mens du står med det. Nummeret følger
+     lista over (K.length + 1) selv om steget ikke er en del av `kjede()`. */
+  wrap.appendChild(h('div', { class: 'seksjonstittel', style: 'margin-top:18px' },
+    'Steg ' + (K.length + 1) + ' · når brødet er ute av ovnen'));
+  wrap.appendChild(loggSkjema(r));
+
   // Diskré vei tilbake til handlelista når den er kvittert bort — den skal ikke
   // stå over stegene, men den skal fortsatt være å finne.
   if (S.handlelisteOk) {
@@ -3609,8 +3616,14 @@ function stegKort(steg, status, ctx) {
 /* ============================================================
    5 · LOGG
    ============================================================ */
-function tegnLogg(r) {
-  const wrap = h('div');
+/* ---------- Loggskjemaet ----------
+   Bor på PROSESS, som siste steg — det er der man er når brødet kommer ut av
+   ovnen, og «loggfør baket» er den siste handlingen i baket, ikke et oppslag
+   man går til (Bjørn 02.08: «det blir bedre oppsett»). Logg-skjermen er da
+   ren historikk. Utenfor `kjede()` av samme grunn som handlelista er det: et
+   steg uten varighet der ville forskjøvet klokkeslettene i alt som leser
+   kjeden (Tid, grafen, totaltiden). */
+function loggSkjema(r) {
   const form = h('div', { class: 'kort' },
     h('div', { class: 'kort-num' }, 'Loggfør dette baket'),
     h('div', { class: 'hjelpetekst', style: 'margin-top:6px' }, 'Forskjellen mellom en god og en fantastisk gjærbaker er en loggbok, ikke en surdeig. Endre én variabel per bak.'),
@@ -3669,7 +3682,19 @@ function tegnLogg(r) {
     S.standardBrod
       ? 'Appen åpner på dette brødet når du starter på nytt uten noe påbegynt.'
       : 'Da åpner appen på dette brødet neste gang du starter uten noe påbegynt fra før.'));
-  wrap.appendChild(form);
+  return form;
+}
+
+function tegnLogg(r) {
+  const wrap = h('div');
+  /* Skjemaet ligger på Prosess nå. Veien dit skal likevel være åpenbar herfra
+     — den som står i Logg og leter etter «hvor loggfører jeg?» skal finne
+     svaret, ikke lete gjennom fanene. */
+  wrap.appendChild(h('button', { class: 'valgkort', style: 'margin-bottom:12px', onClick: () => bytt('prosess') },
+    h('span', { style: 'flex:1' },
+      h('span', { class: 'tittel', style: 'font-size:.95rem' }, 'Loggfør baket du holder på med'),
+      h('span', { class: 'undertittel' }, 'Skjemaet er siste steg i Prosess — der du er når brødet kommer ut av ovnen.')),
+    h('span', { style: 'color:var(--color-neutral-400)' }, '›')));
 
   if (!S.loggListe.length) {
     wrap.appendChild(h('div', { class: 'tomkort', style: 'margin-top:12px' },
@@ -3845,6 +3870,10 @@ function lagreBak(r) {
   }]);
   S.lgNavn = ''; S.lgBilder = []; S.lgBrod = []; S.lgLaas = null;
   S.stegKvitt = {};             // kvitteringene er levert — neste bak starter blankt
+  /* Lagret fra Prosess (der skjemaet bor): gå til Logg og VIS posten. Uten
+     dette ble man stående på et tomt skjema uten kvittering på at baket
+     faktisk kom inn. */
+  if (S.skjerm === 'prosess') { bytt('logg'); return; }
   oppdater();
 }
 /* Bak dette på nytt: legg oppskriften tilbake i tilstanden og gå til Brød.

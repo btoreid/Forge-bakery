@@ -7,6 +7,29 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 02.08.2026 — «Loggfør dette baket» er siste steg i Prosess
+
+Bjørn: «legg loggfør dette baket som siste steg i prosessen — det blir bedre
+oppsett». Skjemaet lå øverst på Logg-skjermen, altså et sted man måtte gå TIL,
+mens man i praksis står i Prosess når brødet kommer ut av ovnen.
+
+Skjemaet er trukket ut som `loggSkjema(r)` og ligger nå nederst på Prosess
+under overskriften «Steg N+1 · når brødet er ute av ovnen» — utenfor
+`kjede()`, av nøyaktig samme grunn som handlelista er det: et steg uten
+varighet i kjeden ville forskjøvet klokkeslettene i alt som leser den (Tid,
+grafen, totaltiden). Nummeret følger likevel lista, så rekka leses som én
+sekvens.
+
+Lagring fra Prosess går videre til Logg og viser posten — ellers ble man
+stående på et tomt skjema uten kvittering. Logg-skjermen er nå ren historikk
+(pluss konto og sikkerhetskopi), med et kort øverst som peker til skjemaet for
+den som leter etter det der.
+
+Fire testsuiter fylte skjemaet fra Logg-skjermen og navigerer nå til Prosess.
+Alle 9 grønne.
+
+---
+
 ## 02.08.2026 — Vekta: 0,01 g ut, og presisjon etter mengde
 
 Bjørn: «min vekt er 0,1 g, ikke 0,01 — ta bort 0,01, det er det ingen som

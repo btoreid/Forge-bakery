@@ -25,8 +25,10 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
     }, farge);
     fs.writeFileSync(D + navn, Buffer.from(data.split(',')[1], 'base64'));
   }
-  await page.click('#bunnmeny button:has-text("Logg")');
-  await page.waitForTimeout(300);
+  // Loggskjemaet er siste steg i PROSESS nå; Logg-skjermen er ren historikk.
+  const tilSkjema = async () => { await page.click('#bunnmeny button:has-text("Prosess")'); await page.waitForTimeout(350); };
+  const tilLogg = async () => { await page.click('#bunnmeny button:has-text("Logg")'); await page.waitForTimeout(350); };
+  await tilSkjema();
 
   console.log('— Lagre to bak, ett med to bilder —');
   for (const f of ['bilde-a.png', 'bilde-b.png']) {
@@ -36,10 +38,12 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   }
   await page.fill('input[placeholder*="Halvgrovt"]', 'Bak med bilder');
   await page.click('button:has-text("Lagre baket")');
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(400);
+  ok('lagring fra Prosess lander på Logg', await page.evaluate(() => window.__FB.S.skjerm) === 'logg');
+  await tilSkjema();
   await page.fill('input[placeholder*="Halvgrovt"]', 'Bak uten bilder');
   await page.click('button:has-text("Lagre baket")');
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(400);
   ok('to poster i loggen', await page.evaluate(() => window.__FB.S.loggListe.length) === 2);
   ok('nyeste øverst', (await page.locator('.kort:has-text("Bak uten bilder")').count()) === 1);
   ok('hver post har id', await page.evaluate(() => window.__FB.S.loggListe.every(b => !!b.id)));
@@ -119,6 +123,7 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   // bare verdt å lagre når de sier noe (en kommentar eller en avvikende metode).
   ok('urørte rader lagres ikke', await page.evaluate(() =>
     !('brod' in window.__FB.S.loggListe.find(b => b.navn === 'Omdøpt bak'))));
+  await tilSkjema();
   const skjema = page.locator('.kort:has-text("Loggfør dette baket")');
   ok('én rad per brød i oppskriften (4)', await skjema.locator('select[aria-label^="Stekemetode for brød"]').count() === 4);
   await skjema.locator('select[aria-label="Stekemetode for brød 2"]').selectOption('brod_glass_stal');
@@ -136,7 +141,7 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
     e.clientHeight > foer && e.scrollWidth <= e.clientWidth + 1, kfoer));
   await skjema.locator('input[placeholder*="Halvgrovt"]').fill('Bak brød for brød');
   await page.click('button:has-text("Lagre baket")');
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(400);
   const bpost = await page.evaluate(() => window.__FB.S.loggListe.find(b => b.navn === 'Bak brød for brød'));
   ok('alle fire brød i posten', bpost && Array.isArray(bpost.brod) && bpost.brod.length === 4, JSON.stringify(bpost && bpost.brod));
   ok('avvikende metode lagret', bpost && bpost.brod[1].metode === 'brod_glass_stal');
@@ -186,6 +191,7 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   ok('brød for brød også', (await page.locator('.kort:has-text("Bak brød for brød")').innerText()).includes('tre timer'));
 
   console.log('— Bilder per brød —');
+  await tilSkjema();
   // Kameraet skal være ETT trykk unna: egen 📷-knapp med capture-input som
   // åpner kamera-appen direkte, ved siden av + som åpner galleriet.
   ok('kameraknapp på baket og per brød', await page.locator('button[aria-label="Ta bilde"]').count() === 1
@@ -199,7 +205,7 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   ok('bildet ligger i skjemaraden', await page.evaluate(() => (window.__FB.S.lgBrod[0].bilder || []).length === 1));
   await page.fill('input[placeholder*="Halvgrovt"]', 'Bak med brødbilde');
   await page.click('button:has-text("Lagre baket")');
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(400);
   const fp = await page.evaluate(() => {
     const b = window.__FB.S.loggListe.find(x => x.navn === 'Bak med brødbilde');
     return { harBrod: !!b.brod, b1: b.brod ? (b.brod[0].bilder || []).length : 0, b2har: !!(b.brod && ('bilder' in b.brod[1])) };
@@ -312,8 +318,7 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   }));
 
   console.log('— Lås oppskriften til baket —');
-  await page.click('#bunnmeny button:has-text("Logg")');
-  await page.waitForTimeout(300);
+  await tilSkjema();
   await page.click('button:has-text("Lås oppskriften til dette baket")');
   await page.waitForTimeout(250);
   ok('låsen vises i skjemaet', (await page.locator('.kort:has-text("Loggfør dette baket")').innerText()).includes('låst til dette baket'));
@@ -322,7 +327,7 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   await page.waitForTimeout(250);
   await page.fill('input[placeholder*="Halvgrovt"]', 'Låst bak');
   await page.click('button:has-text("Lagre baket")');
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(400);
   ok('posten fikk den LÅSTE oppskriften', await page.evaluate(() =>
     window.__FB.S.loggListe.find(b => b.navn === 'Låst bak').oppskrift.hyd === 75));
   ok('appen står fortsatt på endringen', await page.evaluate(() => window.__FB.S.hyd === 85));
