@@ -209,6 +209,14 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   await page.waitForTimeout(500);
   ok('bilde kan legges til i ettertid', await page.evaluate(() =>
     (window.__FB.S.loggListe.find(x => x.navn === 'Bak med brødbilde').brod[1].bilder || []).length === 1));
+  // Grensa er 4 per brød, ikke 2: etter bilde nummer to skal +-knappen fortsatt
+  // stå der. (Skorpe, bunn, krumme og smøreprøve er et helt vanlig bak.)
+  const [vb3] = await Promise.all([page.waitForEvent('filechooser'), fred.locator('button[aria-label="Legg til bilde av brød 2"]').click()]);
+  await vb3.setFiles(D + 'bilde-a.png');
+  await page.waitForTimeout(500);
+  ok('to bilder på samme brød', await page.evaluate(() =>
+    (window.__FB.S.loggListe.find(x => x.navn === 'Bak med brødbilde').brod[1].bilder || []).length === 2));
+  ok('plass til flere enn to', await fred.locator('button[aria-label="Legg til bilde av brød 2"]').count() === 1);
   await fred.locator('button[aria-label="Fjern bilde 1 av brød 1"]').click();
   await page.waitForTimeout(250);
   ok('bilde kan fjernes i ettertid', await page.evaluate(() =>
@@ -220,7 +228,7 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   await page.waitForTimeout(500);
   await page.click('#bunnmeny button:has-text("Logg")');
   await page.waitForTimeout(300);
-  ok('brødbildet overlever omlasting', await page.locator('.kort:has-text("Bak med brødbilde") .logg-bilde.liten').count() === 1);
+  ok('brødbildene overlever omlasting', await page.locator('.kort:has-text("Bak med brødbilde") .logg-bilde.liten').count() === 2);
 
   console.log('— Deigregnskap og hevekurve fra loggen —');
   const rkort = page.locator('.kort:has-text("Bak med brødbilde")');

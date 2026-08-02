@@ -3459,9 +3459,11 @@ function settLgBrod(i, felt, verdi) {
 }
 /* Miniatyrrad for ETT brøds bilder: fjern-kryss på hver, + så lenge det er
    plass. Gjenbrukes av skjemaet og redigeringen — de skal se og oppføre seg
-   likt, ellers lærer man UI-et to ganger. Maks 2 per brød (skorpe + krumme);
+   likt, ellers lærer man UI-et to ganger. Maks 4 per brød (var 2 — «skorpe og
+   krumme» holdt ikke: skorpe, bunn, krumme OG smøreprøven er et helt vanlig
+   bak, Bjørn 02.08). Kvotevernet i skalerBilde() er den egentlige grensa;
    helhetsbildene av baket har sin egen velger med plass til 3. */
-const MAKS_BRODBILDER = 2;
+const MAKS_BRODBILDER = 4;
 function brodBildeRad(nr, bilder, leggTil, fjern) {
   const inp = h('input', { type: 'file', accept: 'image/*', style: 'display:none',
     'aria-label': 'Velg bilde til brød ' + nr,
