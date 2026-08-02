@@ -7,6 +7,22 @@ Les `STATUS.md` først for gjeldende tilstand og åpne punkter.
 
 ---
 
+## 02.08.2026 — Ta bilde direkte: 📷-knapp ved siden av +
+
+Bjørn: «hva skjedde med ta bilde direkte?» Svaret var at det aldri fantes —
+alle bildevelgerne var rene filvelgere (`accept="image/*"` uten `capture`),
+så på Android landet man i galleriet og måtte lete seg til kameraet derfra.
+
+Alle tre velgerne (bakstbilder i skjemaet, bilder i postredigeringen og
+per-brød-radene via `brodBildeRad()`) har nå TO knapper: 📷 med
+`capture="environment"` som åpner kamera-appen direkte — brødet står nystekt
+på benken, det er dét man vil — og + som åpner galleriet for bilder som alt
+er tatt. På PC ignoreres `capture` og begge åpner filvelgeren. Bakstbildenes
+inline-stilte +-knapp ble til klassen `.bilde-ny` i samme slengen. Tester på
+knappene og capture-attributtet i `tester/test-logg.js`.
+
+---
+
 ## 02.08.2026 — Kommentarfeltene vokser med teksten
 
 Bjørn: lange kommentarer i loggen måtte scrolles fram sidelengs. Feltene var
