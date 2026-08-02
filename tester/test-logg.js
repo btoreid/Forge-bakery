@@ -114,6 +114,56 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   const igjen = await page.evaluate(() => window.__FB.S.loggListe.map(b => b.navn));
   ok('riktig post slettet', igjen.length === 1 && igjen[0] === 'Omdøpt bak', JSON.stringify(igjen));
 
+  console.log('— Brød for brød: metode og kommentar per brød —');
+  // Poster lagret uten at radene ble rørt skal IKKE ha brod-feltet — radene er
+  // bare verdt å lagre når de sier noe (en kommentar eller en avvikende metode).
+  ok('urørte rader lagres ikke', await page.evaluate(() =>
+    !('brod' in window.__FB.S.loggListe.find(b => b.navn === 'Omdøpt bak'))));
+  const skjema = page.locator('.kort:has-text("Loggfør dette baket")');
+  ok('én rad per brød i oppskriften (4)', await skjema.locator('select[aria-label^="Stekemetode for brød"]').count() === 4);
+  await skjema.locator('select[aria-label="Stekemetode for brød 2"]').selectOption('brod_glass_stal');
+  await page.waitForTimeout(250);
+  await skjema.locator('input[aria-label="Kommentar til brød 1"]').fill('Glasset av etter 18 min');
+  await page.waitForTimeout(250);
+  await skjema.locator('input[placeholder*="Halvgrovt"]').fill('Bak brød for brød');
+  await page.click('button:has-text("Lagre baket")');
+  await page.waitForTimeout(300);
+  const bpost = await page.evaluate(() => window.__FB.S.loggListe.find(b => b.navn === 'Bak brød for brød'));
+  ok('alle fire brød i posten', bpost && Array.isArray(bpost.brod) && bpost.brod.length === 4, JSON.stringify(bpost && bpost.brod));
+  ok('avvikende metode lagret', bpost && bpost.brod[1].metode === 'brod_glass_stal');
+  ok('kommentaren lagret', bpost && bpost.brod[0].kommentar === 'Glasset av etter 18 min');
+  ok('umerkede brød fikk oppsettets metode', bpost && bpost.brod[2].metode === bpost.oppskrift.stekeProfil);
+  const bkort = page.locator('.kort:has-text("Bak brød for brød")');
+  // innerText er CSS-bevisst: overskriften står med text-transform:uppercase,
+  // så det er den transformerte teksten som kommer tilbake.
+  ok('kortet viser Brød for brød', (await bkort.innerText()).includes('BRØD FOR BRØD'));
+  ok('kortet viser metoden', (await bkort.innerText()).includes('Glassgryte PÅ 15 mm stål'));
+  ok('kortet viser kommentaren', (await bkort.innerText()).includes('18 min'));
+  // Redigering i ettertid: brødene stekes til ulik tid, så kommentarene på de
+  // siste brødene finnes ofte ikke før timer etter at posten ble lagret.
+  await bkort.locator('button:has-text("Rediger")').click();
+  await page.waitForTimeout(300);
+  const red = page.locator('.kort:has-text("Redigerer")');
+  await red.locator('input[aria-label="Kommentar til brød 3"]').fill('Stekt tre timer senere, åpen på stålet');
+  await page.waitForTimeout(250);
+  ok('kommentar kan legges til i ettertid', await page.evaluate(() =>
+    window.__FB.S.loggListe.find(b => b.navn === 'Bak brød for brød').brod[2].kommentar.includes('tre timer')));
+  await red.locator('select[aria-label="Stekemetode for brød 3"]').selectOption('brod_apen');
+  await page.waitForTimeout(250);
+  ok('metode kan endres i ettertid', await page.evaluate(() =>
+    window.__FB.S.loggListe.find(b => b.navn === 'Bak brød for brød').brod[2].metode === 'brod_apen'));
+  await red.locator('button:has-text("+ Legg til brød")').click();
+  await page.waitForTimeout(250);
+  ok('rad kan legges til', await page.evaluate(() =>
+    window.__FB.S.loggListe.find(b => b.navn === 'Bak brød for brød').brod.length === 5));
+  await red.locator('button[aria-label="Fjern brød 5"]').click();
+  await page.waitForTimeout(250);
+  ok('rad kan fjernes', await page.evaluate(() =>
+    window.__FB.S.loggListe.find(b => b.navn === 'Bak brød for brød').brod.length === 4));
+  await red.locator('button:has-text("Ferdig")').click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: D + 'logg-brod-for-brod.png' });
+
   // overlever omlasting
   await page.reload();
   await page.waitForTimeout(500);
@@ -121,6 +171,7 @@ const ok = (n, s, e) => { console.log((s ? '  ✓ ' : '  ✗ ') + n + (e ? ' —
   await page.waitForTimeout(300);
   ok('endringene overlever omlasting', (await page.locator('.kort:has-text("Omdøpt bak")').count()) === 1);
   ok('bildet også', await page.locator('.logg-bilde').count() === 1);
+  ok('brød for brød også', (await page.locator('.kort:has-text("Bak brød for brød")').innerText()).includes('tre timer'));
 
   ok('ingen JS-feil', errs.length === 0, errs.join(' | '));
   await browser.close();
